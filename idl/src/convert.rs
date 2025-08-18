@@ -64,13 +64,6 @@ mod legacy {
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-    pub struct IdlState {
-        #[serde(rename = "struct")]
-        pub strct: IdlTypeDefinition,
-        pub methods: Vec<IdlInstruction>,
-    }
-
-    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
     pub struct IdlInstruction {
         pub name: String,
         #[serde(skip_serializing_if = "Option::is_none")]
