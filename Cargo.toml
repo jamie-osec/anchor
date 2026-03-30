@@ -1,6 +1,8 @@
 [workspace]
 members = [
     "avm",
+    "bench",
+    "bench/programs/*",
     "cli",
     "client",
     "idl",

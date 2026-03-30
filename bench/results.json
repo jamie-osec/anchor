@@ -1,0 +1,15 @@
+{
+  "results": [
+    {
+      "commit": "current",
+      "programs": {
+        "hello_world": {
+          "binary_size_bytes": 54728,
+          "compute_units": {
+            "hello": 347
+          }
+        }
+      }
+    }
+  ]
+}
