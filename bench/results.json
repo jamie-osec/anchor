@@ -1,18 +1,18 @@
 {
   "baseline": {
     "hello_world_quasar": {
-      "binary_size_bytes": 0,
+      "binary_size_bytes": 2944,
       "compute_units": {
-        "hello": 0
+        "hello": 115
       }
     },
     "multisig_quasar": {
-      "binary_size_bytes": 0,
+      "binary_size_bytes": 31096,
       "compute_units": {
-        "create": 0,
-        "deposit": 0,
-        "execute_transfer": 0,
-        "set_label": 0
+        "create": 3152,
+        "deposit": 2304,
+        "execute_transfer": 2173,
+        "set_label": 1864
       }
     }
   },
