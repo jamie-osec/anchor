@@ -3,6 +3,7 @@ name = "hello-world"
 version = "0.1.0"
 description = "Hello world program used by anchor-bench"
 edition = "2021"
+publish = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]

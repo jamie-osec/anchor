@@ -1,4 +1,5 @@
 mod bench;
+mod graphs;
 mod history;
 mod programs;
 
@@ -8,6 +9,7 @@ use {
             build_programs, build_results, execute_benchmark, BenchContext, BenchInstruction,
             InstructionSuite, ProgramSuite,
         },
+        graphs::{render_graphs, GRAPHS_DIR},
         history::{load_history, save_history, update_history, RESULTS_FILE},
     },
     anchor_lang::{InstructionData, ToAccountMetas},
@@ -101,8 +103,13 @@ fn main() -> Result<()> {
 
     update_history(&mut history, current_result)?;
     save_history(&results_path, &history)?;
+    render_graphs(&bench_dir, &history)?;
 
     println!("Stored benchmark results in {}", results_path.display());
+    println!(
+        "Stored benchmark graphs in {}",
+        bench_dir.join(GRAPHS_DIR).display()
+    );
 
     Ok(())
 }

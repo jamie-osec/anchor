@@ -3,6 +3,7 @@ name = "multisig"
 version = "0.1.0"
 description = "Anchor port of the Quasar multisig benchmark example"
 edition = "2021"
+publish = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]
