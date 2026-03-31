@@ -233,11 +233,13 @@ dependencies = [
  "anyhow",
  "hello-world",
  "litesvm",
+ "multisig",
  "paste",
  "serde",
  "serde_json",
  "solana-keypair",
  "solana-message",
+ "solana-pubkey 3.0.0",
  "solana-signer",
  "solana-transaction",
 ]
@@ -3272,6 +3274,13 @@ dependencies = [
  "solana-program",
  "solana-program-error",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "multisig"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
 ]
 
 [[package]]

@@ -1,5 +1,12 @@
 use {
-    anchor_lang::{solana_program::instruction::Instruction, InstructionData, ToAccountMetas},
+    anchor_lang::{
+        prelude::Pubkey,
+        solana_program::{
+            instruction::{AccountMeta, Instruction},
+            system_program,
+        },
+        InstructionData, ToAccountMetas,
+    },
     anyhow::{anyhow, bail, Context, Result},
     litesvm::{types::TransactionMetadata, LiteSVM},
     paste::paste,
@@ -26,29 +33,141 @@ struct ProgramSuite {
 
 struct InstructionSuite {
     name: &'static str,
-    run: fn(&Path) -> Result<u64>,
+    run: fn(&Path) -> Result<TransactionMetadata>,
 }
 
-// FIXME: Extend this to allow passing data to instructions
+type CaseBuilder = fn(&mut BenchContext) -> Result<BenchInstruction>;
+
+struct BenchContext {
+    payer: Keypair,
+    program_id: Pubkey,
+    svm: LiteSVM,
+}
+
+struct BenchInstruction {
+    instruction_data: Vec<u8>,
+    account_metas: Vec<AccountMeta>,
+    signers: Vec<Keypair>,
+}
+
+impl BenchInstruction {
+    fn new(instruction_data: Vec<u8>, account_metas: Vec<AccountMeta>) -> Self {
+        Self {
+            instruction_data,
+            account_metas,
+            signers: Vec::new(),
+        }
+    }
+
+    fn with_signer(mut self, signer: Keypair) -> Self {
+        self.signers.push(signer);
+        self
+    }
+
+    fn with_signers(mut self, signers: Vec<Keypair>) -> Self {
+        self.signers.extend(signers);
+        self
+    }
+}
+
+impl BenchContext {
+    fn new(program_path: &Path, program_id: Pubkey) -> Result<Self> {
+        let payer = keypair_for_account("bench-payer");
+        let mut svm = LiteSVM::new();
+
+        svm.add_program_from_file(program_id, program_path)
+            .with_context(|| format!("failed to load {}", program_path.display()))?;
+        svm.airdrop(&payer.pubkey(), 1_000_000_000)
+            .map_err(|failure| {
+                anyhow!(
+                    "failed to fund benchmark payer: {:?}\n{}",
+                    failure.err,
+                    failure.meta.pretty_logs()
+                )
+            })?;
+
+        Ok(Self {
+            payer,
+            program_id,
+            svm,
+        })
+    }
+
+    fn airdrop(&mut self, pubkey: &Pubkey, lamports: u64) -> Result<()> {
+        self.svm.airdrop(pubkey, lamports).map_err(|failure| {
+            anyhow!(
+                "failed to fund benchmark account {}: {:?}\n{}",
+                pubkey,
+                failure.err,
+                failure.meta.pretty_logs()
+            )
+        })?;
+        Ok(())
+    }
+
+    fn execute(&mut self, instruction: BenchInstruction) -> Result<TransactionMetadata> {
+        let signer_refs = instruction
+            .signers
+            .iter()
+            .map(|signer| signer as &dyn solana_signer::Signer)
+            .collect::<Vec<_>>();
+
+        self.execute_raw(
+            instruction.instruction_data,
+            instruction.account_metas,
+            &signer_refs,
+        )
+    }
+
+    fn execute_with_signers(
+        &mut self,
+        instruction_data: Vec<u8>,
+        account_metas: Vec<AccountMeta>,
+        signers: &[&dyn solana_signer::Signer],
+    ) -> Result<TransactionMetadata> {
+        self.execute_raw(instruction_data, account_metas, signers)
+    }
+
+    fn execute_raw(
+        &mut self,
+        instruction_data: Vec<u8>,
+        account_metas: Vec<AccountMeta>,
+        signers: &[&dyn solana_signer::Signer],
+    ) -> Result<TransactionMetadata> {
+        let instruction =
+            Instruction::new_with_bytes(self.program_id, &instruction_data, account_metas);
+
+        let blockhash = self.svm.latest_blockhash();
+        let message =
+            Message::new_with_blockhash(&[instruction], Some(&self.payer.pubkey()), &blockhash);
+        let mut all_signers: Vec<&dyn solana_signer::Signer> = vec![&self.payer];
+        all_signers.extend_from_slice(signers);
+        let transaction =
+            VersionedTransaction::try_new(VersionedMessage::Legacy(message), &all_signers)
+                .context("failed to create benchmark transaction")?;
+
+        self.svm.send_transaction(transaction).map_err(|failure| {
+            anyhow!(
+                "benchmark transaction failed: {:?}\n{}",
+                failure.err,
+                failure.meta.pretty_logs()
+            )
+        })
+    }
+}
+
 macro_rules! make_tests {
     (
         $(
             $program:ident => {
-                $( $instruction:ident, )*
+                $( $instruction:ident $(=> $builder:path)?, )*
             },
         )*
     ) => {
         paste! {
             $(
                 $(
-                    fn [<run_ $program _ $instruction>](program_path: &Path) -> Result<u64> {
-                        Ok(execute_instruction(
-                            program_path,
-                            $program::id(),
-                            $program::instruction::[<$instruction:camel>] {}.data(),
-                            $program::accounts::[<$instruction:camel>] {}.to_account_metas(None),
-                        )?.compute_units_consumed)
-                    }
+                    make_tests!(@runner $program, $instruction $(, $builder)?);
                 )*
             )*
 
@@ -69,11 +188,44 @@ macro_rules! make_tests {
             ];
         }
     };
+    (@runner $program:ident, $instruction:ident) => {
+        paste! {
+            fn [<build_ $program _ $instruction _case>](
+                _ctx: &mut BenchContext,
+            ) -> Result<BenchInstruction> {
+                Ok(BenchInstruction::new(
+                    $program::instruction::[<$instruction:camel>] {}.data(),
+                    $program::accounts::[<$instruction:camel>] {}.to_account_metas(None),
+                ))
+            }
+
+            fn [<run_ $program _ $instruction>](program_path: &Path) -> Result<TransactionMetadata> {
+                execute_benchmark(
+                    program_path,
+                    $program::id(),
+                    [<build_ $program _ $instruction _case>],
+                )
+            }
+        }
+    };
+    (@runner $program:ident, $instruction:ident, $custom_builder:path) => {
+        paste! {
+            fn [<run_ $program _ $instruction>](program_path: &Path) -> Result<TransactionMetadata> {
+                execute_benchmark(program_path, $program::id(), $custom_builder)
+            }
+        }
+    };
 }
 
 make_tests! {
     hello_world => {
         hello,
+    },
+    multisig => {
+        create => build_multisig_create_case,
+        deposit => build_multisig_deposit_case,
+        set_label => build_multisig_set_label_case,
+        execute_transfer => build_multisig_execute_transfer_case,
     },
 }
 
@@ -157,40 +309,14 @@ fn build_programs(bench_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn execute_instruction(
+fn execute_benchmark(
     program_path: &Path,
-    program_id: anchor_lang::prelude::Pubkey,
-    instruction_data: Vec<u8>,
-    account_metas: Vec<anchor_lang::solana_program::instruction::AccountMeta>,
+    program_id: Pubkey,
+    case_builder: CaseBuilder,
 ) -> Result<TransactionMetadata> {
-    let payer = Keypair::new();
-    let mut svm = LiteSVM::new();
-
-    svm.add_program_from_file(program_id, program_path)
-        .with_context(|| format!("failed to load {}", program_path.display()))?;
-    svm.airdrop(&payer.pubkey(), 1_000_000_000)
-        .map_err(|failure| {
-            anyhow!(
-                "failed to fund benchmark payer: {:?}\n{}",
-                failure.err,
-                failure.meta.pretty_logs()
-            )
-        })?;
-
-    let instruction = Instruction::new_with_bytes(program_id, &instruction_data, account_metas);
-
-    let blockhash = svm.latest_blockhash();
-    let message = Message::new_with_blockhash(&[instruction], Some(&payer.pubkey()), &blockhash);
-    let transaction = VersionedTransaction::try_new(VersionedMessage::Legacy(message), &[&payer])
-        .context("failed to create benchmark transaction")?;
-
-    svm.send_transaction(transaction).map_err(|failure| {
-        anyhow!(
-            "benchmark transaction failed: {:?}\n{}",
-            failure.err,
-            failure.meta.pretty_logs()
-        )
-    })
+    let mut ctx = BenchContext::new(program_path, program_id)?;
+    let instruction = case_builder(&mut ctx)?;
+    ctx.execute(instruction)
 }
 
 fn build_results(bench_dir: &Path) -> Result<BenchmarkResult> {
@@ -204,10 +330,8 @@ fn build_results(bench_dir: &Path) -> Result<BenchmarkResult> {
         let mut compute_units = BTreeMap::new();
 
         for instruction in suite.instructions {
-            compute_units.insert(
-                instruction.name.to_owned(),
-                (instruction.run)(&program_path)?,
-            );
+            let metadata = (instruction.run)(&program_path)?;
+            compute_units.insert(instruction.name.to_owned(), metadata.compute_units_consumed);
         }
 
         programs.insert(
@@ -233,6 +357,175 @@ fn program_binary_path(bench_dir: &Path, program_name: &str) -> PathBuf {
 
 fn program_manifest_path(program_name: &str) -> String {
     format!("programs/{}/Cargo.toml", program_name.replace('_', "-"))
+}
+
+/// Generate deterministic keypair with a simple account name hash
+fn keypair_for_account(name: &str) -> Keypair {
+    let mut seed = [0u8; 32];
+
+    for (index, byte) in name.bytes().enumerate() {
+        let position = index % seed.len();
+        seed[position] = seed[position]
+            .wrapping_mul(31)
+            .wrapping_add(byte)
+            .wrapping_add(index as u8);
+    }
+
+    Keypair::new_from_array(seed)
+}
+
+fn build_multisig_create_case(ctx: &mut BenchContext) -> Result<BenchInstruction> {
+    let creator = keypair_for_account("multisig-create-creator");
+    let signer_one = keypair_for_account("multisig-create-signer-one");
+    let signer_two = keypair_for_account("multisig-create-signer-two");
+    let (config, _) = multisig_config_address(&creator.pubkey());
+
+    ctx.airdrop(&creator.pubkey(), 1_000_000_000)?;
+
+    let mut metas = multisig::accounts::Create {
+        creator: creator.pubkey(),
+        config,
+        system_program: system_program::ID,
+    }
+    .to_account_metas(None);
+    metas.push(AccountMeta::new_readonly(signer_one.pubkey(), true));
+    metas.push(AccountMeta::new_readonly(signer_two.pubkey(), true));
+
+    Ok(
+        BenchInstruction::new(multisig::instruction::Create { threshold: 2 }.data(), metas)
+            .with_signers(vec![creator, signer_one, signer_two]),
+    )
+}
+
+fn build_multisig_deposit_case(ctx: &mut BenchContext) -> Result<BenchInstruction> {
+    let creator = keypair_for_account("multisig-deposit-creator");
+    let signer_one = keypair_for_account("multisig-deposit-signer-one");
+    let signer_two = keypair_for_account("multisig-deposit-signer-two");
+    let (config, _) = multisig_config_address(&creator.pubkey());
+    let (vault, _) = multisig_vault_address(&config);
+
+    ctx.airdrop(&creator.pubkey(), 1_000_000_000)?;
+    setup_multisig(ctx, &creator, &[&signer_one, &signer_two], 2)?;
+
+    Ok(BenchInstruction::new(
+        multisig::instruction::Deposit { amount: 1_000_000 }.data(),
+        multisig::accounts::Deposit {
+            depositor: creator.pubkey(),
+            config,
+            vault,
+            system_program: system_program::ID,
+        }
+        .to_account_metas(None),
+    )
+    .with_signer(creator))
+}
+
+fn build_multisig_set_label_case(ctx: &mut BenchContext) -> Result<BenchInstruction> {
+    let creator = keypair_for_account("multisig-set-label-creator");
+    let signer_one = keypair_for_account("multisig-set-label-signer-one");
+    let signer_two = keypair_for_account("multisig-set-label-signer-two");
+    let (config, _) = multisig_config_address(&creator.pubkey());
+
+    ctx.airdrop(&creator.pubkey(), 1_000_000_000)?;
+    setup_multisig(ctx, &creator, &[&signer_one, &signer_two], 2)?;
+
+    Ok(BenchInstruction::new(
+        multisig::instruction::SetLabel {
+            label: "bench-multisig".to_owned(),
+        }
+        .data(),
+        multisig::accounts::SetLabel {
+            creator: creator.pubkey(),
+            config,
+        }
+        .to_account_metas(None),
+    )
+    .with_signer(creator))
+}
+
+fn build_multisig_execute_transfer_case(ctx: &mut BenchContext) -> Result<BenchInstruction> {
+    let creator = keypair_for_account("multisig-execute-transfer-creator");
+    let signer_one = keypair_for_account("multisig-execute-transfer-signer-one");
+    let signer_two = keypair_for_account("multisig-execute-transfer-signer-two");
+    let (config, _) = multisig_config_address(&creator.pubkey());
+    let (vault, _) = multisig_vault_address(&config);
+    let recipient = keypair_for_account("multisig-execute-transfer-recipient");
+
+    ctx.airdrop(&creator.pubkey(), 1_000_000_000)?;
+    ctx.airdrop(&recipient.pubkey(), 1)?;
+    setup_multisig(ctx, &creator, &[&signer_one, &signer_two], 2)?;
+    ctx.execute_with_signers(
+        multisig::instruction::Deposit { amount: 1_000_000 }.data(),
+        multisig::accounts::Deposit {
+            depositor: creator.pubkey(),
+            config,
+            vault,
+            system_program: system_program::ID,
+        }
+        .to_account_metas(None),
+        &[&creator],
+    )?;
+
+    let mut metas = multisig::accounts::ExecuteTransfer {
+        config,
+        creator: creator.pubkey(),
+        vault,
+        recipient: recipient.pubkey(),
+        system_program: system_program::ID,
+    }
+    .to_account_metas(None);
+    metas.push(AccountMeta::new_readonly(signer_one.pubkey(), true));
+    metas.push(AccountMeta::new_readonly(signer_two.pubkey(), true));
+
+    Ok(BenchInstruction::new(
+        multisig::instruction::ExecuteTransfer { amount: 500_000 }.data(),
+        metas,
+    )
+    .with_signers(vec![signer_one, signer_two]))
+}
+
+fn setup_multisig(
+    ctx: &mut BenchContext,
+    creator: &Keypair,
+    signers: &[&Keypair],
+    threshold: u8,
+) -> Result<()> {
+    let (config, _) = multisig_config_address(&creator.pubkey());
+    let mut metas = multisig::accounts::Create {
+        creator: creator.pubkey(),
+        config,
+        system_program: system_program::ID,
+    }
+    .to_account_metas(None);
+
+    for signer in signers {
+        metas.push(AccountMeta::new_readonly(signer.pubkey(), true));
+    }
+
+    let extra_signers = std::iter::once(creator as &dyn solana_signer::Signer)
+        .chain(
+            signers
+                .iter()
+                .copied()
+                .map(|signer| signer as &dyn solana_signer::Signer),
+        )
+        .collect::<Vec<_>>();
+
+    ctx.execute_with_signers(
+        multisig::instruction::Create { threshold }.data(),
+        metas,
+        &extra_signers,
+    )?;
+
+    Ok(())
+}
+
+fn multisig_config_address(creator: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[b"multisig", creator.as_ref()], &multisig::id())
+}
+
+fn multisig_vault_address(config: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[b"vault", config.as_ref()], &multisig::id())
 }
 
 fn load_history(results_path: &Path) -> Result<BenchmarkHistory> {

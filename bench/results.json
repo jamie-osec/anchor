@@ -8,6 +8,26 @@
           "compute_units": {
             "hello": 347
           }
+        },
+        "multisig": {
+          "binary_size_bytes": 173520,
+          "compute_units": {
+            "create": 14295,
+            "deposit": 6374,
+            "execute_transfer": 10216,
+            "set_label": 4189
+          }
+        }
+      }
+    },
+    {
+      "commit": "a67208269e9165f10247c46862216d20dbd11a9b",
+      "programs": {
+        "hello_world": {
+          "binary_size_bytes": 54728,
+          "compute_units": {
+            "hello": 347
+          }
         }
       }
     }

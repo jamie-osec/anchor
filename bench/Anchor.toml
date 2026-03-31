@@ -4,6 +4,7 @@ wallet = "~/.config/solana/id.json"
 
 [programs.localnet]
 hello_world = "B7ihZyoXZ1fwAY3TugkiFJ6SXkzJwMuQrxrekBaSmn32"
+multisig = "5KkVfSkB1P64QL4Qis2SvMZNyyM2aUGBM3CynZnACnFg"
 
 [workspace]
-members = ["programs/hello-world"]
+members = ["programs/hello-world", "programs/multisig"]
