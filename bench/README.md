@@ -15,3 +15,12 @@ Small benchmark workspace for measuring Anchor program compute usage and binary 
 ```sh
 cargo run --manifest-path bench/Cargo.toml
 ```
+
+## Check
+
+```sh
+cargo run --manifest-path bench/Cargo.toml -- check
+```
+
+`check` exits with an error when the recorded benchmark history is out of date or when any
+recorded snapshot commit is not present on `master`.

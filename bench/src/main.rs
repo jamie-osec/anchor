@@ -10,7 +10,9 @@ use {
             InstructionSuite, ProgramSuite,
         },
         graphs::{render_graphs, GRAPHS_DIR},
-        history::{load_history, save_history, update_history, RESULTS_FILE},
+        history::{
+            load_history, save_history, update_history, validate_history_commits, RESULTS_FILE,
+        },
     },
     anchor_lang::{InstructionData, ToAccountMetas},
     anyhow::{bail, Result},
@@ -124,6 +126,7 @@ fn main() -> Result<()> {
     let mut updated_history = history.clone();
 
     update_history(&mut updated_history, current_result)?;
+    validate_history_commits(&updated_history)?;
 
     match mode {
         RunMode::Record => {

@@ -8,6 +8,8 @@ use {
 pub const RESULTS_FILE: &str = "results.json";
 /// Synthetic commit label used for the latest benchmark snapshot.
 pub const CURRENT_COMMIT: &str = "current";
+/// Preferred branch name used to validate persisted benchmark snapshots.
+pub const MASTER_BRANCH: &str = "master";
 
 /// Stores the benchmark history as an ordered list of snapshots.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -63,8 +65,23 @@ pub fn update_history(
     history: &mut BenchmarkHistory,
     current_result: BenchmarkResult,
 ) -> Result<()> {
-    let previous_commit = previous_commit()?;
+    let previous_commit = latest_master_ancestor_commit()?;
     update_history_with_previous_commit(history, current_result, &previous_commit);
+    Ok(())
+}
+
+/// Ensures every persisted snapshot commit is reachable from the master branch.
+pub fn validate_history_commits(history: &BenchmarkHistory) -> Result<()> {
+    let master_ref = master_reference()?;
+
+    for result in &history.results {
+        if result.commit == CURRENT_COMMIT {
+            continue;
+        }
+
+        ensure_commit_is_on_master(&result.commit, &master_ref)?;
+    }
+
     Ok(())
 }
 
@@ -92,22 +109,53 @@ fn benchmark_changed(previous: &BenchmarkResult, current: &BenchmarkResult) -> b
     previous.programs != current.programs
 }
 
-/// Resolves the commit immediately before `HEAD` for history rollover.
-fn previous_commit() -> Result<String> {
+/// Resolves the most recent ancestor of `HEAD` that is present on the master branch.
+fn latest_master_ancestor_commit() -> Result<String> {
+    let master_ref = master_reference()?;
     let output = Command::new("git")
-        .args(["rev-parse", "HEAD~1"])
+        .args(["merge-base", "HEAD", &master_ref])
         .output()
-        .context("failed to get previous commit")?;
+        .with_context(|| format!("failed to get latest master ancestor from {master_ref}"))?;
 
     if !output.status.success() {
         bail!(
-            "failed to get previous commit: {}",
+            "failed to get latest master ancestor from {master_ref}: {}",
             String::from_utf8_lossy(&output.stderr).trim()
         );
     }
 
     Ok(String::from_utf8(output.stdout)
-        .context("previous commit was not valid UTF-8")?
+        .context("latest master ancestor was not valid UTF-8")?
         .trim()
         .to_owned())
+}
+
+/// Returns the local git ref that should be treated as the canonical master branch.
+fn master_reference() -> Result<String> {
+    for candidate in [MASTER_BRANCH, "origin/master"] {
+        let status = Command::new("git")
+            .args(["rev-parse", "--verify", candidate])
+            .status()
+            .with_context(|| format!("failed to check git ref {candidate}"))?;
+
+        if status.success() {
+            return Ok(candidate.to_owned());
+        }
+    }
+
+    bail!("failed to find a `{MASTER_BRANCH}` branch reference")
+}
+
+/// Checks that a specific commit is reachable from the selected master branch reference.
+fn ensure_commit_is_on_master(commit: &str, master_ref: &str) -> Result<()> {
+    let status = Command::new("git")
+        .args(["merge-base", "--is-ancestor", commit, master_ref])
+        .status()
+        .with_context(|| format!("failed to validate commit {commit} against {master_ref}"))?;
+
+    if status.success() {
+        Ok(())
+    } else {
+        bail!("benchmark history commit {commit} is not present in {master_ref}")
+    }
 }
