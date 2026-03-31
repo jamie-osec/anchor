@@ -87,8 +87,8 @@ jobs:
         with:
           path: ./bench/target
           key: cargo-${{ runner.os }}-anchor-bench-${{ env.SOLANA_VERSION }}-${{ hashFiles('./bench/Cargo.lock', './bench/**/Cargo.toml', './Cargo.lock') }}
-      - run: cargo run --manifest-path bench/Cargo.toml --locked
-      - uses: ./.github/actions/git-diff/
+      - run: cargo run --manifest-path bench/Cargo.toml --locked -- check
+        if: ${{ github.event_name == 'pull_request' }}
 
   setup-anchor-cli:
     name: Setup Anchor cli

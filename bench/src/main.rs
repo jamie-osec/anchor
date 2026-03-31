@@ -13,10 +13,13 @@ use {
         history::{load_history, save_history, update_history, RESULTS_FILE},
     },
     anchor_lang::{InstructionData, ToAccountMetas},
-    anyhow::Result,
+    anyhow::{bail, Result},
     litesvm::types::TransactionMetadata,
     paste::paste,
-    std::path::{Path, PathBuf},
+    std::{
+        env,
+        path::{Path, PathBuf},
+    },
 };
 
 macro_rules! make_tests {
@@ -92,24 +95,59 @@ make_tests! {
     },
 }
 
+/// Controls whether the benchmark run updates the history file or only validates it.
+enum RunMode {
+    Record,
+    Check,
+}
+
+impl RunMode {
+    /// Parses the requested benchmark run mode from the CLI arguments.
+    fn from_args() -> Result<Self> {
+        match env::args().nth(1).as_deref() {
+            None => Ok(Self::Record),
+            Some("check" | "--check") => Ok(Self::Check),
+            Some(argument) => bail!("unsupported anchor-bench mode: {argument}"),
+        }
+    }
+}
+
 /// Builds benchmark programs, runs the configured suites, and updates `results.json`.
 fn main() -> Result<()> {
+    let mode = RunMode::from_args()?;
     let bench_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
 
     build_programs(&bench_dir, TEST_SUITES)?;
     let results_path = bench_dir.join(RESULTS_FILE);
     let current_result = build_results(&bench_dir, TEST_SUITES)?;
-    let mut history = load_history(&results_path)?;
+    let history = load_history(&results_path)?;
+    let mut updated_history = history.clone();
 
-    update_history(&mut history, current_result)?;
-    save_history(&results_path, &history)?;
-    render_graphs(&bench_dir, &history)?;
+    update_history(&mut updated_history, current_result)?;
 
-    println!("Stored benchmark results in {}", results_path.display());
-    println!(
-        "Stored benchmark graphs in {}",
-        bench_dir.join(GRAPHS_DIR).display()
-    );
+    match mode {
+        RunMode::Record => {
+            save_history(&results_path, &updated_history)?;
+            render_graphs(&bench_dir, &updated_history)?;
+
+            println!("Stored benchmark results in {}", results_path.display());
+            println!(
+                "Stored benchmark graphs in {}",
+                bench_dir.join(GRAPHS_DIR).display()
+            );
+        }
+        RunMode::Check => {
+            if history != updated_history {
+                bail!(
+                    "benchmarks have changed without being recorded in {}. Run `cargo run \
+                     --manifest-path bench/Cargo.toml --locked` to refresh them.",
+                    results_path.display()
+                );
+            }
+
+            println!("Benchmark history is up to date");
+        }
+    }
 
     Ok(())
 }
