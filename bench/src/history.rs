@@ -76,7 +76,7 @@ fn update_history_with_previous_commit(
 ) {
     match history.results.first_mut() {
         Some(existing_current) if existing_current.commit == CURRENT_COMMIT => {
-            if benchmark_shape_changed(existing_current, &current_result) {
+            if benchmark_changed(existing_current, &current_result) {
                 existing_current.commit = previous_commit.to_owned();
                 history.results.insert(0, current_result);
             } else {
@@ -87,22 +87,9 @@ fn update_history_with_previous_commit(
     }
 }
 
-/// Returns true when the set of benchmarked programs or instructions has changed.
-fn benchmark_shape_changed(previous: &BenchmarkResult, current: &BenchmarkResult) -> bool {
-    previous.programs.keys().ne(current.programs.keys())
-        || previous
-            .programs
-            .iter()
-            .any(|(program_name, previous_program)| {
-                let Some(current_program) = current.programs.get(program_name) else {
-                    return true;
-                };
-
-                previous_program
-                    .compute_units
-                    .keys()
-                    .ne(current_program.compute_units.keys())
-            })
+/// Returns true when any benchmarked value or benchmark shape differs from the prior snapshot.
+fn benchmark_changed(previous: &BenchmarkResult, current: &BenchmarkResult) -> bool {
+    previous.programs != current.programs
 }
 
 /// Resolves the commit immediately before `HEAD` for history rollover.
