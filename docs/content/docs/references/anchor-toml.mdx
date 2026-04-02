@@ -262,3 +262,13 @@ post-test = "exit 1"
 # pre-deploy = []
 # post-deploy = []
 ```
+
+## registry (removed)
+
+The `[registry]` section is no longer supported and has been removed in
+`1.0.0`. If your `Anchor.toml` contains this section, remove it:
+
+```diff
+- [registry]
+- url = "https://anchor.projectserum.com"
+```

@@ -413,9 +413,11 @@ If you see this error message, follow these steps:
 
 #### Node.js and Yarn
 
-Node.js and Yarn are required to run the default Anchor project test file
-(TypeScript) created with the `anchor init` command. (Rust test template is also
-available using `anchor init --test-template rust`)
+Node.js and Yarn are required for project initialization and when using
+a TypeScript-based test template (`mocha`, `jest`). The default test template
+(`litesvm`) does not run TypeScript tests, so they are not needed for
+day-to-day development once initialization is complete. They are expected to
+become fully optional in a future release.
 
 <Accordions>
 <Accordion title="Node Installation">
@@ -727,8 +729,13 @@ anchor init my-project
 ```
 
 This command creates a new directory with the project name and initializes a new
-Anchor project with a modular Rust program structure and TypeScript test
-template.
+Anchor project with a modular Rust program structure. By default, tests are
+written in Rust using the [LiteSVM](https://github.com/LiteSVM/litesvm) crate.
+Use `--test-template` to choose a different template (`mollusk`, `mocha`, `jest`, etc):
+
+```shell title="Terminal"
+anchor init my-project --test-template mollusk
+```
 
 <Callout type="info">
 

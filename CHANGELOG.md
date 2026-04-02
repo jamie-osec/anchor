@@ -44,45 +44,6 @@ The minor version will be incremented upon a breaking change and the patch versi
 
 ### Features
 
-### Fixes
-
-- client: Fix deadlock when having multiple websocket listeners ([#4250](https://github.com/solana-foundation/anchor/pull/4250)).
-
-### Breaking
-
-- lang: Rename `errors` and `ProgramError` of `declare_program!` ([#4347](https://github.com/solana-foundation/anchor/pull/4347)).
-- client: Remove the `solana-account-decoder` crate export ([#4373](https://github.com/solana-foundation/anchor/pull/4373)).
-
-## [1.0.0-rc.5] - 2026-03-20
-
-### Features
-
-- lang, cli, client: Updated solana dependencies to the latest compatible versions. Bumping CI and docker builds to use Solana CLI version 3.1.10 ([#4317](https://github.com/solana-foundation/anchor/pull/4317/))
-
-### Fixes
-
-- lang: Fix incorrect deserialization for dynamically sized types when using `lazy-account` ([#4319](https://github.com/solana-foundation/anchor/pull/4319))
-- avm: Using a temporary installation dir on cargo install calls to prevent cargo erroring out due to existing `anchor` symlink in `.avm/bin` ([4343](https://github.com/solana-foundation/anchor/pull/4343))
-
-### Breaking
-
-## [1.0.0-rc.4] - 2026-03-19
-
-### Features
-
-- avm: Added flags and version labels to explicitly handle pre-releases (`avm list --pre-release`, `avm update --pre-release` and `avm install latest-pre-release`). ([#4335](https://github.com/solana-foundation/anchor/pull/4335))
-- avm: Added `avm self-update` command and passive version check warning for out of date avm ([#4338](https://github.com/solana-foundation/anchor/pull/4338))
-
-### Fixes
-
-- avm: Fixed handling of new Cargo.toml version location. Fixed handling of pre-release version parsing. ([#4335](https://github.com/solana-foundation/anchor/pull/4335))
-
-### Breaking
-
-## [1.0.0-rc.3] - 2026-03-18
-
-### Features
-
 - lang: Add `Migration<'info, From, To>` account type for schema migrations between account types ([#4060](https://github.com/solana-foundation/anchor/pull/4060)).
 - cli: Added a `check_program_id_mismatch` in build time to check if the program ID in the source code matches the program ID in the keypair file ([#4018](https://github.com/solana-foundation/anchor/pull/4018)). This check will be skipped during `anchor test`.
 - lang: Add instruction parser to `declare_program!` ([#4118](https://github.com/solana-foundation/anchor/pull/4118)).
@@ -105,6 +66,9 @@ The minor version will be incremented upon a breaking change and the patch versi
 - lang: Add generic program validation support to `Program` type allowing `Program<'info>` for executable-only validation ([#3878](https://github.com/solana-foundation/anchor/pull/3878)).
 - cli: Added `litesvm` test template and made it the default option on `anchor init` ([#4316](https://github.com/solana-foundation/anchor/pull/4316))
 - cli: Added `--install-agent-skills` to automatically install Solana agent skills during `anchor init` ([#4307](https://github.com/solana-foundation/anchor/pull/4307))
+- avm: Added flags and version labels to explicitly handle pre-releases (`avm list --pre-release`, `avm update --pre-release` and `avm install latest-pre-release`). ([#4335](https://github.com/solana-foundation/anchor/pull/4335))
+- avm: Added `avm self-update` command and passive version check warning for out of date avm ([#4338](https://github.com/solana-foundation/anchor/pull/4338))
+- lang, cli, client: Updated solana dependencies to the latest compatible versions. Bumping CI and docker builds to use Solana CLI version 3.1.10 ([#4317](https://github.com/solana-foundation/anchor/pull/4317/))
 
 ### Fixes
 
@@ -129,6 +93,10 @@ The minor version will be incremented upon a breaking change and the patch versi
 - ts: Fix incorrect Anchor dependency version requirements ([#4138](https://github.com/solana-foundation/anchor/pull/4138)).
 - lang: Omit `parsers` module of `declare_program!` during on-chain (Solana) builds ([#4109](https://github.com/solana-foundation/anchor/pull/4109)).
 - docs: Fixed broken links and replaced coral-xyz github references to solana-foundation ([#4320](https://github.com/solana-foundation/anchor/pull/4320))
+- avm: Fixed handling of new Cargo.toml version location. Fixed handling of pre-release version parsing. ([#4335](https://github.com/solana-foundation/anchor/pull/4335))
+- client: Fix deadlock when having multiple websocket listeners ([#4250](https://github.com/solana-foundation/anchor/pull/4250)).
+- lang: Fix incorrect deserialization for dynamically sized types when using `lazy-account` ([#4319](https://github.com/solana-foundation/anchor/pull/4319))
+- avm: Using a temporary installation dir on cargo install calls to prevent cargo erroring out due to existing `anchor` symlink in `.avm/bin` ([4343](https://github.com/solana-foundation/anchor/pull/4343))
 
 ### Breaking
 
@@ -142,13 +110,14 @@ The minor version will be incremented upon a breaking change and the patch versi
 - idl: Remove the conflicting account names check ([#4294](https://github.com/solana-foundation/anchor/pull/4294)).
 - deps: Update to Solana 3.0 ([#4031](https://github.com/solana-foundation/anchor/pull/4031)).
 - idl: Remove legacy IDL instructions and integrate Program Metadata for IDL management ([#3798](https://github.com/solana-foundation/anchor/pull/3798)).
-- ts: Rename TypeScript packages from `@coral-xyz/anchor` to `@anchor-lang/anchor` ([#4141](https://github.com/solana-foundation/anchor/pull/4141)).
+- ts: Rename TypeScript packages from `@coral-xyz/anchor` to `@anchor-lang/core` ([#4141](https://github.com/solana-foundation/anchor/pull/4141)).
 - lang: Remove program account info from CPI context ([#2762](https://github.com/solana-foundation/anchor/pull/2762)).
 - cli: Remove dependency on the external `solana` CLI; native implementations provided for balance, airdrop, address, deploy, and other commands ([#4099](https://github.com/solana-foundation/anchor/pull/4099)).
 - idl: Disallow multiple `#[error_code]` definitions in a single program ([#4300](https://github.com/solana-foundation/anchor/pull/4300)).
 - cli: Remove the `[registry]` section from `Anchor.toml` ([#4299](https://github.com/solana-foundation/anchor/pull/4299)).
 - client: Make sending a tx not panic and instead return an Error when signing fails ([#3865](https://github.com/solana-foundation/anchor/pull/3865)).
-- idl: Disallow multiple error definitions ([#4300](https://github.com/solana-foundation/anchor/pull/4300)).
+- lang: Rename `errors` and `ProgramError` of `declare_program!` ([#4347](https://github.com/solana-foundation/anchor/pull/4347)).
+- client: Remove the `solana-account-decoder` crate export ([#4373](https://github.com/solana-foundation/anchor/pull/4373)).
 
 ## [0.32.1] - 2025-10-09
 
