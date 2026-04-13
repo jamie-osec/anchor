@@ -255,6 +255,7 @@ dependencies = [
  "solana-hash 3.1.0",
  "solana-instruction",
  "solana-keypair",
+ "solana-message",
  "solana-pubsub-client",
  "solana-rpc-client",
  "solana-rpc-client-api",
