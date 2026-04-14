@@ -188,6 +188,7 @@ pub struct AccountBitvec {
 }
 
 impl AccountBitvec {
+    #[inline]
     pub fn get(&self, index: u8) -> bool {
         let index = index as usize;
         let arr_index = index / 64;
@@ -195,6 +196,7 @@ impl AccountBitvec {
         (self.data[arr_index] >> bit_index) & 1 == 1
     }
 
+    #[inline]
     fn set(&mut self, index: u8) {
         let index = index as usize;
         let arr_index = index / 64;
