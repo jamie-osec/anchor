@@ -575,7 +575,9 @@ fn emit_init_body(
         <#inner_ty as anchor_lang_v2::AccountInitialize>::create_and_initialize(
             __payer, &__target, #space, __program_id, &__init_params, __seeds,
         )?;
-        <#field_ty as anchor_lang_v2::AnchorAccount>::load_mut_after_init(__target, __program_id)?
+        // SAFETY: `create_and_initialize` just created this account; no other
+        // mutable reference to its data can exist yet.
+        unsafe { <#field_ty as anchor_lang_v2::AnchorAccount>::load_mut_after_init(__target, __program_id)? }
     }
 }
 
@@ -612,7 +614,9 @@ pub fn parse_field(field: &syn::Field, field_names: &[String], field_index: u8) 
             let mut #field_name = {
                 let __target = __views[#field_index_usize];
                 if __target.data_len() > 0 && !__target.owned_by(&anchor_lang_v2::programs::System::id()) {
-                    <#field_ty as anchor_lang_v2::AnchorAccount>::load_mut(__target, __program_id)?
+                    // SAFETY: the bitvec duplicate-account check below ensures
+                    // no other mutable reference to this account's data exists.
+                    unsafe { <#field_ty as anchor_lang_v2::AnchorAccount>::load_mut(__target, __program_id)? }
                 } else {
                     #init_body
                 }
@@ -640,12 +644,16 @@ pub fn parse_field(field: &syn::Field, field_names: &[String], field_index: u8) 
                     let __disc = <#inner_ty as anchor_lang_v2::Discriminator>::DISCRIMINATOR;
                     __data[..__disc.len()].copy_from_slice(__disc);
                 }
-                <#field_ty as anchor_lang_v2::AnchorAccount>::load_mut(__target, __program_id)?
+                // SAFETY: the bitvec duplicate-account check below ensures
+                // no other mutable reference to this account's data exists.
+                unsafe { <#field_ty as anchor_lang_v2::AnchorAccount>::load_mut(__target, __program_id)? }
             };
         }
     } else if attrs.is_mut {
         quote! {
-            let mut #field_name = <#field_ty as anchor_lang_v2::AnchorAccount>::load_mut(__views[#field_index_usize], __program_id)?;
+            // SAFETY: the bitvec duplicate-account check below ensures no
+            // other mutable reference to this account's data exists.
+            let mut #field_name = unsafe { <#field_ty as anchor_lang_v2::AnchorAccount>::load_mut(__views[#field_index_usize], __program_id)? };
         }
     } else {
         quote! {

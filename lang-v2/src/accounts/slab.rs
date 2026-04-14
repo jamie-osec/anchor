@@ -679,8 +679,12 @@ where
         Self::from_ref(view, program_id)
     }
 
+    /// # Safety
+    ///
+    /// See [`AnchorAccount::load_mut`] — caller must ensure no other live
+    /// `&mut` to the same account data exists.
     #[inline(always)]
-    fn load_mut(view: AccountView, program_id: &Address) -> Result<Self, ProgramError> {
+    unsafe fn load_mut(view: AccountView, program_id: &Address) -> Result<Self, ProgramError> {
         // Reuses the post-init primitive for construction, then layers full
         // validation on top.
         let slab = Self::load_mut_after_init(view, program_id)?;
@@ -703,8 +707,13 @@ where
     ///
     /// Under `guardrails`, `build_mutable` still does a length check so the
     /// cached `header_ptr` is valid. Under `guardrails = off`, drops it too.
+    ///
+    /// # Safety
+    ///
+    /// See [`AnchorAccount::load_mut`] — caller must ensure no other live
+    /// `&mut` to the same account data exists.
     #[inline(always)]
-    fn load_mut_after_init(view: AccountView, _program_id: &Address) -> Result<Self, ProgramError> {
+    unsafe fn load_mut_after_init(view: AccountView, _program_id: &Address) -> Result<Self, ProgramError> {
         // Guardrail: catches "forgot `#[account(mut)]`" early with a clear
         // error. Under `default-features = false` the Solana runtime still
         // rejects the tx when we try to write, just with a less specific
