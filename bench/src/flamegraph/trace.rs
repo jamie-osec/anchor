@@ -13,7 +13,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
-use super::walker::FlamegraphReport;
+use super::FlamegraphReport;
 
 /// Size in bytes of one register trace entry: 12 x u64 = 96 bytes.
 pub(super) const REGS_ENTRY_SIZE: usize = 12 * std::mem::size_of::<u64>();

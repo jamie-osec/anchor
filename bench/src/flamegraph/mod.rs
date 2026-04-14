@@ -1,12 +1,18 @@
 mod ix_trace;
 mod svg;
 mod trace;
-pub mod walker;
 
 use anyhow::Result;
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
+
+pub struct FlamegraphReport {
+    pub program_name: String,
+    pub total_cu: u64,
+    pub stacks: BTreeMap<Vec<String>, u64>,
+}
 
 /// Re-export the per-instruction trace printer so the top-level crate can
 /// invoke it from the bench harness.
@@ -37,24 +43,6 @@ pub fn generate_flamegraph_from_trace(
     manifest_dir: Option<&Path>,
 ) -> Result<()> {
     let report = trace::build_report_from_trace(program_name, elf_path, trace_dir, manifest_dir)?;
-    let Some(report) = report else {
-        return Ok(());
-    };
-    if let Some(parent) = output_path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::write(output_path, svg::render(&report))?;
-    Ok(())
-}
-
-/// Old static analysis approach (kept for reference but no longer called by default).
-#[allow(dead_code)]
-pub fn generate_flamegraph(
-    program_name: &str,
-    elf_path: &Path,
-    output_path: &Path,
-) -> Result<()> {
-    let report = walker::analyze_program(program_name, elf_path)?;
     let Some(report) = report else {
         return Ok(());
     };
