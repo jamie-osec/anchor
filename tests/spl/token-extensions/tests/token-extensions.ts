@@ -1,8 +1,21 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import { PublicKey, Keypair } from "@solana/web3.js";
+import {
+  PublicKey,
+  Keypair,
+  SystemProgram,
+  sendAndConfirmTransaction,
+  Transaction,
+} from "@solana/web3.js";
 import { TokenExtensions } from "../target/types/token_extensions";
 import { ASSOCIATED_PROGRAM_ID } from "@coral-xyz/anchor/dist/cjs/utils/token";
+import {
+  ExtensionType,
+  createInitializeMintInstruction,
+  createInitializeAccountInstruction,
+  getAccountLen,
+  getMintLen,
+} from "@solana/spl-token";
 import { it } from "node:test";
 
 const TOKEN_2022_PROGRAM_ID = new anchor.web3.PublicKey(
@@ -80,5 +93,80 @@ describe("token extensions", () => {
       })
       .signers([payer])
       .rpc();
+  });
+
+  describe("cpi guard", () => {
+    const cpiGuardMint = Keypair.generate();
+    const tokenAccount = Keypair.generate();
+
+    it("Create mint and token account with CPI guard extension", async () => {
+      const mintLen = getMintLen([]);
+      const mintLamports =
+        await provider.connection.getMinimumBalanceForRentExemption(mintLen);
+
+      const accountLen = getAccountLen([ExtensionType.CpiGuard]);
+      const accountLamports =
+        await provider.connection.getMinimumBalanceForRentExemption(accountLen);
+
+      const transaction = new Transaction().add(
+        SystemProgram.createAccount({
+          fromPubkey: payer.publicKey,
+          newAccountPubkey: cpiGuardMint.publicKey,
+          space: mintLen,
+          lamports: mintLamports,
+          programId: TOKEN_2022_PROGRAM_ID,
+        }),
+        createInitializeMintInstruction(
+          cpiGuardMint.publicKey,
+          0,
+          payer.publicKey,
+          null,
+          TOKEN_2022_PROGRAM_ID
+        ),
+        SystemProgram.createAccount({
+          fromPubkey: payer.publicKey,
+          newAccountPubkey: tokenAccount.publicKey,
+          space: accountLen,
+          lamports: accountLamports,
+          programId: TOKEN_2022_PROGRAM_ID,
+        }),
+        createInitializeAccountInstruction(
+          tokenAccount.publicKey,
+          cpiGuardMint.publicKey,
+          payer.publicKey,
+          TOKEN_2022_PROGRAM_ID
+        )
+      );
+
+      await sendAndConfirmTransaction(provider.connection, transaction, [
+        payer,
+        cpiGuardMint,
+        tokenAccount,
+      ]);
+    });
+
+    it("Enable CPI guard via program CPI", async () => {
+      await program.methods
+        .enableCpiGuard()
+        .accountsStrict({
+          tokenProgram: TOKEN_2022_PROGRAM_ID,
+          tokenAccount: tokenAccount.publicKey,
+          owner: payer.publicKey,
+        })
+        .signers([payer])
+        .rpc();
+    });
+
+    it("Disable CPI guard via program CPI", async () => {
+      await program.methods
+        .disableCpiGuard()
+        .accountsStrict({
+          tokenProgram: TOKEN_2022_PROGRAM_ID,
+          tokenAccount: tokenAccount.publicKey,
+          owner: payer.publicKey,
+        })
+        .signers([payer])
+        .rpc();
+    });
   });
 });

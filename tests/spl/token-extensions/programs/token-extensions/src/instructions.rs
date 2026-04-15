@@ -178,3 +178,41 @@ pub struct CheckMintExtensionConstraints<'info> {
     )]
     pub mint: Box<InterfaceAccount<'info, Mint>>,
 }
+
+#[derive(Accounts)]
+pub struct EnableCpiGuard<'info> {
+    pub token_program: Program<'info, Token2022>,
+    /// CHECK: token account with CPI guard extension
+    #[account(mut)]
+    pub token_account: UncheckedAccount<'info>,
+    pub owner: Signer<'info>,
+}
+
+pub fn enable_cpi_guard_handler(ctx: Context<EnableCpiGuard>) -> Result<()> {
+    let cpi_accounts = anchor_spl::token_2022_extensions::CpiGuard {
+        token_program_id: ctx.accounts.token_program.to_account_info(),
+        account: ctx.accounts.token_account.to_account_info(),
+        owner: ctx.accounts.owner.to_account_info(),
+    };
+    let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
+    anchor_spl::token_2022_extensions::cpi_guard_enable(cpi_ctx)
+}
+
+#[derive(Accounts)]
+pub struct DisableCpiGuard<'info> {
+    pub token_program: Program<'info, Token2022>,
+    /// CHECK: token account with CPI guard extension
+    #[account(mut)]
+    pub token_account: UncheckedAccount<'info>,
+    pub owner: Signer<'info>,
+}
+
+pub fn disable_cpi_guard_handler(ctx: Context<DisableCpiGuard>) -> Result<()> {
+    let cpi_accounts = anchor_spl::token_2022_extensions::CpiGuard {
+        token_program_id: ctx.accounts.token_program.to_account_info(),
+        account: ctx.accounts.token_account.to_account_info(),
+        owner: ctx.accounts.owner.to_account_info(),
+    };
+    let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
+    anchor_spl::token_2022_extensions::cpi_guard_disable(cpi_ctx)
+}

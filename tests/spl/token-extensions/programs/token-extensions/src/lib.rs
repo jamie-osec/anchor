@@ -29,4 +29,12 @@ pub mod token_extensions {
     ) -> Result<()> {
         Ok(())
     }
+
+    pub fn enable_cpi_guard(ctx: Context<EnableCpiGuard>) -> Result<()> {
+        instructions::enable_cpi_guard_handler(ctx)
+    }
+
+    pub fn disable_cpi_guard(ctx: Context<DisableCpiGuard>) -> Result<()> {
+        instructions::disable_cpi_guard_handler(ctx)
+    }
 }
