@@ -21,6 +21,7 @@ The minor version will be incremented upon a breaking change and the patch versi
 
 ### Fixes
 
+- cli: Correctly honor `--skip-seed-phrase-validation` in `keygen recover` ([#4417](https://github.com/solana-foundation/anchor/pull/4417)).
 - ts: Fix `sha256.hash()` returning corrupted output by using hex encoding ([#4404](https://github.com/solana-foundation/anchor/pull/4404)).
 - lang: Support module constants in `max_len` attribute ([#3879](https://github.com/solana-foundation/anchor/pull/3879)).
 
