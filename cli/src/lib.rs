@@ -100,7 +100,7 @@ pub enum Command {
         /// Don't install JavaScript dependencies
         #[clap(long)]
         no_install: bool,
-        /// Package Manager to use
+        /// Package Manager to use (defaults to yarn if not specified)
         #[clap(value_enum, long, default_value = "yarn")]
         package_manager: PackageManager,
         /// Don't initialize git
@@ -1347,6 +1347,15 @@ fn process_command(opts: Opts) -> Result<()> {
     }
 }
 
+fn is_package_manager_available(pm: &PackageManager) -> bool {
+    std::process::Command::new(pm.to_string())
+        .arg("--version")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok()
+}
+
 #[allow(clippy::too_many_arguments)]
 fn init(
     cfg_override: &ConfigOverride,
@@ -1381,6 +1390,13 @@ fn init(
     {
         return Err(anyhow!(
             "Anchor workspace name must be a valid Rust identifier. It may not be a Rust reserved word, start with a digit, or include certain disallowed characters. See https://doc.rust-lang.org/reference/identifiers.html for more detail.",
+        ));
+    }
+
+    if !is_package_manager_available(&package_manager) {
+        return Err(anyhow!(
+            "Package manager {package_manager} not found. Install it or pass --package-manager \
+             <pm>."
         ));
     }
 
