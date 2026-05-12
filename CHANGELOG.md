@@ -18,6 +18,7 @@ The minor version will be incremented upon a breaking change and the patch versi
 - cli: Add `edition` and `rust-version` to template ([#4048](https://github.com/solana-foundation/anchor/pull/4048))
 - lang: Add `program_id` verification to CPI return values ([#4411](https://github.com/solana-foundation/anchor/pull/4411)).
 - cli: Resolve the target directory via `cargo metadata` so custom target locations (e.g. `CARGO_TARGET_DIR`, workspace-level overrides) work across build, test, deploy and IDL paths ([#3817](https://github.com/solana-foundation/anchor/pull/3817)).
+- lang: Derive `Clone`, `Debug`, `Copy`, and `Default` on generated client / CPI account structs and instruction args where the field types allow it ([#4085](https://github.com/solana-foundation/anchor/pull/4085)).
 
 ### Fixes
 
