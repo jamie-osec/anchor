@@ -80,7 +80,7 @@ pub struct Overrides {
 impl Parse for Overrides {
     fn parse(input: ParseStream) -> ParseResult<Self> {
         let mut attr = Self::default();
-        let args = input.parse_terminated::<_, Comma>(NamedArg::parse)?;
+        let args = input.parse_terminated(NamedArg::parse, Token![,])?;
         for arg in args {
             match arg.name.to_string().as_str() {
                 "discriminator" => {
@@ -152,7 +152,7 @@ pub struct AccountsStruct {
     // Fields on the accounts struct.
     pub fields: Vec<AccountField>,
     // Instruction data api expression.
-    instruction_api: Option<Punctuated<Expr, Comma>>,
+    instruction_api: Option<Punctuated<syn::FnArg, Comma>>,
 }
 
 impl Parse for AccountsStruct {
@@ -178,7 +178,7 @@ impl AccountsStruct {
     pub fn new(
         strct: ItemStruct,
         fields: Vec<AccountField>,
-        instruction_api: Option<Punctuated<Expr, Comma>>,
+        instruction_api: Option<Punctuated<syn::FnArg, Comma>>,
     ) -> Self {
         let ident = strct.ident.clone();
         let generics = strct.generics;
@@ -1015,13 +1015,9 @@ impl syn::parse::Parse for SeedsExpr {
         if stream.peek(syn::token::Bracket) {
             let content;
             syn::bracketed!(content in stream);
-            let mut list: Punctuated<Expr, Token![,]> = content.parse_terminated(Expr::parse)?;
-
-            // Strip a trailing comma if present.
-            // Use `pop_punct` when we update to syn 2.0
-            if let Some(pair) = list.pop() {
-                list.push_value(pair.into_value());
-            }
+            let mut list: Punctuated<Expr, Token![,]> =
+                content.parse_terminated(Expr::parse, Token![,])?;
+            list.pop_punct();
 
             Ok(SeedsExpr::List(list))
         } else {
@@ -1269,8 +1265,14 @@ impl<T> Deref for Context<T> {
     }
 }
 
-impl<T> Spanned for Context<T> {
-    fn span(&self) -> Span {
+impl<T> Context<T> {
+    pub fn span(&self) -> Span {
         self.span
+    }
+}
+
+impl<T: ToTokens> ToTokens for Context<T> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        self.inner.to_tokens(tokens)
     }
 }
