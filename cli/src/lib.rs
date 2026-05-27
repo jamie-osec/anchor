@@ -12,7 +12,7 @@ use {
         prelude::UpgradeableLoaderState, solana_program::bpf_loader_upgradeable, AnchorDeserialize,
     },
     anchor_lang_idl::{
-        convert::convert_idl,
+        convert::{convert_idl, convert_idl_to_legacy},
         types::{Idl, IdlArrayLen, IdlDefinedFields, IdlType, IdlTypeDefTy},
     },
     anyhow::{anyhow, bail, Context, Result},
@@ -851,7 +851,7 @@ pub enum IdlCommand {
         #[clap(long)]
         non_canonical: bool,
     },
-    /// Convert legacy IDLs (pre Anchor 0.30) to the new IDL spec
+    /// Convert IDLs between the legacy (pre Anchor 0.30) and current spec
     Convert {
         /// Path to the IDL file
         path: PathBuf,
@@ -862,6 +862,11 @@ pub enum IdlCommand {
         /// If not provided, discovers program ID from IDL.
         #[clap(short, long)]
         program_id: Option<Pubkey>,
+        /// Convert a current-spec IDL back to the legacy (pre Anchor
+        /// v0.30) format. Without this flag the converter runs in the
+        /// default direction (legacy -> current).
+        #[clap(long)]
+        to_legacy: bool,
     },
     /// Generate TypeScript type for the IDL
     Type {
@@ -3009,7 +3014,8 @@ fn idl(cfg_override: &ConfigOverride, subcmd: IdlCommand) -> Result<()> {
             path,
             out,
             program_id,
-        } => idl_convert(path, out, program_id),
+            to_legacy,
+        } => idl_convert(path, out, program_id, to_legacy),
         IdlCommand::Type { path, out } => idl_type(path, out),
         IdlCommand::Close {
             program_id,
@@ -3228,30 +3234,72 @@ fn idl_fetch(
     Ok(())
 }
 
-fn idl_convert(path: PathBuf, out: Option<PathBuf>, program_id: Option<Pubkey>) -> Result<()> {
-    let idl = fs::read(path)?;
-
-    // Set the `metadata.address` field based on the given `program_id`
-    let idl = match program_id {
-        Some(program_id) => {
-            let mut idl = serde_json::from_slice::<serde_json::Value>(&idl)?;
-            idl.as_object_mut()
-                .ok_or_else(|| anyhow!("IDL must be an object"))?
-                .insert(
-                    "metadata".into(),
-                    serde_json::json!({ "address": program_id.to_string() }),
-                );
-            serde_json::to_vec(&idl)?
+/// Apply a `--program-id` override to a raw IDL JSON document. The current
+/// and legacy specs store the program address in different places, so we
+/// detect the spec by the presence of `metadata.spec` and patch the right
+/// field. For the legacy spec we merge into the existing `metadata` object
+/// instead of replacing it; replacing it would drop sibling fields, and for
+/// a current-spec IDL it would also wipe `metadata.{spec,name,version}` and
+/// cause `convert_idl` to mis-detect the file as legacy.
+fn apply_program_id_override(idl: &[u8], program_id: Pubkey) -> Result<Vec<u8>> {
+    let mut idl = serde_json::from_slice::<serde_json::Value>(idl)?;
+    let obj = idl
+        .as_object_mut()
+        .ok_or_else(|| anyhow!("IDL must be an object"))?;
+    let pid = program_id.to_string();
+    let is_current_spec = obj.get("metadata").and_then(|m| m.get("spec")).is_some();
+    if is_current_spec {
+        // Current spec stores the address at the top level.
+        obj.insert("address".into(), serde_json::Value::String(pid));
+    } else {
+        // Legacy spec stores it under `metadata.address`. Merge so we
+        // don't drop any sibling metadata fields the file may already
+        // carry.
+        match obj.get_mut("metadata") {
+            Some(serde_json::Value::Object(m)) => {
+                m.insert("address".into(), serde_json::Value::String(pid));
+            }
+            _ => {
+                obj.insert("metadata".into(), serde_json::json!({ "address": pid }));
+            }
         }
-        _ => idl,
+    }
+    serde_json::to_vec(&idl).map_err(Into::into)
+}
+
+fn idl_convert(
+    path: PathBuf,
+    out: Option<PathBuf>,
+    program_id: Option<Pubkey>,
+    to_legacy: bool,
+) -> Result<()> {
+    let idl = fs::read(path)?;
+    let idl = match program_id {
+        Some(program_id) => apply_program_id_override(&idl, program_id)?,
+        None => idl,
     };
 
-    let idl = convert_idl(&idl)?;
+    // Normalize either input spec to a current-spec `Idl`; both output
+    // branches need the parsed value.
+    let parsed = convert_idl(&idl)?;
     let out = match out {
         None => OutFile::Stdout,
         Some(out) => OutFile::File(out),
     };
-    write_idl(&idl, out)
+    if to_legacy {
+        let bytes = convert_idl_to_legacy(&parsed)?;
+        match out {
+            OutFile::Stdout => {
+                let s =
+                    std::str::from_utf8(&bytes).context("legacy IDL JSON was not valid UTF-8")?;
+                println!("{s}");
+                Ok(())
+            }
+            OutFile::File(path) => fs::write(path, bytes).map_err(Into::into),
+        }
+    } else {
+        write_idl(&parsed, out)
+    }
 }
 
 fn idl_type(path: PathBuf, out: Option<PathBuf>) -> Result<()> {
@@ -6846,6 +6894,65 @@ mod tests {
         assert!(ts.contains(r#""generic": "itemType""#));
         assert!(ts.contains(r#""name": "seedPrefix""#));
         assert!(ts.contains(r#""value": "SEED_PREFIX""#));
+    }
+
+    // ---------------------------------------------------------------------
+    // `anchor idl convert` regression tests.
+    // ---------------------------------------------------------------------
+
+    const TEST_PROGRAM_ID: Pubkey =
+        solana_pubkey::pubkey!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+
+    #[test]
+    fn apply_program_id_override_current_spec_sets_top_level_address() {
+        // Current-spec input. Must patch top-level `address` and keep the
+        // `metadata.spec` field so the downstream parser still detects
+        // the current spec.
+        let idl = serde_json::json!({
+            "address": "11111111111111111111111111111111",
+            "metadata": { "name": "demo", "version": "0.1.0", "spec": "0.1.0" },
+            "instructions": [],
+        })
+        .to_string();
+        let out = apply_program_id_override(idl.as_bytes(), TEST_PROGRAM_ID).unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&out).unwrap();
+        assert_eq!(v["address"], TEST_PROGRAM_ID.to_string());
+        // Sibling metadata fields must survive.
+        assert_eq!(v["metadata"]["spec"], "0.1.0");
+        assert_eq!(v["metadata"]["name"], "demo");
+        assert_eq!(v["metadata"]["version"], "0.1.0");
+    }
+
+    #[test]
+    fn apply_program_id_override_legacy_merges_into_existing_metadata() {
+        // Legacy input with sibling metadata fields. Override must merge
+        // into the existing `metadata` object, not replace it.
+        let idl = serde_json::json!({
+            "version": "0.1.0",
+            "name": "demo",
+            "instructions": [],
+            "metadata": { "origin": "anchor", "address": "11111111111111111111111111111111" },
+        })
+        .to_string();
+        let out = apply_program_id_override(idl.as_bytes(), TEST_PROGRAM_ID).unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&out).unwrap();
+        assert_eq!(v["metadata"]["address"], TEST_PROGRAM_ID.to_string());
+        assert_eq!(v["metadata"]["origin"], "anchor");
+    }
+
+    #[test]
+    fn apply_program_id_override_legacy_no_metadata_creates_object() {
+        // Legacy input without any metadata block. Override should create
+        // a fresh `metadata.address` entry.
+        let idl = serde_json::json!({
+            "version": "0.1.0",
+            "name": "demo",
+            "instructions": [],
+        })
+        .to_string();
+        let out = apply_program_id_override(idl.as_bytes(), TEST_PROGRAM_ID).unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&out).unwrap();
+        assert_eq!(v["metadata"]["address"], TEST_PROGRAM_ID.to_string());
     }
 
     #[test]
