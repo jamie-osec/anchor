@@ -80,6 +80,8 @@ solana
 Solana
 Solana's
 solanafoundation
+ottersec
+otter-sec
 Solang
 solpg
 Solpg
