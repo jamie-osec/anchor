@@ -20,6 +20,7 @@ The minor version will be incremented upon a breaking change and the patch versi
 - cli: Resolve the target directory via `cargo metadata` so custom target locations (e.g. `CARGO_TARGET_DIR`, workspace-level overrides) work across build, test, deploy and IDL paths ([#3817](https://github.com/solana-foundation/anchor/pull/3817)).
 - cli: Allow configuring IDL JSON location in workspace config ([#4483](https://github.com/solana-foundation/anchor/pull/4483)).
 - lang: Derive `Clone`, `Debug`, `Copy`, and `Default` on generated client / CPI account structs and instruction args where the field types allow it ([#4085](https://github.com/solana-foundation/anchor/pull/4085)).
+- cli: `anchor init` refuses to create a new Anchor workspace inside an existing Cargo workspace to avoid broken nested layouts ([#4576](https://github.com/solana-foundation/anchor/pull/4576)).
 
 ### Fixes
 
