@@ -35,6 +35,7 @@ The minor version will be incremented upon a breaking change and the patch versi
 - lang: Support module constants in `max_len` attribute ([#3879](https://github.com/solana-foundation/anchor/pull/3879)).
 - ts: Validate instruction args in `BorshInstructionCoder.encode` to reject typo'd or missing fields instead of silently ignoring them ([#4560](https://github.com/solana-foundation/anchor/pull/4560)).
 - ts: Align TS `camelCase` conversion with Rust `heck` for digit-letter identifiers so generated client names match Rust identifiers ([#4571](https://github.com/solana-foundation/anchor/pull/4571)).
+- cli: Warn if `event-cpi` instruction is unreachable with custom discriminators ([#4614](https://github.com/solana-foundation/anchor/pull/4614)).
 
 ### Breaking
 

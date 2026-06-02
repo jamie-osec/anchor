@@ -3312,12 +3312,29 @@ fn generate_idl(
 ) -> Result<Idl> {
     check_idl_build_feature()?;
 
-    anchor_lang_idl::build::IdlBuilder::new()
+    let idl = anchor_lang_idl::build::IdlBuilder::new()
         .resolution(cfg.features.resolution)
         .skip_lint(cfg.features.skip_lint || skip_lint)
         .no_docs(no_docs)
         .cargo_args(cargo_args.into())
-        .build()
+        .build()?;
+
+    // Warn users if there is a potential for a conflict between user-defined discriminators and
+    // hardcoded `event-cpi` discriminator.
+    //
+    // Note: Warn independent of whether the user has the `event-cpi` feature enabled to make sure
+    // there are no potential conflicts in the future if/when the user decides to enable it.
+    idl.instructions
+        .iter()
+        .filter(|ix| anchor_lang::event::EVENT_IX_TAG_LE.starts_with(&ix.discriminator))
+        .for_each(|ix| {
+            eprintln!(
+                "Warning: Instruction conflicts with `event-cpi` instruction discriminator: `{}`",
+                ix.name
+            );
+        });
+
+    Ok(idl)
 }
 
 fn idl_fetch(
