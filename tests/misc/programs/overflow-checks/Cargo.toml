@@ -10,7 +10,6 @@ name = "overflow_checks"
 
 [features]
 no-entrypoint = []
-
 no-log-ix-name = []
 cpi = ["no-entrypoint"]
 default = []

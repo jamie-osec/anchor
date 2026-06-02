@@ -10,7 +10,6 @@ name = "multiple_suites_run_single"
 
 [features]
 no-entrypoint = []
-
 no-log-ix-name = []
 cpi = ["no-entrypoint"]
 default = []
