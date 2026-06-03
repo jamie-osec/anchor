@@ -530,7 +530,8 @@ jobs:
             path: tests/multiple-scripts
           - cmd: cd tests/test-instruction-validation && ./test.sh
             path: tests/test-instruction-validation
-
+          - cmd: cd tests/account-generation-test && anchor test
+            path: tests/account-generation-test
 
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3
