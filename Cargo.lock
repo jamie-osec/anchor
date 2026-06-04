@@ -686,6 +686,7 @@ dependencies = [
  "dirs",
  "fs2",
  "reqwest 0.13.4",
+ "indicatif",
  "semver",
  "serde",
  "serde_json",
