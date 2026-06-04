@@ -685,6 +685,7 @@ dependencies = [
  "clap_complete",
  "dirs",
  "reqwest 0.13.4",
+ "indicatif",
  "semver",
  "serde",
  "serde_json",
