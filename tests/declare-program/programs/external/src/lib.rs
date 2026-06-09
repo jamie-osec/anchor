@@ -86,6 +86,12 @@ pub mod external {
         Ok(())
     }
 
+    // Test optional accounts parsing
+    pub fn update_with_optional(ctx: Context<UpdateWithOptional>, value: u32) -> Result<()> {
+        ctx.accounts.my_account.field = value;
+        Ok(())
+    }
+
     // Compilation test for whether a defined type (an account in this case) can be used in `cpi` client.
     pub fn test_compilation_defined_type_param(
         _ctx: Context<TestCompilation>,
@@ -119,9 +125,11 @@ pub mod external {
         Ok(())
     }
 
-    // Test optional accounts parsing
-    pub fn update_with_optional(ctx: Context<UpdateWithOptional>, value: u32) -> Result<()> {
-        ctx.accounts.my_account.field = value;
+    // Compilation test for an instruction with a numeric suffix
+    // https://github.com/otter-sec/anchor/issues/4281
+    pub fn test_compilation_initialize_with_token_2022(
+        _ctx: Context<TestCompilation>,
+    ) -> Result<()> {
         Ok(())
     }
 }
