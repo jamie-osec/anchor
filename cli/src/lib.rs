@@ -469,6 +469,7 @@ pub enum Command {
     /// config.
     Shell,
     /// Runs the script defined by the current workspace's Anchor.toml.
+    #[clap(alias = "r")]
     Run {
         /// The name of the script to run.
         script: String,
