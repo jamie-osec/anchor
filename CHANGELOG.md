@@ -41,6 +41,7 @@ The minor version will be incremented upon a breaking change and the patch versi
 - lang/syn: Remove remaining fallible IDL generation paths from clippy-denied code ([#4631](https://github.com/otter-sec/anchor/pull/4631)).
 - lang: Validate `max_len` arguments more strictly during space derivation ([#4707](https://github.com/otter-sec/anchor/pull/4707)).
 - ts: Remove `cross-fetch` dependency ([#4671](https://github.com/solana-foundation/anchor/pull/4671)).
+- lang: Set `anchor-lang` Minimum Supported Rust Version to `1.89` ([#4638](https://github.com/otter-sec/anchor/pull/4638)).
 - lang: Migrate `anchor-syn` from syn 1.x to syn 2.0, allowing use of modern Rust syntax ([#4523](https://github.com/solana-foundation/anchor/issues/4523)).
 - idl: Bump version to 0.1.3 ([#4453](https://github.com/solana-foundation/anchor/pull/4453)).
 - lang: Avoid fatal errors in IDL building when modern Rust syntax is in use ([#4520](https://github.com/solana-foundation/anchor/pull/4520)).
