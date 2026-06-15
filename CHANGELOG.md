@@ -28,6 +28,7 @@ The minor version will be incremented upon a breaking change and the patch versi
 
 ### Fixes
 
+- ts: Remove `cross-fetch` dependency ([#4671](https://github.com/solana-foundation/anchor/pull/4671)).
 - lang: Migrate `anchor-syn` from syn 1.x to syn 2.0, allowing use of modern Rust syntax ([#4523](https://github.com/solana-foundation/anchor/issues/4523)).
 - lang: Avoid fatal errors in IDL building when modern Rust syntax is in use ([#4520](https://github.com/solana-foundation/anchor/pull/4520)).
 - client: Avoid panic in `parse_logs_response` when a program-emitted log line ends with `invoke [1]` ([#4461](https://github.com/solana-foundation/anchor/issues/4461)).
