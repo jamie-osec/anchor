@@ -79,6 +79,9 @@ pub const DOCKER_BUILDER_VERSION: &str = VERSION;
 /// Default RPC port
 pub const DEFAULT_RPC_PORT: u16 = 8899;
 const DEFAULT_FAUCET_PORT: u16 = 9900;
+const DEFAULT_TOOLS_VERSION: &str = "v1.54";
+const DEFAULT_BUILD_ARCH: &str = "v3";
+const BUILD_ARCH_ENV: &str = "ANCHOR_BUILD_SBF_ARCH";
 
 /// WebSocket port offset for solana-test-validator (RPC port + 1)
 pub const WEBSOCKET_PORT_OFFSET: u16 = 1;
@@ -240,6 +243,12 @@ pub enum Command {
         /// only.
         #[clap(short, long)]
         solana_version: Option<String>,
+        /// Platform tools version to pass to `cargo build-sbf`.
+        #[clap(long, default_value = DEFAULT_TOOLS_VERSION)]
+        tools_version: String,
+        /// SBPF architecture to pass to `cargo build-sbf`.
+        #[clap(long)]
+        arch: Option<String>,
         /// Docker image to use. For --verifiable builds only.
         #[clap(short, long)]
         docker_image: Option<String>,
@@ -1424,6 +1433,8 @@ fn process_command(opts: Opts) -> Result<()> {
             verifiable,
             program_name,
             solana_version,
+            tools_version,
+            arch,
             docker_image,
             bootstrap,
             cargo_args,
@@ -1443,6 +1454,7 @@ fn process_command(opts: Opts) -> Result<()> {
             solana_version,
             docker_image,
             bootstrap,
+            BuildSbfOptions::from_build_command(tools_version, arch),
             None,
             None,
             env,
@@ -2193,6 +2205,7 @@ pub fn build(
     solana_version: Option<String>,
     docker_image: Option<String>,
     bootstrap: BootstrapMode,
+    build_sbf_options: BuildSbfOptions,
     stdout: Option<File>, // Used for the package registry server.
     stderr: Option<File>, // Used for the package registry server.
     env_vars: Vec<String>,
@@ -2272,6 +2285,7 @@ pub fn build(
             idl_out.clone(),
             idl_ts_out.clone(),
             &build_config,
+            &build_sbf_options,
             stdout,
             stderr,
             env_vars,
@@ -2287,6 +2301,7 @@ pub fn build(
             idl_out.clone(),
             idl_ts_out.clone(),
             &build_config,
+            &build_sbf_options,
             stdout,
             stderr,
             env_vars,
@@ -2302,6 +2317,7 @@ pub fn build(
             idl_out.clone(),
             idl_ts_out.clone(),
             &build_config,
+            &build_sbf_options,
             stdout,
             stderr,
             env_vars,
@@ -2332,6 +2348,7 @@ fn build_all(
     idl_out: Option<PathBuf>,
     idl_ts_out: Option<PathBuf>,
     build_config: &BuildConfig,
+    build_sbf_options: &BuildSbfOptions,
     stdout: Option<File>, // Used for the package registry server.
     stderr: Option<File>, // Used for the package registry server.
     env_vars: Vec<String>,
@@ -2353,6 +2370,7 @@ fn build_all(
                         idl_out.clone(),
                         idl_ts_out.clone(),
                         build_config,
+                        build_sbf_options,
                         stdout.as_ref().map(|f| f.try_clone()).transpose()?,
                         stderr.as_ref().map(|f| f.try_clone()).transpose()?,
                         env_vars.clone(),
@@ -2519,6 +2537,7 @@ fn build_cwd(
     idl_out: Option<PathBuf>,
     idl_ts_out: Option<PathBuf>,
     build_config: &BuildConfig,
+    build_sbf_options: &BuildSbfOptions,
     stdout: Option<File>,
     stderr: Option<File>,
     env_vars: Vec<String>,
@@ -2532,12 +2551,20 @@ fn build_cwd(
     };
     match build_config.verifiable {
         false => _build_cwd(
-            cfg, no_idl, idl_out, idl_ts_out, skip_lint, no_docs, cargo_args,
+            cfg,
+            no_idl,
+            idl_out,
+            idl_ts_out,
+            skip_lint,
+            no_docs,
+            build_sbf_options,
+            cargo_args,
         ),
         true => build_cwd_verifiable(
             cfg,
             cargo_toml,
             build_config,
+            build_sbf_options,
             stdout,
             stderr,
             skip_lint,
@@ -2555,6 +2582,7 @@ fn build_cwd_verifiable(
     cfg: &WithPath<Config>,
     cargo_toml: PathBuf,
     build_config: &BuildConfig,
+    build_sbf_options: &BuildSbfOptions,
     stdout: Option<File>,
     stderr: Option<File>,
     skip_lint: bool,
@@ -2583,6 +2611,7 @@ fn build_cwd_verifiable(
         container_name,
         cargo_toml,
         build_config,
+        build_sbf_options,
         stdout,
         stderr,
         env_vars,
@@ -2657,6 +2686,7 @@ fn docker_build(
     container_name: &str,
     cargo_toml: PathBuf,
     build_config: &BuildConfig,
+    build_sbf_options: &BuildSbfOptions,
     stdout: Option<File>,
     stderr: Option<File>,
     env_vars: Vec<String>,
@@ -2711,6 +2741,7 @@ fn docker_build(
             cfg_parent,
             target_dir.as_path(),
             binary_name,
+            build_sbf_options,
             stdout,
             stderr,
             env_vars,
@@ -2775,6 +2806,7 @@ fn docker_build_bpf(
     cfg_parent: &Path,
     target_dir: &Path,
     binary_name: String,
+    build_sbf_options: &BuildSbfOptions,
     stdout: Option<File>,
     stderr: Option<File>,
     env_vars: Vec<String>,
@@ -2805,7 +2837,7 @@ fn docker_build_bpf(
                 .concat(),
         )
         .args([container_name, "cargo"])
-        .args(build_sbf_base_args(&cargo_args))
+        .args(build_sbf_base_args(build_sbf_options))
         .args(["--manifest-path", &manifest_path.display().to_string()])
         .args(cargo_args)
         .stdout(match stdout {
@@ -2897,9 +2929,10 @@ fn _build_cwd(
     idl_ts_out: Option<PathBuf>,
     skip_lint: bool,
     no_docs: bool,
+    build_sbf_options: &BuildSbfOptions,
     cargo_args: Vec<String>,
 ) -> Result<Vec<PathBuf>> {
-    let build_args = build_sbf_args(&cargo_args);
+    let build_args = build_sbf_args(build_sbf_options, &cargo_args);
     let exit = std::process::Command::new("cargo")
         .args(&build_args)
         .stdout(Stdio::inherit())
@@ -2972,9 +3005,36 @@ fn _build_cwd(
 
 /// Subcommand to be passed to cargo.
 const BUILD_SUBCOMMAND: &str = "build-sbf";
-const DEFAULT_TOOLS_VERSION: &str = "v1.54";
-const DEFAULT_BUILD_ARCH: &str = "v3";
-const BUILD_ARCH_ENV: &str = "ANCHOR_BUILD_SBF_ARCH";
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BuildSbfOptions {
+    tools_version: String,
+    arch: Option<String>,
+}
+
+impl BuildSbfOptions {
+    fn new(tools_version: String, arch: Option<String>) -> Self {
+        Self {
+            tools_version,
+            arch: arch.filter(|arch| !arch.is_empty()),
+        }
+    }
+
+    fn from_build_command(tools_version: String, arch: Option<String>) -> Self {
+        Self::new(tools_version, arch.or_else(Self::default_arch))
+    }
+
+    fn default_arch() -> Option<String> {
+        Some(std::env::var(BUILD_ARCH_ENV).unwrap_or_else(|_| DEFAULT_BUILD_ARCH.to_owned()))
+            .filter(|arch| !arch.is_empty())
+    }
+}
+
+impl Default for BuildSbfOptions {
+    fn default() -> Self {
+        Self::new(DEFAULT_TOOLS_VERSION.to_owned(), Self::default_arch())
+    }
+}
 
 fn validator_type_from_env() -> Result<Option<ValidatorType>> {
     let Ok(value) = std::env::var("ANCHOR_TEST_VALIDATOR") else {
@@ -2989,41 +3049,34 @@ fn validator_type_from_env() -> Result<Option<ValidatorType>> {
     }
 }
 
-fn has_cargo_arg(args: &[String], name: &str) -> bool {
-    let name_with_value = format!("{name}=");
-    args.iter()
-        .any(|arg| arg == name || arg.starts_with(&name_with_value))
-}
-
-fn build_sbf_base_args(extra_args: &[String]) -> Vec<String> {
+fn build_sbf_base_args(build_sbf_options: &BuildSbfOptions) -> Vec<String> {
     let mut args = vec![BUILD_SUBCOMMAND.to_owned()];
-    if !has_cargo_arg(extra_args, "--tools-version") {
-        args.push("--tools-version".to_owned());
-        args.push(DEFAULT_TOOLS_VERSION.to_owned());
-    }
-    if !has_cargo_arg(extra_args, "--arch") {
-        let arch = std::env::var(BUILD_ARCH_ENV).unwrap_or_else(|_| DEFAULT_BUILD_ARCH.to_owned());
-        if !arch.is_empty() {
-            args.push("--arch".to_owned());
-            args.push(arch);
-        }
+    args.push("--tools-version".to_owned());
+    args.push(build_sbf_options.tools_version.clone());
+    if let Some(arch) = &build_sbf_options.arch {
+        args.push("--arch".to_owned());
+        args.push(arch.clone());
     }
     args
 }
 
-fn build_sbf_args(extra_args: &[String]) -> Vec<String> {
-    let mut args = build_sbf_base_args(extra_args);
+fn build_sbf_args(build_sbf_options: &BuildSbfOptions, extra_args: &[String]) -> Vec<String> {
+    let mut args = build_sbf_base_args(build_sbf_options);
     args.extend(extra_args.iter().cloned());
     args
 }
 
 /// Run the configured SBF build command.
-pub fn cargo_build_sbf(cwd: Option<&Path>, extra_args: &[String]) -> Result<()> {
+pub fn cargo_build_sbf(
+    cwd: Option<&Path>,
+    build_sbf_options: &BuildSbfOptions,
+    extra_args: &[String],
+) -> Result<()> {
     let mut cmd = std::process::Command::new("cargo");
     if let Some(d) = cwd {
         cmd.current_dir(d);
     }
-    let args = build_sbf_args(extra_args);
+    let args = build_sbf_args(build_sbf_options, extra_args);
     let status = cmd
         .args(&args)
         .stdout(Stdio::inherit())
@@ -4189,6 +4242,7 @@ fn test(
                 None,
                 None,
                 BootstrapMode::None,
+                BuildSbfOptions::default(),
                 None,
                 None,
                 env_vars,
@@ -4465,7 +4519,7 @@ fn debugger_loose(
         if !skip_build {
             let build_cwd = ws.cargo_invocation_dir();
             eprintln!("running `cargo build-sbf` from {}", build_cwd.display());
-            cargo_build_sbf(Some(build_cwd), &cargo_args)?;
+            cargo_build_sbf(Some(build_cwd), &BuildSbfOptions::default(), &cargo_args)?;
         }
 
         std::env::remove_var("RUSTC_WRAPPER");
@@ -4559,7 +4613,7 @@ fn run_coverage(
         if !skip_build {
             let build_cwd = ws.cargo_invocation_dir();
             eprintln!("building programs with DWARF...");
-            cargo_build_sbf(Some(build_cwd), &cargo_args)?;
+            cargo_build_sbf(Some(build_cwd), &BuildSbfOptions::default(), &cargo_args)?;
         }
 
         if trace_path.exists() {
@@ -6786,6 +6840,7 @@ fn localnet(
                 None,
                 None,
                 BootstrapMode::None,
+                BuildSbfOptions::default(),
                 None,
                 None,
                 env_vars,
@@ -7329,6 +7384,79 @@ mod tests {
         };
 
         assert_eq!(anchor_version, AnchorVersion::V2);
+    }
+
+    #[test]
+    fn test_build_accepts_build_sbf_options() {
+        let opts = Opts::try_parse_from([
+            "anchor",
+            "build",
+            "--tools-version",
+            "v1.55",
+            "--arch",
+            "v2",
+            "--",
+            "--features",
+            "extra",
+        ])
+        .unwrap();
+
+        let Command::Build {
+            tools_version,
+            arch,
+            cargo_args,
+            ..
+        } = opts.command
+        else {
+            panic!("expected build command");
+        };
+
+        assert_eq!(tools_version, "v1.55");
+        assert_eq!(arch.as_deref(), Some("v2"));
+        assert_eq!(cargo_args, ["--features", "extra"].map(str::to_string));
+    }
+
+    #[test]
+    fn build_sbf_args_appends_extra_args_without_special_handling() {
+        let build_sbf_options = BuildSbfOptions::new("v1.55".to_string(), Some("v2".to_string()));
+        let extra_args = vec![
+            "--tools-version".to_string(),
+            "v1.53".to_string(),
+            "--arch".to_string(),
+            "v1".to_string(),
+        ];
+
+        let args = build_sbf_args(&build_sbf_options, &extra_args);
+
+        assert_eq!(
+            args,
+            [
+                "build-sbf",
+                "--tools-version",
+                "v1.55",
+                "--arch",
+                "v2",
+                "--tools-version",
+                "v1.53",
+                "--arch",
+                "v1",
+            ]
+            .map(str::to_string)
+        );
+    }
+
+    #[test]
+    fn build_sbf_options_from_build_command_uses_default_arch() {
+        let default_arch = BuildSbfOptions::default_arch();
+        let build_sbf_options = BuildSbfOptions::from_build_command("v1.54".to_string(), None);
+        let mut expected = ["build-sbf", "--tools-version", "v1.54"]
+            .map(str::to_string)
+            .to_vec();
+        if let Some(default_arch) = default_arch {
+            expected.extend(["--arch".to_string(), default_arch]);
+        }
+
+        assert_eq!(build_sbf_base_args(&build_sbf_options), expected);
     }
 
     #[test]
