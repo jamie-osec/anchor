@@ -75,7 +75,8 @@ pub use {
     solana_message::AddressLookupTableAccount,
     solana_pubsub_client::nonblocking::pubsub_client::PubsubClientError,
     solana_rpc_client_api::{
-        client_error::Error as SolanaClientError, config::RpcSendTransactionConfig,
+        client_error::{Error as SolanaClientError, ErrorKind as SolanaClientErrorKind},
+        config::RpcSendTransactionConfig,
         filter::RpcFilterType,
     },
     solana_signer::{Signer, SignerError},
@@ -305,10 +306,16 @@ impl<C: Deref<Target = impl Signer> + Clone> Program<C> {
                 .map_err(Box::new)?
                 .into_iter()
                 .map(|(key, account)| {
-                    let data = account
-                        .data
-                        .decode()
-                        .expect("account was fetched with binary encoding");
+                    let data = account.data.decode().ok_or_else(|| {
+                        ClientError::SolanaClientError(Box::new(
+                            SolanaClientError::new_with_request(
+                                SolanaClientErrorKind::Custom(
+                                    "Failed to decode account data".to_string(),
+                                ),
+                                solana_rpc_client_api::request::RpcRequest::GetProgramAccounts,
+                            ),
+                        ))
+                    })?;
                     Ok((key, T::try_deserialize(&mut data.as_slice())?))
                 }),
         })
@@ -356,8 +363,14 @@ impl<C: Deref<Target = impl Signer> + Clone> Program<C> {
             })?;
 
             while let Some(logs) = notifications.next().await {
+                let signature: Signature = logs.value.signature.parse().map_err(|e| {
+                    ClientError::LogParseError(format!(
+                        "Invalid signature '{}': {e}",
+                        logs.value.signature
+                    ))
+                })?;
                 let ctx = EventContext {
-                    signature: logs.value.signature.parse().unwrap(),
+                    signature,
                     slot: logs.context.slot,
                 };
                 let events = parse_logs_response(logs, &program_id_str)?;
