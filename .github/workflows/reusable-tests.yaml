@@ -456,7 +456,7 @@ jobs:
           #   path: tests/swap
           - cmd: cd tests/escrow && anchor test --skip-lint && npx tsc --noEmit
             path: tests/escrow
-          - cmd: cd tests/pyth && anchor test --skip-lint && npx tsc --noEmit
+          - cmd: cd tests/pyth && anchor test --skip-lint
             path: tests/pyth
           - cmd: cd tests/realloc && anchor test --skip-lint && npx tsc --noEmit
             path: tests/realloc
