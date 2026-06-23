@@ -52,9 +52,9 @@ impl Bumps for NoAccounts {
 const PROGRAM_ID: [u8; 32] = [0x42; 32];
 const MAX_ACCOUNTS: usize = 8;
 
-/// `ProgramError::Custom(2005)` — `ErrorCode::ConstraintDuplicateMutableAccount`
+/// `ProgramError::Custom(2040)` — `ErrorCode::ConstraintDuplicateMutableAccount`
 /// (`lang-v2/src/lib.rs`).
-const DUP_MUT_ERROR: u32 = 2005;
+const DUP_MUT_ERROR: u32 = 2040;
 
 /// Build a fresh non-dup record with a distinct address.
 fn fresh(tag: u8) -> AccountRecord {

@@ -30,12 +30,12 @@ const ERR_BAD_CONSTRAINT: u32 = 6003;
 const ERR_BAD_FIRST: u32 = 6004;
 const ERR_BAD_SECOND: u32 = 6005;
 
-/// `ErrorCode::ConstraintRaw` maps to `Custom(2001)`.
-const CONSTRAINT_RAW: u32 = 2001;
-/// `ErrorCode::ConstraintExecutable` maps to `Custom(2002)`.
-const CONSTRAINT_EXECUTABLE: u32 = 2002;
-/// `ErrorCode::ConstraintZero` maps to `Custom(2004)`.
-const CONSTRAINT_ZERO: u32 = 2004;
+/// `ErrorCode::ConstraintRaw` maps to `Custom(2003)`.
+const CONSTRAINT_RAW: u32 = 2003;
+/// `ErrorCode::ConstraintExecutable` maps to `Custom(2007)`.
+const CONSTRAINT_EXECUTABLE: u32 = 2007;
+/// `ErrorCode::ConstraintZero` maps to `Custom(2013)`.
+const CONSTRAINT_ZERO: u32 = 2013;
 
 // Matching the pinned address baked into the program.
 fn pinned_address() -> Pubkey {
@@ -566,7 +566,7 @@ fn close_self_close_rejected() {
 
     // Pass `data` as both `data` and `receiver`. Both slots are `mut`
     // in `DoClose`, so the duplicate-mutable-account guard fires first
-    // (`Custom(2005)`), before the derive's self-close check would run.
+    // (`Custom(2040)`), before the derive's self-close check would run.
     // Both are derive-level rejections of the same misuse — accept
     // either. (The self-close check only becomes reachable if the
     // receiver slot is read-only, which is not a legitimate close.)
@@ -579,7 +579,7 @@ fn close_self_close_rejected() {
     );
     let rendered = format!("{:?}", result.as_ref().err().expect("should fail").err);
     assert!(
-        rendered.contains("Custom(2005)") || rendered.contains("InvalidAccountData"),
+        rendered.contains("Custom(2040)") || rendered.contains("InvalidAccountData"),
         "expected dup-mut or ConstraintClose rejection, got: {rendered}",
     );
 }

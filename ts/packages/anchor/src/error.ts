@@ -383,6 +383,8 @@ export const LangErrorCode = {
     errors.ANCHOR_ERROR__CONSTRAINT_MINT_TRANSFER_HOOK_EXTENSION_AUTHORITY,
   ConstraintMintTransferHookExtensionProgramId:
     errors.ANCHOR_ERROR__CONSTRAINT_MINT_TRANSFER_HOOK_EXTENSION_PROGRAM_ID,
+  ConstraintDuplicateMutableAccount:
+    errors.ANCHOR_ERROR__CONSTRAINT_DUPLICATE_MUTABLE_ACCOUNT,
 
   // Require.
   RequireViolated: errors.ANCHOR_ERROR__REQUIRE_VIOLATED,
@@ -571,6 +573,10 @@ export const LangErrorMessage = new Map<number, string>([
   [
     LangErrorCode.ConstraintMintTransferHookExtensionProgramId,
     "A transfer hook extension transfer hook program id constraint was violated",
+  ],
+  [
+    LangErrorCode.ConstraintDuplicateMutableAccount,
+    "A duplicate mutable account constraint was violated",
   ],
 
   // Require.

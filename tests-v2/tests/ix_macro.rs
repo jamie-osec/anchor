@@ -136,7 +136,7 @@ fn instruction_arg_address_constraint_rejects_wrong_account() {
     .expect_err("address constraint should reject mismatched marker")
     .to_string();
     assert!(
-        err.contains("InvalidAccountData") || err.contains("Custom(2005)"),
+        err.contains("InvalidAccountData"),
         "unexpected error: {err}"
     );
 }

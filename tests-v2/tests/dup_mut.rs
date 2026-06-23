@@ -2,7 +2,7 @@
 //!
 //! Covers the common ways a caller might try to alias a mutable account:
 //! two mut slots, three mut slots in every dup position, and a mut paired
-//! with a read-only slot. Each should surface `Custom(2005)`
+//! with a read-only slot. Each should surface `Custom(2040)`
 //! (`ErrorCode::ConstraintDuplicateMutableAccount`). The final test
 //! exercises the `#[account(unsafe(dup))]` escape hatch; the on-chain
 //! handler is written so even the aliased invocation never holds two
@@ -23,7 +23,7 @@ use {
 };
 
 /// Custom program error code for `ConstraintDuplicateMutableAccount`.
-const DUPLICATE_MUT_ERROR: u32 = 2005;
+const DUPLICATE_MUT_ERROR: u32 = 2040;
 
 fn program_id() -> Pubkey {
     "2TxMd2YAMi9Sk4xxiJBNkYQNuxK9FwvwwiujuEbKoanz"

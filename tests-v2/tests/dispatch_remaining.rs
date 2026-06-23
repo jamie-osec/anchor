@@ -22,7 +22,7 @@ fn counter_pda() -> Pubkey {
     Pubkey::find_program_address(&[b"counter"], &program_id()).0
 }
 
-const DUPLICATE_MUT_ERROR: u32 = 2005;
+const DUPLICATE_MUT_ERROR: u32 = 2040;
 
 fn setup() -> (LiteSVM, Keypair) {
     let test_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));

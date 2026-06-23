@@ -330,6 +330,7 @@ impl From<ErrorCode> for solana_program_error::ProgramError {
             ErrorCode::AccountNotEnoughKeys => {
                 solana_program_error::ProgramError::NotEnoughAccountKeys
             }
+            // Custom codes are aligned with Anchor v1's numbering
             ErrorCode::ConstraintMut => solana_program_error::ProgramError::Custom(2000),
             ErrorCode::ConstraintSigner => {
                 solana_program_error::ProgramError::MissingRequiredSignature
@@ -339,9 +340,9 @@ impl From<ErrorCode> for solana_program_error::ProgramError {
             ErrorCode::ConstraintAddress => solana_program_error::ProgramError::InvalidAccountData,
             ErrorCode::ConstraintClose => solana_program_error::ProgramError::InvalidAccountData,
             ErrorCode::ConstraintOwner => solana_program_error::ProgramError::IllegalOwner,
-            ErrorCode::ConstraintRaw => solana_program_error::ProgramError::Custom(2001),
-            ErrorCode::ConstraintExecutable => solana_program_error::ProgramError::Custom(2002),
-            ErrorCode::ConstraintZero => solana_program_error::ProgramError::Custom(2004),
+            ErrorCode::ConstraintRaw => solana_program_error::ProgramError::Custom(2003),
+            ErrorCode::ConstraintExecutable => solana_program_error::ProgramError::Custom(2007),
+            ErrorCode::ConstraintZero => solana_program_error::ProgramError::Custom(2013),
             ErrorCode::InstructionDidNotDeserialize => {
                 solana_program_error::ProgramError::InvalidInstructionData
             }
@@ -359,7 +360,7 @@ impl From<ErrorCode> for solana_program_error::ProgramError {
             ErrorCode::RequireGtViolated => solana_program_error::ProgramError::Custom(2505),
             ErrorCode::RequireGteViolated => solana_program_error::ProgramError::Custom(2506),
             ErrorCode::ConstraintDuplicateMutableAccount => {
-                solana_program_error::ProgramError::Custom(2005)
+                solana_program_error::ProgramError::Custom(2040)
             }
         }
     }
