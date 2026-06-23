@@ -28,10 +28,13 @@ The minor version will be incremented upon a breaking change and the patch versi
 
 ### Fixes
 
+- lang: Snapshot CPI return data before `Return::get()` validates the source program ([#4624](https://github.com/otter-sec/anchor/pull/4624)).
+- lang/syn: Remove remaining fallible IDL generation paths from clippy-denied code ([#4631](https://github.com/otter-sec/anchor/pull/4631)).
+- lang: Validate `max_len` arguments more strictly during space derivation ([#4707](https://github.com/otter-sec/anchor/pull/4707)).
 - ts: Remove `cross-fetch` dependency ([#4671](https://github.com/solana-foundation/anchor/pull/4671)).
 - lang: Migrate `anchor-syn` from syn 1.x to syn 2.0, allowing use of modern Rust syntax ([#4523](https://github.com/solana-foundation/anchor/issues/4523)).
 - lang: Avoid fatal errors in IDL building when modern Rust syntax is in use ([#4520](https://github.com/solana-foundation/anchor/pull/4520)).
-- lang: Return `InvalidProgramId` when `Migration::exit` cannot persist migrated state because `To::owner()` does not match `program_id` ([#4622](https://github.com/otter-sec/anchor/pull/4622)).
+- lang: Return `InvalidProgramId` when `Migration::exit` cannot persist migrated state because `To::owner()` does not match `program_id` ([#4706](https://github.com/otter-sec/anchor/pull/4706)).
 - client: Avoid panic in `parse_logs_response` when a program-emitted log line ends with `invoke [1]` ([#4461](https://github.com/solana-foundation/anchor/issues/4461)).
 - cli: Correctly honor `--skip-seed-phrase-validation` in `keygen recover` ([#4417](https://github.com/solana-foundation/anchor/pull/4417)).
 - ts: Fix `sha256.hash()` returning corrupted output by using hex encoding ([#4404](https://github.com/solana-foundation/anchor/pull/4404)).
