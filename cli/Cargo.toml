@@ -8,6 +8,9 @@ repository = "https://github.com/otter-sec/anchor"
 description = "Anchor CLI"
 license = "Apache-2.0"
 
+[package.metadata.docs.rs]
+workspace = true
+
 [[bin]]
 name = "anchor"
 path = "src/bin/main.rs"
