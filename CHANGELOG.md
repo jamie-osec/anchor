@@ -28,6 +28,7 @@ The minor version will be incremented upon a breaking change and the patch versi
 
 ### Fixes
 
+- cli: Warn instead of aborting `anchor build` when a program keypair and `declare_id!` do not match ([#4705](https://github.com/otter-sec/anchor/pull/4705)).
 - lang: Snapshot CPI return data before `Return::get()` validates the source program ([#4624](https://github.com/otter-sec/anchor/pull/4624)).
 - lang/syn: Remove remaining fallible IDL generation paths from clippy-denied code ([#4631](https://github.com/otter-sec/anchor/pull/4631)).
 - lang: Validate `max_len` arguments more strictly during space derivation ([#4707](https://github.com/otter-sec/anchor/pull/4707)).
