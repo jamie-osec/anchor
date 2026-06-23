@@ -18,6 +18,10 @@ resolver = "2"
 [workspace.package]
 version = "1.0.2"
 
+[workspace.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [workspace.dependencies]
 solana-account = "3.2.0"
 solana-account-decoder = "3.0.14"
