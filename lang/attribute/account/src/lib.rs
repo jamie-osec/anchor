@@ -7,9 +7,8 @@ use {
         parenthesized,
         parse::{Parse, ParseStream},
         parse_macro_input,
-        spanned::Spanned,
         token::Paren,
-        Expr, Ident, LitStr, Token,
+        Ident, LitStr, Token,
     },
 };
 

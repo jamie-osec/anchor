@@ -1,7 +1,7 @@
 use {
     crate::{codegen::program::common::*, parser, Program},
     heck::CamelCase,
-    quote::{quote, quote_spanned, ToTokens},
+    quote::{quote, quote_spanned},
     syn::Type,
 };
 
