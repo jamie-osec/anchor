@@ -2,7 +2,7 @@
 name = "anchor-derive-serde"
 version.workspace = true
 publish = true
-repository = "https://github.com/otter-sec/anchor"
+repository.workspace = true
 license = "Apache-2.0"
 description = "Anchor Derive macro for serialization and deserialization"
 edition = "2021"

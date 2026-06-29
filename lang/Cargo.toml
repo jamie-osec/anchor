@@ -2,7 +2,7 @@
 name = "anchor-lang"
 version.workspace = true
 publish = true
-repository = "https://github.com/otter-sec/anchor"
+repository.workspace = true
 edition = "2021"
 rust-version = "1.89"
 license = "Apache-2.0"

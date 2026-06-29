@@ -2,7 +2,7 @@
 name = "anchor-attribute-program"
 version.workspace = true
 publish = true
-repository = "https://github.com/otter-sec/anchor"
+repository.workspace = true
 license = "Apache-2.0"
 description = "Anchor attribute macro for defining a program"
 edition = "2021"

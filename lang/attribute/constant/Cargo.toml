@@ -2,7 +2,7 @@
 name = "anchor-attribute-constant"
 version.workspace = true
 publish = true
-repository = "https://github.com/otter-sec/anchor"
+repository.workspace = true
 license = "Apache-2.0"
 description = "Anchor attribute macro for creating constant types"
 edition = "2021"

@@ -2,7 +2,7 @@
 name = "anchor-attribute-account"
 version.workspace = true
 publish = true
-repository = "https://github.com/otter-sec/anchor"
+repository.workspace = true
 license = "Apache-2.0"
 description = "Anchor attribute macro for defining an account"
 edition = "2021"

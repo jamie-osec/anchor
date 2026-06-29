@@ -3,7 +3,7 @@ name = "anchor-cli"
 version.workspace = true
 publish = true
 edition = "2021"
-repository = "https://github.com/otter-sec/anchor"
+repository.workspace = true
 description = "Anchor CLI"
 license = "Apache-2.0"
 
