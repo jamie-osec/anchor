@@ -2,7 +2,6 @@
 name = "anchor-cli"
 version.workspace = true
 publish = true
-authors = ["Anchor Maintainers <accounts@200ms.io>"]
 edition = "2021"
 repository = "https://github.com/otter-sec/anchor"
 description = "Anchor CLI"
