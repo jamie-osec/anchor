@@ -35,6 +35,8 @@ jobs:
 
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: stable
 
       - name: Cache cargo registry and builds
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
@@ -54,4 +56,3 @@ jobs:
         with:
           exclude: avm, anchor-cli
           baseline-rev: ${{ github.event.pull_request.base.sha }}
-
