@@ -18,9 +18,8 @@ import {
   createAssociatedTokenAccountInstruction,
   getAssociatedTokenAddressSync,
   createMintToInstruction,
-  createTransferCheckedInstruction,
+  createTransferCheckedWithTransferHookInstruction,
   getAccount,
-  addExtraAccountsToInstruction,
 } from "@solana/spl-token";
 import { assert } from "chai";
 import { TransferHook } from "../target/types/transfer_hook";
@@ -256,19 +255,15 @@ describe("transfer hook", () => {
         );
       });
 
-    const ix = await addExtraAccountsToInstruction(
+    const ix = await createTransferCheckedWithTransferHookInstruction(
       provider.connection,
-      createTransferCheckedInstruction(
-        source,
-        mint.publicKey,
-        destination,
-        sourceAuthority.publicKey,
-        transferAmount,
-        decimals,
-        undefined,
-        TOKEN_2022_PROGRAM_ID
-      ),
+      source,
       mint.publicKey,
+      destination,
+      sourceAuthority.publicKey,
+      BigInt(transferAmount),
+      decimals,
+      [],
       undefined,
       TOKEN_2022_PROGRAM_ID
     );

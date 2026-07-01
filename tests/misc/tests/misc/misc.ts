@@ -11,11 +11,11 @@ import {
 } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
-  Token,
   ASSOCIATED_TOKEN_PROGRAM_ID,
   AccountLayout,
   MintLayout,
 } from "@solana/spl-token";
+import { Token } from "../../../token-compat";
 import { assert, expect } from "chai";
 
 import { Misc } from "../../target/types/misc";

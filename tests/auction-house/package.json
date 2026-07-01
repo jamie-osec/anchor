@@ -17,6 +17,7 @@
     "test": "anchor test --skip-lint"
   },
   "dependencies": {
-    "@metaplex/js": "^4.4.1"
+    "@metaplex/js": "^4.4.1",
+    "@solana/spl-token": "^0.1.8"
   }
 }

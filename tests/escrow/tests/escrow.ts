@@ -1,7 +1,8 @@
 import * as anchor from "@anchor-lang/core";
 import { Program, BN, IdlAccounts } from "@anchor-lang/core";
 import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID, Token } from "@solana/spl-token";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { Token } from "../../token-compat";
 import { assert } from "chai";
 import { Escrow } from "../target/types/escrow";
 

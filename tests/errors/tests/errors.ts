@@ -1,7 +1,8 @@
 import * as anchor from "@anchor-lang/core";
 import { Program, AnchorError } from "@anchor-lang/core";
 import { Keypair, Transaction, TransactionInstruction } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID, Token } from "@solana/spl-token";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { Token } from "../../token-compat";
 import { assert, expect } from "chai";
 import { Errors } from "../target/types/errors";
 import { sleep } from "@project-serum/common";

@@ -1,4 +1,4 @@
-const spl = require("@solana/spl-token");
+const { Token } = require("../../../token-compat");
 const anchor = require("@anchor-lang/core");
 const serumCmn = require("@project-serum/common");
 const TokenInstructions = require("@project-serum/serum").TokenInstructions;
@@ -50,7 +50,7 @@ async function createMint(provider, authority) {
   if (authority === undefined) {
     authority = provider.wallet.publicKey;
   }
-  const mint = await spl.Token.createMint(
+  const mint = await Token.createMint(
     provider.connection,
     provider.wallet.payer,
     authority,
@@ -62,7 +62,7 @@ async function createMint(provider, authority) {
 }
 
 async function createTokenAccount(provider, mint, owner) {
-  const token = new spl.Token(
+  const token = new Token(
     provider.connection,
     mint,
     TOKEN_PROGRAM_ID,

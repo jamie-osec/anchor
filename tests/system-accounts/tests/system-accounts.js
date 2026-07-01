@@ -1,5 +1,6 @@
 const anchor = require("@anchor-lang/core");
-const splToken = require("@solana/spl-token");
+const { TOKEN_PROGRAM_ID } = require("@solana/spl-token");
+const { Token } = require("../../token-compat");
 const { assert } = require("chai");
 
 describe("system_accounts", () => {
@@ -21,13 +22,13 @@ describe("system_accounts", () => {
   });
 
   it("Emits an AccountNotSystemOwned error", async () => {
-    const mint = await splToken.Token.createMint(
+    const mint = await Token.createMint(
       program.provider.connection,
       authority,
       authority.publicKey,
       null,
       9,
-      splToken.TOKEN_PROGRAM_ID
+      TOKEN_PROGRAM_ID
     );
 
     const tokenAccount = await mint.createAssociatedTokenAccount(
