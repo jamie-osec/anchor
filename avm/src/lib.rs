@@ -1,3 +1,4 @@
+mod attestation;
 pub mod platform_tools;
 pub mod resolve;
 pub mod solana;
@@ -502,11 +503,10 @@ pub fn install_version(
         } else {
             ""
         };
-        let res = DOWNLOAD_CLIENT
-            .get(format!(
-                "https://github.com/otter-sec/anchor/releases/download/v{version}/anchor-{version}-{target}{ext}"
-            ))
-            .send()?;
+        let url = format!(
+            "https://github.com/otter-sec/anchor/releases/download/v{version}/anchor-{version}-{target}{ext}"
+        );
+        let res = DOWNLOAD_CLIENT.get(&url).send()?;
         match res.status() {
             StatusCode::NOT_FOUND => bail!(
                 "No prebuilt binary found for version `{version}` (HTTP 404). Try `avm install \
@@ -519,15 +519,32 @@ pub fn install_version(
             _ => (),
         }
 
-        let bin_path = version_binary_path(&version);
-        fs::write(&bin_path, res.bytes()?)?;
+        let staging_dir = get_tmp_install_dir_path();
+        fs::create_dir_all(&staging_dir)
+            .with_context(|| format!("Creating {}", staging_dir.display()))?;
+        let staging_path =
+            staging_dir.join(format!(".anchor-{version}-download-{}", std::process::id()));
+        if staging_path.exists() {
+            fs::remove_file(&staging_path)
+                .with_context(|| format!("Removing stale {}", staging_path.display()))?;
+        }
 
-        // Set file to executable on UNIX
-        #[cfg(unix)]
-        fs::set_permissions(
-            bin_path,
-            <fs::Permissions as std::os::unix::fs::PermissionsExt>::from_mode(0o775),
-        )?;
+        let result = (|| -> Result<()> {
+            fs::write(&staging_path, res.bytes()?).with_context(|| {
+                format!("Writing downloaded binary to {}", staging_path.display())
+            })?;
+            attestation::verify_release(&staging_path, &version).with_context(|| {
+                format!(
+                    "Downloaded Anchor {version} binary from `{url}` failed build provenance \
+                     verification. Refusing to install it; use `avm install {version} \
+                     --from-source` to build from source instead."
+                )
+            })?;
+            install_binary_atomic(&staging_path, &version_binary_path(&version))
+        })();
+
+        let _ = fs::remove_file(&staging_path);
+        result?;
     }
 
     let is_at_least_0_32 = version >= Version::new(0, 32, 0);
@@ -1087,6 +1104,12 @@ fn download_nightly_artifact(artifact: &NightlyArtifact, dest: &Path) -> Result<
         );
     }
     fs::write(dest, bytes.as_ref()).with_context(|| format!("Writing {}", dest.display()))?;
+    attestation::verify_nightly(dest).with_context(|| {
+        format!(
+            "Downloaded nightly artifact `{url}` failed build provenance verification. Refusing \
+             to install it."
+        )
+    })?;
     Ok(())
 }
 
