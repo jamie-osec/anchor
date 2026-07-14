@@ -15,7 +15,7 @@ use {
         fmt::Write as FmtWrite,
         fs,
         io::{BufRead, Write},
-        path::{Path, PathBuf},
+        path::{Component, Path, PathBuf},
         process::{Command, Stdio},
         sync::LazyLock,
     },
@@ -1085,6 +1085,7 @@ fn install_nightly_artifact(
     destination: &Path,
     skip_attestation: bool,
 ) -> Result<()> {
+    let archive_name = nightly_archive_name(&artifact.file)?;
     let staging = get_tmp_install_dir_path().join(format!(
         "nightly-{}-{}",
         artifact.tool,
@@ -1097,7 +1098,7 @@ fn install_nightly_artifact(
     fs::create_dir_all(&staging).with_context(|| format!("Creating {}", staging.display()))?;
 
     let result = (|| -> Result<()> {
-        let archive_path = staging.join(&artifact.file);
+        let archive_path = staging.join(archive_name);
         download_nightly_artifact(artifact, &archive_path, skip_attestation)?;
         extract_tar_gz(&archive_path, &staging)?;
         let extracted = extracted_nightly_binary(&staging, &artifact.tool)?;
@@ -1107,6 +1108,15 @@ fn install_nightly_artifact(
 
     let _ = fs::remove_dir_all(&staging);
     result
+}
+
+fn nightly_archive_name(file: &str) -> Result<&Path> {
+    let path = Path::new(file);
+    let mut components = path.components();
+    match (components.next(), components.next()) {
+        (Some(Component::Normal(_)), None) => Ok(path),
+        _ => bail!("Invalid nightly artifact filename `{file}`"),
+    }
 }
 
 fn download_nightly_artifact(
@@ -1563,6 +1573,25 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("does not include `anchor` for target `x86_64-unknown-linux-gnu`"));
+    }
+
+    #[test]
+    fn test_nightly_archive_name_rejects_path_traversal() {
+        assert_eq!(
+            nightly_archive_name("anchor.tar.gz").unwrap(),
+            Path::new("anchor.tar.gz")
+        );
+
+        for file in [
+            "../outside.tar.gz",
+            "nested/archive.tar.gz",
+            "/tmp/outside.tar.gz",
+            ".",
+            "..",
+            "",
+        ] {
+            assert!(nightly_archive_name(file).is_err(), "accepted `{file}`");
+        }
     }
 
     #[test]
