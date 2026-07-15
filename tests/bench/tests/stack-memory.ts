@@ -1,5 +1,6 @@
 import path from "path";
 import fs from "fs/promises";
+import os from "os";
 
 import { BenchData, StackMemory, spawn } from "../scripts/utils";
 
@@ -42,6 +43,29 @@ describe("Stack memory", () => {
     if (!match) return;
 
     return instructionAccountsStructs.get(match[1]);
+  };
+
+  const getLlvmObjdumpPath = () => {
+    const result = spawn("cargo-build-sbf", ["--version"], {
+      throwOnError: {
+        msg: "Failed to determine the Solana platform-tools version.",
+      },
+    });
+    const match = /^platform-tools (v[\d.]+)$/m.exec(result.stdout.toString());
+    if (!match) {
+      throw new Error("Failed to determine the Solana platform-tools version.");
+    }
+
+    return path.join(
+      os.homedir(),
+      ".cache",
+      "solana",
+      match[1],
+      "platform-tools",
+      "llvm",
+      "bin",
+      "llvm-objdump"
+    );
   };
 
   const parseStackSizeSection = (output: string) => {
@@ -141,8 +165,9 @@ describe("Stack memory", () => {
       },
     });
 
+    const llvmObjdump = getLlvmObjdumpPath();
     const stackSizeResult = spawn(
-      "llvm-objdump",
+      llvmObjdump,
       ["-s", "-j", ".stack_sizes", PROGRAM_PATH],
       {
         throwOnError: {
@@ -150,7 +175,7 @@ describe("Stack memory", () => {
         },
       }
     );
-    const symbolResult = spawn("llvm-objdump", ["-t", PROGRAM_PATH], {
+    const symbolResult = spawn(llvmObjdump, ["-t", PROGRAM_PATH], {
       throwOnError: {
         msg: `Failed to read symbols from ${PROGRAM_PATH}.`,
       },

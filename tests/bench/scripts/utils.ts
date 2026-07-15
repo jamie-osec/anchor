@@ -547,12 +547,16 @@ export const spawn = (
   if (opts?.logOutput || !success) {
     console.log(
       `Output of \`${cmd} ${args.join(" ")}\`:`,
-      result.output.toString()
+      result.error ?? result.output?.toString()
     );
   }
 
   if (opts?.throwOnError && !success) {
-    throw new Error(opts.throwOnError.msg);
+    throw new Error(
+      result.error
+        ? `${opts.throwOnError.msg} ${result.error.message}`
+        : opts.throwOnError.msg
+    );
   }
 
   return result;
