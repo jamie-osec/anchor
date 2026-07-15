@@ -5618,7 +5618,7 @@ fn stream_solana_logs(config: &WithPath<Config>, rpc_url: &str) -> Result<Vec<Lo
                     Err(e) => {
                         eprintln!(
                             "Warning: Failed to subscribe to logs for genesis program {}: {}",
-                            &entry.address, e
+                            entry.address, e
                         );
                         continue;
                     }
