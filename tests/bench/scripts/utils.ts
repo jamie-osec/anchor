@@ -536,9 +536,13 @@ export const getVersionFromArgs = () => {
 export const spawn = (
   cmd: string,
   args: string[],
-  opts?: { logOutput?: boolean; throwOnError?: { msg: string } }
+  opts?: {
+    env?: NodeJS.ProcessEnv;
+    logOutput?: boolean;
+    throwOnError?: { msg: string };
+  }
 ) => {
-  const result = spawnSync(cmd, args);
+  const result = spawnSync(cmd, args, { env: opts?.env });
   const success = result.status === 0;
   if (opts?.logOutput || !success) {
     console.log(
