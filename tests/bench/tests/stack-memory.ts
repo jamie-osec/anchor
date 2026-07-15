@@ -131,7 +131,11 @@ describe("Stack memory", () => {
     const instructionAccountsStructs = await getInstructionAccountsStructs();
 
     spawn("anchor", ["build", "--skip-lint", "--ignore-keys"], {
-      env: { ...process.env, RUSTFLAGS: "-Z emit-stack-sizes" },
+      env: {
+        ...process.env,
+        RUSTC_BOOTSTRAP: "1",
+        RUSTFLAGS: "-Z emit-stack-sizes",
+      },
       throwOnError: {
         msg: "Failed to build benchmark program with stack size metadata.",
       },
