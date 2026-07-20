@@ -17,6 +17,7 @@ struct Fixture {
     anchor_stub: PathBuf,
     path_bin: PathBuf,
     log_path: PathBuf,
+    cargo_log_path: PathBuf,
     solana_log_path: PathBuf,
 }
 
@@ -39,6 +40,7 @@ impl Fixture {
             anchor_stub,
             path_bin,
             log_path: avm_bin.join("anchor.log"),
+            cargo_log_path: avm_bin.join("cargo.log"),
             solana_log_path: avm_bin.join("solana.log"),
         }
     }
@@ -65,9 +67,38 @@ impl Fixture {
 echo "version={version}" > "$AVM_TEST_ANCHOR_LOG"
 echo "args=$*" >> "$AVM_TEST_ANCHOR_LOG"
 echo "avm_active=${{AVM_ACTIVE:-}}" >> "$AVM_TEST_ANCHOR_LOG"
+echo "rustup_toolchain=${{RUSTUP_TOOLCHAIN:-}}" >> "$AVM_TEST_ANCHOR_LOG"
 echo "resolver=${{CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS:-}}" >> "$AVM_TEST_ANCHOR_LOG"
 "#
             ),
+        );
+    }
+
+    fn install_anchor_with_cargo_calls(&self, version: &str) {
+        write_executable(
+            &self.avm_home_bin().join(format!("anchor-{version}")),
+            r#"#!/bin/sh
+cargo build-sbf
+cargo +nightly test idl
+cargo +nightly-2026-07-01 test already-pinned
+"#,
+        );
+        write_executable(
+            &self.path_bin.join("cargo"),
+            r#"#!/bin/sh
+echo "$*" >> "$AVM_TEST_CARGO_LOG"
+"#,
+        );
+        write_executable(
+            &self.path_bin.join("rustup"),
+            r#"#!/bin/sh
+if [ "$*" = "toolchain list" ]; then
+  echo "nightly-2025-04-15-x86_64-unknown-linux-gnu"
+  echo "nightly-2026-06-10-x86_64-unknown-linux-gnu"
+  exit 0
+fi
+exit 1
+"#,
         );
     }
 
@@ -237,7 +268,9 @@ exit 0
             .current_dir(current_dir)
             .env("AVM_HOME", &self.avm_home)
             .env("PATH", path)
+            .env_remove("RUSTUP_TOOLCHAIN")
             .env("AVM_TEST_ANCHOR_LOG", &self.log_path)
+            .env("AVM_TEST_CARGO_LOG", &self.cargo_log_path)
             .env("AVM_TEST_SOLANA_LOG", &self.solana_log_path)
             .output()
             .expect("run anchor stub")
@@ -296,6 +329,7 @@ fn anchor_stub_prefers_anchor_toml_and_sets_launcher_env() {
     assert!(log.contains("version=1.0.2"), "{log}");
     assert!(log.contains("args=build -- --features mainnet"), "{log}");
     assert!(log.contains("avm_active=1"), "{log}");
+    assert!(log.contains("rustup_toolchain=\n"), "{log}");
     assert!(log.contains("resolver=fallback"), "{log}");
     assert_eq!(
         fs::read_to_string(&fixture.solana_log_path).unwrap(),
@@ -332,6 +366,51 @@ fn anchor_stub_falls_back_to_anchorversion_cargo_and_global_sources() {
     fixture.install_fake_solana("1.18.17");
     assert_success(&fixture.run_anchor(&global_project, ["--version"]));
     assert!(fixture.anchor_log().contains("version=0.30.1"));
+}
+
+#[test]
+fn anchor_stub_pins_only_unversioned_nightly_cargo_invocations() {
+    let fixture = Fixture::new();
+    let project = fixture.project("cargo-proxy");
+    fixture.install_anchor_with_cargo_calls("1.0.2");
+    fixture.install_fake_solana("4.1.2");
+    fs::write(
+        project.join("Anchor.toml"),
+        "[toolchain]\nanchor_version = \"1.0.2\"\nsolana_version = \"4.1.2\"\n",
+    )
+    .unwrap();
+
+    assert_success(&fixture.run_anchor(&project, ["build"]));
+
+    assert_eq!(
+        fs::read_to_string(&fixture.cargo_log_path).unwrap(),
+        "build-sbf\n+nightly-2026-06-10 test idl\n+nightly-2026-07-01 test already-pinned\n"
+    );
+}
+
+#[test]
+fn anchor_stub_uses_legacy_idl_nightly_for_locked_proc_macro2() {
+    let fixture = Fixture::new();
+    let project = fixture.project("legacy-cargo-proxy");
+    fixture.install_anchor_with_cargo_calls("0.30.1");
+    fixture.install_fake_solana("1.18.17");
+    fs::write(
+        project.join("Anchor.toml"),
+        "[toolchain]\nanchor_version = \"0.30.1\"\nsolana_version = \"1.18.17\"\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("Cargo.lock"),
+        "version = 4\n\n[[package]]\nname = \"proc-macro2\"\nversion = \"1.0.86\"\n",
+    )
+    .unwrap();
+
+    assert_success(&fixture.run_anchor(&project, ["build"]));
+
+    assert_eq!(
+        fs::read_to_string(&fixture.cargo_log_path).unwrap(),
+        "build-sbf\n+nightly-2025-04-15 test idl\n+nightly-2026-07-01 test already-pinned\n"
+    );
 }
 
 #[test]
