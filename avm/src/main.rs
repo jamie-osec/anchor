@@ -4,11 +4,17 @@ use {
     clap::{CommandFactory, Parser, Subcommand},
     semver::Version,
     std::{
-        ffi::OsStr,
+        env,
+        ffi::{OsStr, OsString},
+        fs,
         io::IsTerminal,
         path::{Path, PathBuf},
+        process::Command,
     },
 };
+
+const PINNED_IDL_NIGHTLY: &str = "nightly-2026-07-14";
+const REAL_CARGO_ENV: &str = "AVM_REAL_CARGO";
 
 #[derive(Parser)]
 #[clap(name = "avm", about = "Anchor version manager", version)]
@@ -337,16 +343,20 @@ fn anchor_proxy() -> Result<()> {
 }
 
 fn spawn_anchor(binary_path: PathBuf, args: Vec<String>) -> Result<()> {
-    let exit = std::process::Command::new(binary_path)
+    let cargo_proxy = CargoProxy::new()?;
+    let path = env::join_paths(
+        [
+            cargo_proxy.dir.path().to_path_buf(),
+            avm::get_bin_dir_path(),
+        ]
+        .into_iter()
+        .chain(env::split_paths(&env::var_os("PATH").unwrap_or_default())),
+    )?;
+
+    let exit = Command::new(binary_path)
         .args(args)
-        .env(
-            "PATH",
-            format!(
-                "{}:{}",
-                avm::get_bin_dir_path().to_string_lossy(),
-                std::env::var("PATH").unwrap_or_default()
-            ),
-        )
+        .env("PATH", path)
+        .env(REAL_CARGO_ENV, &cargo_proxy.real_cargo)
         // Signal to the spawned anchor-cli that AVM has already resolved the
         // toolchain version, so it must not re-exec via `[toolchain] anchor_version`.
         .env("AVM_ACTIVE", "1")
@@ -357,6 +367,106 @@ fn spawn_anchor(binary_path: PathBuf, args: Vec<String>) -> Result<()> {
 
     if !exit.status.success() {
         std::process::exit(exit.status.code().unwrap_or(1));
+    }
+
+    Ok(())
+}
+
+struct CargoProxy {
+    dir: tempfile::TempDir,
+    real_cargo: PathBuf,
+}
+
+impl CargoProxy {
+    fn new() -> Result<Self> {
+        let current_exe = env::current_exe().context("resolving AVM executable")?;
+        let real_cargo = find_real_cargo(&current_exe)?;
+        let dir = tempfile::tempdir().context("creating temporary Cargo proxy directory")?;
+        let proxy = dir
+            .path()
+            .join(if cfg!(windows) { "cargo.exe" } else { "cargo" });
+
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&current_exe, &proxy)
+            .context("creating temporary Cargo proxy")?;
+        #[cfg(windows)]
+        fs::copy(&current_exe, &proxy).context("creating temporary Cargo proxy")?;
+
+        Ok(Self { dir, real_cargo })
+    }
+}
+
+fn find_real_cargo(current_exe: &Path) -> Result<PathBuf> {
+    let cargo_name = if cfg!(windows) { "cargo.exe" } else { "cargo" };
+    let current_exe = fs::canonicalize(current_exe).context("canonicalizing AVM executable")?;
+
+    env::split_paths(&env::var_os("PATH").unwrap_or_default())
+        .map(|dir| dir.join(cargo_name))
+        .find(|candidate| {
+            candidate.is_file()
+                && fs::canonicalize(candidate)
+                    .map(|candidate| candidate != current_exe)
+                    .unwrap_or(false)
+        })
+        .ok_or_else(|| anyhow!("Could not find `cargo` on PATH"))
+}
+
+fn cargo_proxy() -> Result<()> {
+    let real_cargo =
+        env::var_os(REAL_CARGO_ENV).ok_or_else(|| anyhow!("{REAL_CARGO_ENV} is not set"))?;
+    let mut args = env::args_os().skip(1).collect::<Vec<_>>();
+
+    if pin_idl_nightly(&mut args) {
+        ensure_idl_nightly_installed()?;
+    }
+
+    let status = Command::new(real_cargo)
+        .args(args)
+        .status()
+        .context("running Cargo through AVM proxy")?;
+    if !status.success() {
+        std::process::exit(status.code().unwrap_or(1));
+    }
+
+    Ok(())
+}
+
+fn pin_idl_nightly(args: &mut [OsString]) -> bool {
+    let Some(toolchain) = args.first_mut() else {
+        return false;
+    };
+    if toolchain != "+nightly" {
+        return false;
+    }
+
+    *toolchain = format!("+{PINNED_IDL_NIGHTLY}").into();
+    true
+}
+
+fn ensure_idl_nightly_installed() -> Result<()> {
+    let output = Command::new("rustup")
+        .args(["toolchain", "list"])
+        .output()
+        .context("listing installed Rust toolchains")?;
+    let installed = String::from_utf8(output.stdout)?
+        .lines()
+        .any(|line| line.starts_with(PINNED_IDL_NIGHTLY));
+    if installed {
+        return Ok(());
+    }
+
+    let status = Command::new("rustup")
+        .args([
+            "toolchain",
+            "install",
+            PINNED_IDL_NIGHTLY,
+            "--profile",
+            "minimal",
+        ])
+        .status()
+        .context("installing pinned IDL Rust toolchain")?;
+    if !status.success() {
+        anyhow::bail!("Failed to install Rust toolchain {PINNED_IDL_NIGHTLY}");
     }
 
     Ok(())
@@ -423,7 +533,7 @@ fn ensure_resolved_binary(resolution: &Resolution) -> Result<PathBuf> {
 }
 
 fn main() -> Result<()> {
-    // If the binary is named `anchor` then run the proxy.
+    // If the binary is named `anchor` or `cargo` then run the relevant proxy.
     if let Some(stem) = std::env::args()
         .next()
         .as_ref()
@@ -431,6 +541,9 @@ fn main() -> Result<()> {
     {
         if stem == "anchor" {
             return anchor_proxy();
+        }
+        if stem == "cargo" {
+            return cargo_proxy();
         }
     }
 
@@ -444,6 +557,21 @@ fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use {super::*, avm::InstallTarget};
+
+    #[test]
+    fn pins_only_unversioned_nightly_cargo_invocations() {
+        let mut nightly = vec![OsString::from("+nightly"), OsString::from("test")];
+        assert!(pin_idl_nightly(&mut nightly));
+        assert_eq!(nightly[0], OsString::from(format!("+{PINNED_IDL_NIGHTLY}")));
+
+        let mut build_sbf = vec![OsString::from("build-sbf")];
+        assert!(!pin_idl_nightly(&mut build_sbf));
+        assert_eq!(build_sbf[0], "build-sbf");
+
+        let mut dated = vec![OsString::from("+nightly-2026-07-01")];
+        assert!(!pin_idl_nightly(&mut dated));
+        assert_eq!(dated[0], "+nightly-2026-07-01");
+    }
 
     // --- is_pre_release ---
 
