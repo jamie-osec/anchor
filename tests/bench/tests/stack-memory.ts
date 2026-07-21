@@ -41,7 +41,7 @@ describe("Stack memory", () => {
     instructionAccountsStructs: Map<string, string>
   ) => {
     const match =
-      /_\$LT\$bench\.\.(\w+)\$u20\$as\$u20\$anchor_lang\.\.Accounts\$LT\$bench\.\.\w+Bumps\$GT\$\$GT\$12try_accounts17h/.exec(
+      /_\$LT\$bench\.\.(\w+)\$u20\$as\$u20\$anchor_lang\.\.Accounts(?:\$LT\$bench\.\.\w+Bumps\$GT\$)?\$GT\$12try_accounts17h/.exec(
         fn
       );
     if (!match) return;
@@ -134,9 +134,8 @@ describe("Stack memory", () => {
 
   it("Measure stack memory usage", async () => {
     const bench = await BenchData.open();
-    const platformToolsVersion = bench.get(
-      getVersionFromArgs()
-    ).platformToolsVersion;
+    const version = getVersionFromArgs();
+    const platformToolsVersion = bench.get(version).platformToolsVersion;
     const llvmObjdumpPath = path.join(
       os.homedir(),
       ".cache",
@@ -149,7 +148,9 @@ describe("Stack memory", () => {
     );
     const instructionAccountsStructs = await getInstructionAccountsStructs();
 
-    spawn("anchor", ["build", "--skip-lint", "--ignore-keys"], {
+    const buildArgs = ["build", "--skip-lint", "--ignore-keys"];
+    if (version !== "unreleased") buildArgs.push("--no-idl");
+    spawn("anchor", buildArgs, {
       env: {
         ...process.env,
         RUSTC_BOOTSTRAP: "1",

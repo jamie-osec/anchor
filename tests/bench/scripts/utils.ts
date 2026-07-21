@@ -495,20 +495,31 @@ export class LockFile {
 
 /** Utility class to manage versions */
 export class VersionManager {
-  /** Set the active Solana version with `solana-install init` command. */
+  /** Install and set the active Solana version. */
   static setSolanaVersion(version: Version) {
     const activeVersion = this.#getSolanaVersion();
     if (activeVersion === version) return;
 
-    // `solana-install` is renamed to `agave-install` in Solana v2
-    // https://github.com/anza-xyz/agave/wiki/Agave-Transition
-    const cmdName = activeVersion.startsWith("1")
-      ? "solana-install"
-      : "agave-install";
-    spawn(cmdName, ["init", version], {
-      logOutput: true,
-      throwOnError: { msg: `Failed to set Solana version to ${version}` },
-    });
+    const [major, minor] = version.split(".").map(Number);
+    const isSolanaLabs = major === 1 && minor < 18;
+    const repo = isSolanaLabs ? "solana-labs/solana" : "anza-xyz/agave";
+    const installer = isSolanaLabs ? "solana" : "agave";
+    const installUrl = `https://raw.githubusercontent.com/${repo}/v${version}/install/${installer}-install-init.sh`;
+    spawn(
+      "sh",
+      [
+        "-c",
+        'curl -sSfL "$1" | sh -s -- --no-modify-path "$2"',
+        "sh",
+        installUrl,
+        version,
+      ],
+      {
+        env: { ...process.env, SOLANA_RELEASE: `v${version}` },
+        logOutput: true,
+        throwOnError: { msg: `Failed to set Solana version to ${version}` },
+      }
+    );
   }
 
   /** Get the active Solana version. */
@@ -534,6 +545,10 @@ export const getVersionFromArgs = () => {
     : (args[anchorVersionArgIndex + 1] as Version);
 };
 
+/** Whether the version predates IDL generation through the `idl-build` feature. */
+export const usesLegacyIdl = (version: Version) =>
+  ["0.27.0", "0.28.0"].includes(version);
+
 /** Spawn a blocking process. */
 export const spawn = (
   cmd: string,
@@ -541,10 +556,14 @@ export const spawn = (
   opts?: {
     env?: NodeJS.ProcessEnv;
     logOutput?: boolean;
+    maxBuffer?: number;
     throwOnError?: { msg: string };
   }
 ) => {
-  const result = spawnSync(cmd, args, { env: opts?.env });
+  const result = spawnSync(cmd, args, {
+    env: opts?.env,
+    maxBuffer: opts?.maxBuffer,
+  });
   const success = result.status === 0;
   if (opts?.logOutput || !success) {
     console.log(
