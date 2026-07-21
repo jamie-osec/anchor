@@ -6,7 +6,6 @@
  */
 
 import * as fs from "fs/promises";
-import os from "os";
 import path from "path";
 
 import {
@@ -16,26 +15,13 @@ import {
   Toml,
   Version,
   VersionManager,
+  getPlatformToolsVersion,
   spawn,
   usesLegacyIdl,
 } from "./utils";
 
 const CARGO_LOCK_PATH = "Cargo.lock";
 const PROGRAM_MANIFEST_PATH = path.join("programs", "bench", "Cargo.toml");
-const STACK_DEPENDENCY_UPDATES: Partial<
-  Record<Version, [dependency: string, version: string][]>
-> = {
-  "0.27.0": [["ahash@0.7.6", "0.7.8"]],
-  "0.28.0": [
-    ["ahash@0.7.6", "0.7.8"],
-    ["ahash@0.8.3", "0.8.7"],
-  ],
-  "0.29.0": [
-    ["ahash@0.7.6", "0.7.8"],
-    ["ahash@0.8.3", "0.8.7"],
-  ],
-};
-
 (async () => {
   const bench = await BenchData.open();
 
@@ -47,29 +33,20 @@ const STACK_DEPENDENCY_UPDATES: Partial<
   const unreleased = bench.get("unreleased");
   VersionManager.setSolanaVersion(unreleased.solanaVersion);
 
-  const cargoBuildSbfResult = spawn("which", ["cargo-build-sbf"], {
-    throwOnError: { msg: "Failed to find cargo-build-sbf." },
-  });
-  const cargoBuildSbfPath = await fs.realpath(
-    cargoBuildSbfResult.stdout.toString().trim()
-  );
-  const tempBinPath = await fs.mkdtemp(path.join(os.tmpdir(), "anchor-bench-"));
-  const tempCargoBuildSbfPath = path.join(tempBinPath, "cargo-build-sbf");
-  await fs.copyFile(cargoBuildSbfPath, tempCargoBuildSbfPath);
-  await fs.chmod(tempCargoBuildSbfPath, 0o755);
-  spawn(
-    "cp",
-    [
-      "-a",
-      path.join(path.dirname(cargoBuildSbfPath), "platform-tools-sdk"),
-      tempBinPath,
-    ],
-    { throwOnError: { msg: "Failed to copy the platform tools SDK." } }
-  );
-  const env = {
+  const buildEnv = {
     ...process.env,
-    PATH: `${tempBinPath}${path.delimiter}${process.env.PATH}`,
+    RUSTC_BOOTSTRAP: "1",
+    RUSTFLAGS: "-Z emit-stack-sizes",
   };
+
+  for (const version of bench.getVersions()) {
+    const platformToolsVersion = await getPlatformToolsVersion(
+      bench.get(version).solanaVersion
+    );
+    bench.setPlatformToolsVersion(version, platformToolsVersion);
+  }
+  await bench.save();
+
   const setProjectVersion = async (version: Version) => {
     const isUnreleased = version === "unreleased";
 
@@ -111,7 +88,9 @@ const STACK_DEPENDENCY_UPDATES: Partial<
   try {
     // Older Anchor versions cannot generate IDLs using the current CLI. Create
     // one before switching dependencies so those versions can skip IDL builds.
-    const buildResult = spawn("anchor", ["build", "--skip-lint"], { env });
+    const buildResult = spawn("anchor", ["build", "--skip-lint"], {
+      env: buildEnv,
+    });
     if (buildResult.status !== 0) {
       throw new Error("Failed to build the current benchmark program.");
     }
@@ -120,6 +99,25 @@ const STACK_DEPENDENCY_UPDATES: Partial<
       console.log(`Updating '${version}'...`);
 
       await setProjectVersion(version);
+
+      const cargoBuildSbfVersionResult = spawn(
+        "cargo-build-sbf",
+        ["--version"],
+        {
+          throwOnError: { msg: "Failed to read the platform-tools version." },
+        }
+      );
+      const actualPlatformToolsVersion =
+        /(?:sbf|platform)-tools (v\d+\.\d+)/.exec(
+          cargoBuildSbfVersionResult.stdout.toString()
+        )?.[1];
+      const expectedPlatformToolsVersion =
+        bench.get(version).platformToolsVersion;
+      if (actualPlatformToolsVersion !== expectedPlatformToolsVersion) {
+        throw new Error(
+          `Expected platform-tools ${expectedPlatformToolsVersion}, found ${actualPlatformToolsVersion}.`
+        );
+      }
 
       // Resolve path dependencies in the cached lockfile before using the
       // version's Cargo. Keep the original lockfile format for old Cargo
@@ -161,47 +159,21 @@ const STACK_DEPENDENCY_UPDATES: Partial<
         );
       }
 
-      const buildResult = spawn("cargo-build-sbf", [
-        "--manifest-path",
-        PROGRAM_MANIFEST_PATH,
-        "--",
-        "--locked",
-      ]);
+      const buildResult = spawn(
+        "cargo-build-sbf",
+        ["--manifest-path", PROGRAM_MANIFEST_PATH, "--", "--locked"],
+        { env: buildEnv }
+      );
       if (buildResult.status !== 0) {
         console.error("Please fix the error and re-run this command.");
         process.exitCode = 1;
         return;
       }
 
-      // Rust 1.89 rejects dependencies used by the oldest releases. Update
-      // only the live lockfile used for the stack metadata rebuild, leaving
-      // the cached historical lockfiles unchanged.
-      for (const [dependency, dependencyVersion] of STACK_DEPENDENCY_UPDATES[
-        version
-      ] ?? []) {
-        spawn(
-          "cargo",
-          [
-            "update",
-            "--manifest-path",
-            PROGRAM_MANIFEST_PATH,
-            "-p",
-            dependency,
-            "--precise",
-            dependencyVersion,
-          ],
-          {
-            throwOnError: {
-              msg: `Failed to update ${dependency} to ${dependencyVersion}.`,
-            },
-          }
-        );
-      }
-
       const result = spawn(
         "anchor",
         ["test", "--skip-lint", "--skip-build", "--validator", "legacy"],
-        { env }
+        { env: buildEnv }
       );
 
       if (result.status !== 0) {
@@ -214,6 +186,5 @@ const STACK_DEPENDENCY_UPDATES: Partial<
     spawn("anchor", ["run", "sync-markdown"]);
   } finally {
     await setProjectVersion("unreleased");
-    await fs.rm(tempBinPath, { recursive: true });
   }
 })();

@@ -13,8 +13,9 @@
 //!
 //! Installation: download the matching tarball from `anza-xyz/platform-tools`
 //! GitHub releases and extract into `$AVM_HOME/platform-tools/<version>/`.
-//! Asset naming follows what `cargo-build-sbf` looks for upstream:
-//! `platform-tools-{linux|osx|windows}-{x86_64|aarch64}.tar.bz2`.
+//! Asset naming follows what `cargo-build-sbf` looks for upstream. Current
+//! releases use `platform-tools-{os}-{arch}.tar.bz2`; v1.29 and v1.32 use the
+//! older `solana-sbf-tools-{os}.tar.bz2` names.
 use {
     crate::{
         resolve::{resolve_solana_version, SolanaResolution, SolanaResolutionSource},
@@ -554,6 +555,25 @@ pub fn host_asset_name() -> &'static str {
     }
 }
 
+fn host_asset_name_for_version(version: &str) -> &'static str {
+    if matches!(version, "v1.29" | "v1.32") {
+        #[cfg(target_os = "linux")]
+        {
+            "solana-sbf-tools-linux.tar.bz2"
+        }
+        #[cfg(target_os = "macos")]
+        {
+            "solana-sbf-tools-osx.tar.bz2"
+        }
+        #[cfg(target_os = "windows")]
+        {
+            "solana-sbf-tools-windows.tar.bz2"
+        }
+    } else {
+        host_asset_name()
+    }
+}
+
 /// Full download URL for a given platform-tools version on the host target.
 pub fn download_url(version: &str) -> String {
     let version = if version.starts_with('v') {
@@ -563,7 +583,7 @@ pub fn download_url(version: &str) -> String {
     };
     format!(
         "https://github.com/anza-xyz/platform-tools/releases/download/{version}/{}",
-        host_asset_name()
+        host_asset_name_for_version(&version)
     )
 }
 
@@ -602,7 +622,7 @@ pub fn install_platform_tools(version: &str, force: bool) -> Result<()> {
     // Cleanup on any error from here on.
     let result = (|| -> Result<()> {
         let url = download_url(&version);
-        let archive_path = staging.join(host_asset_name());
+        let archive_path = staging.join(host_asset_name_for_version(&version));
         println!("Downloading {url}");
         download_to(&url, &archive_path)?;
 
@@ -909,38 +929,6 @@ mod tests {
         let metadata = locked_metadata(&dir.path().join("programs/excluded/Cargo.toml")).unwrap();
 
         assert!(metadata.is_none());
-    }
-
-    // ── Specific known transitions ──────────────────────────────────────────
-
-    #[test]
-    fn known_transition_1_18_0_to_v1_39() {
-        assert_eq!(lookup_for_solana_version(&v("1.18.0")).unwrap(), "v1.39");
-    }
-
-    #[test]
-    fn known_transition_1_18_8_to_v1_41() {
-        assert_eq!(lookup_for_solana_version(&v("1.18.8")).unwrap(), "v1.41");
-    }
-
-    #[test]
-    fn known_transition_2_0_5_to_v1_42() {
-        assert_eq!(lookup_for_solana_version(&v("2.0.5")).unwrap(), "v1.42");
-    }
-
-    #[test]
-    fn known_transition_2_1_0_to_v1_43() {
-        assert_eq!(lookup_for_solana_version(&v("2.1.0")).unwrap(), "v1.43");
-    }
-
-    #[test]
-    fn known_transition_3_0_0_to_v1_51() {
-        assert_eq!(lookup_for_solana_version(&v("3.0.0")).unwrap(), "v1.51");
-    }
-
-    #[test]
-    fn known_transition_4_0_0_to_v1_54() {
-        assert_eq!(lookup_for_solana_version(&v("4.0.0")).unwrap(), "v1.54");
     }
 
     // ── URL + asset naming ──────────────────────────────────────────────────

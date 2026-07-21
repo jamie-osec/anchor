@@ -10,12 +10,6 @@ import {
 } from "../scripts/utils";
 
 const IDL = require("../target/idl/bench.json");
-const PROGRAM_PATH = path.join(
-  "target",
-  "sbpf-solana-solana",
-  "release",
-  `${IDL.metadata.name}.so`
-);
 describe("Stack memory", () => {
   const stackMemory: StackMemory = {};
 
@@ -136,43 +130,39 @@ describe("Stack memory", () => {
     const bench = await BenchData.open();
     const version = getVersionFromArgs();
     const platformToolsVersion = bench.get(version).platformToolsVersion;
+    const platformToolsMinor = Number(platformToolsVersion.split(".")[1]);
+    const platformToolsDirectory =
+      platformToolsMinor < 37 ? "sbf-tools" : "platform-tools";
+    const programPath = path.join(
+      "target",
+      `${platformToolsMinor < 44 ? "sbf" : "sbpf"}-solana-solana`,
+      "release",
+      "bench.so"
+    );
     const llvmObjdumpPath = path.join(
       os.homedir(),
       ".cache",
       "solana",
       platformToolsVersion,
-      "platform-tools",
+      platformToolsDirectory,
       "llvm",
       "bin",
       "llvm-objdump"
     );
     const instructionAccountsStructs = await getInstructionAccountsStructs();
 
-    const buildArgs = ["build", "--skip-lint", "--ignore-keys"];
-    if (version !== "unreleased") buildArgs.push("--no-idl");
-    spawn("anchor", buildArgs, {
-      env: {
-        ...process.env,
-        RUSTC_BOOTSTRAP: "1",
-        RUSTFLAGS: "-Z emit-stack-sizes",
-      },
-      throwOnError: {
-        msg: "Failed to build benchmark program with stack size metadata.",
-      },
-    });
-
     const stackSizeResult = spawn(
       llvmObjdumpPath,
-      ["-s", "-j", ".stack_sizes", PROGRAM_PATH],
+      ["-s", "-j", ".stack_sizes", programPath],
       {
         throwOnError: {
-          msg: `Failed to read stack size metadata from ${PROGRAM_PATH}.`,
+          msg: `Failed to read stack size metadata from ${programPath}.`,
         },
       }
     );
-    const symbolResult = spawn(llvmObjdumpPath, ["-t", PROGRAM_PATH], {
+    const symbolResult = spawn(llvmObjdumpPath, ["-t", programPath], {
       throwOnError: {
-        msg: `Failed to read symbols from ${PROGRAM_PATH}.`,
+        msg: `Failed to read symbols from ${programPath}.`,
       },
     });
     const parsedStackMemory = parseStackSizes(
@@ -182,7 +172,7 @@ describe("Stack memory", () => {
     );
 
     if (!Object.keys(parsedStackMemory).length) {
-      throw new Error(`No stack size metadata was found in ${PROGRAM_PATH}.`);
+      throw new Error(`No stack size metadata was found in ${programPath}.`);
     }
 
     const missingHandlers = [...instructionAccountsStructs.values()].filter(

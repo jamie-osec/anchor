@@ -5,6 +5,9 @@ import { execSync, spawnSync } from "child_process";
 /** Version that is used in bench data file */
 export type Version = "unreleased" | (`${number}.${number}.${number}` & {});
 
+/** Platform-tools version used to build benchmark programs. */
+export type PlatformToolsVersion = `v${number}.${number}`;
+
 /** Persistent benchmark data(mapping of `Version -> Data`) */
 type Bench = {
   [key: string]: {
@@ -15,7 +18,7 @@ type Bench = {
      */
     solanaVersion: Version;
     /** Platform-tools version used to build the benchmark program */
-    platformToolsVersion: `v${number}.${number}`;
+    platformToolsVersion: PlatformToolsVersion;
     /** Benchmark results for a version */
     result: BenchResult;
   };
@@ -93,6 +96,14 @@ export class BenchData {
   /** Get all versions. */
   getVersions() {
     return Object.keys(this.#data) as Version[];
+  }
+
+  /** Record the platform-tools version used for a benchmark version. */
+  setPlatformToolsVersion(
+    version: Version,
+    platformToolsVersion: PlatformToolsVersion
+  ) {
+    this.#data[version].platformToolsVersion = platformToolsVersion;
   }
 
   /** Compare benchmark changes. */
@@ -548,6 +559,44 @@ export const getVersionFromArgs = () => {
 /** Whether the version predates IDL generation through the `idl-build` feature. */
 export const usesLegacyIdl = (version: Version) =>
   ["0.27.0", "0.28.0"].includes(version);
+
+/** Resolve a Solana version using AVM's platform-tools floor lookup. */
+export const getPlatformToolsVersion = async (solanaVersion: Version) => {
+  const map = await fs.readFile(
+    path.join("..", "..", "avm", "platform-tools-map.toml"),
+    "utf8"
+  );
+  const entries = [
+    ...map.matchAll(
+      /\[\[entries\]\]\s+solana\s*=\s*"([^"]+)"\s+platform_tools\s*=\s*"(v\d+\.\d+)"/g
+    ),
+  ].map(([, solana, platformTools]) => ({
+    solana: solana.split(".").map(Number),
+    platformTools: platformTools as PlatformToolsVersion,
+  }));
+  if (!entries.length) {
+    throw new Error("AVM's platform-tools map has no entries.");
+  }
+
+  const requested = solanaVersion.split(".").map(Number);
+  const compare = (a: number[], b: number[]) => {
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+      const difference = (a[i] ?? 0) - (b[i] ?? 0);
+      if (difference) return difference;
+    }
+    return 0;
+  };
+
+  // Match AVM's behavior for versions below the map by starting with the
+  // earliest known platform-tools release.
+  let platformToolsVersion = entries[0].platformTools;
+  for (const entry of entries) {
+    if (compare(entry.solana, requested) > 0) break;
+    platformToolsVersion = entry.platformTools;
+  }
+
+  return platformToolsVersion;
+};
 
 /** Spawn a blocking process. */
 export const spawn = (
