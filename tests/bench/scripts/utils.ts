@@ -14,6 +14,8 @@ type Bench = {
      * - Adjust for the changes in platform-tools
      */
     solanaVersion: Version;
+    /** Platform-tools version used to build the benchmark program */
+    platformToolsVersion: `v${number}.${number}`;
     /** Benchmark results for a version */
     result: BenchResult;
   };

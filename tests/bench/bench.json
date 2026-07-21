@@ -1,6 +1,7 @@
 {
   "0.27.0": {
     "solanaVersion": "1.14.16",
+    "platformToolsVersion": "v1.52",
     "result": {
       "binarySize": {
         "bench": 1137688
@@ -187,6 +188,7 @@
   },
   "0.28.0": {
     "solanaVersion": "1.16.0",
+    "platformToolsVersion": "v1.52",
     "result": {
       "binarySize": {
         "bench": 1160960
@@ -373,6 +375,7 @@
   },
   "0.29.0": {
     "solanaVersion": "1.17.0",
+    "platformToolsVersion": "v1.52",
     "result": {
       "binarySize": {
         "bench": 743056
@@ -559,6 +562,7 @@
   },
   "0.30.0": {
     "solanaVersion": "1.18.8",
+    "platformToolsVersion": "v1.52",
     "result": {
       "binarySize": {
         "bench": 791008
@@ -745,6 +749,7 @@
   },
   "0.30.1": {
     "solanaVersion": "1.18.17",
+    "platformToolsVersion": "v1.52",
     "result": {
       "binarySize": {
         "bench": 791008
@@ -931,6 +936,7 @@
   },
   "0.31.0": {
     "solanaVersion": "2.1.0",
+    "platformToolsVersion": "v1.52",
     "result": {
       "binarySize": {
         "bench": 1041928
@@ -1117,6 +1123,7 @@
   },
   "0.31.1": {
     "solanaVersion": "2.1.0",
+    "platformToolsVersion": "v1.52",
     "result": {
       "binarySize": {
         "bench": 1041928
@@ -1303,6 +1310,7 @@
   },
   "0.32.0": {
     "solanaVersion": "2.3.0",
+    "platformToolsVersion": "v1.52",
     "result": {
       "binarySize": {
         "bench": 1126368
@@ -1489,6 +1497,7 @@
   },
   "0.32.1": {
     "solanaVersion": "2.3.0",
+    "platformToolsVersion": "v1.52",
     "result": {
       "binarySize": {
         "bench": 1126840
@@ -1675,6 +1684,7 @@
   },
   "1.0.0": {
     "solanaVersion": "3.1.10",
+    "platformToolsVersion": "v1.52",
     "result": {
       "binarySize": {
         "bench": 932992
@@ -1861,6 +1871,7 @@
   },
   "1.0.1": {
     "solanaVersion": "3.1.10",
+    "platformToolsVersion": "v1.52",
     "result": {
       "binarySize": {
         "bench": 932992
@@ -2047,6 +2058,7 @@
   },
   "1.0.2": {
     "solanaVersion": "3.1.10",
+    "platformToolsVersion": "v1.52",
     "result": {
       "binarySize": {
         "bench": 932992
@@ -2233,6 +2245,7 @@
   },
   "1.0.3": {
     "solanaVersion": "3.1.10",
+    "platformToolsVersion": "v1.52",
     "result": {
       "binarySize": {
         "bench": 932992
@@ -2419,6 +2432,7 @@
   },
   "1.1.0": {
     "solanaVersion": "3.1.10",
+    "platformToolsVersion": "v1.52",
     "result": {
       "binarySize": {
         "bench": 932992
@@ -2605,6 +2619,7 @@
   },
   "1.1.1": {
     "solanaVersion": "3.1.10",
+    "platformToolsVersion": "v1.52",
     "result": {
       "binarySize": {
         "bench": 932992
@@ -2791,6 +2806,7 @@
   },
   "1.1.2": {
     "solanaVersion": "3.1.10",
+    "platformToolsVersion": "v1.52",
     "result": {
       "binarySize": {
         "bench": 932992
@@ -2977,6 +2993,7 @@
   },
   "unreleased": {
     "solanaVersion": "3.1.10",
+    "platformToolsVersion": "v1.52",
     "result": {
       "binarySize": {
         "bench": 932992

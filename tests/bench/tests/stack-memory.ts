@@ -2,7 +2,12 @@ import path from "path";
 import fs from "fs/promises";
 import os from "os";
 
-import { BenchData, StackMemory, spawn } from "../scripts/utils";
+import {
+  BenchData,
+  StackMemory,
+  getVersionFromArgs,
+  spawn,
+} from "../scripts/utils";
 
 const IDL = require("../target/idl/bench.json");
 const PROGRAM_PATH = path.join(
@@ -11,17 +16,6 @@ const PROGRAM_PATH = path.join(
   "release",
   `${IDL.metadata.name}.so`
 );
-const LLVM_OBJDUMP_PATH = path.join(
-  os.homedir(),
-  ".cache",
-  "solana",
-  "v1.52",
-  "platform-tools",
-  "llvm",
-  "bin",
-  "llvm-objdump"
-);
-
 describe("Stack memory", () => {
   const stackMemory: StackMemory = {};
 
@@ -139,6 +133,20 @@ describe("Stack memory", () => {
   };
 
   it("Measure stack memory usage", async () => {
+    const bench = await BenchData.open();
+    const platformToolsVersion = bench.get(
+      getVersionFromArgs()
+    ).platformToolsVersion;
+    const llvmObjdumpPath = path.join(
+      os.homedir(),
+      ".cache",
+      "solana",
+      platformToolsVersion,
+      "platform-tools",
+      "llvm",
+      "bin",
+      "llvm-objdump"
+    );
     const instructionAccountsStructs = await getInstructionAccountsStructs();
 
     spawn("anchor", ["build", "--skip-lint", "--ignore-keys"], {
@@ -153,7 +161,7 @@ describe("Stack memory", () => {
     });
 
     const stackSizeResult = spawn(
-      LLVM_OBJDUMP_PATH,
+      llvmObjdumpPath,
       ["-s", "-j", ".stack_sizes", PROGRAM_PATH],
       {
         throwOnError: {
@@ -161,7 +169,7 @@ describe("Stack memory", () => {
         },
       }
     );
-    const symbolResult = spawn(LLVM_OBJDUMP_PATH, ["-t", PROGRAM_PATH], {
+    const symbolResult = spawn(llvmObjdumpPath, ["-t", PROGRAM_PATH], {
       throwOnError: {
         msg: `Failed to read symbols from ${PROGRAM_PATH}.`,
       },
