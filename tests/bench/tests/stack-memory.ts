@@ -199,7 +199,9 @@ describe("Stack memory", () => {
   });
 
   after(async () => {
-    if (!Object.keys(stackMemory).length) return;
+    if (!Object.keys(stackMemory).length) {
+      throw new Error("No stack memory measurements were collected.");
+    }
 
     const bench = await BenchData.open();
     await bench.update({ stackMemory });
