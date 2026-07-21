@@ -9,7 +9,7 @@ const PROGRAM_PATH = path.join(
   "target",
   "sbpf-solana-solana",
   "release",
-  "bench.so"
+  `${IDL.metadata.name}.so`
 );
 const LLVM_OBJDUMP_PATH = path.join(
   os.homedir(),
