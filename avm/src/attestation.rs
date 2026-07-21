@@ -19,6 +19,7 @@ const GITHUB_ACTIONS_ISSUER: &str = "https://token.actions.githubusercontent.com
 const SLSA_PROVENANCE_V1: &str = "https://slsa.dev/provenance/v1";
 const RELEASE_WORKFLOW: &str = ".github/workflows/build-cli.yaml";
 const NIGHTLY_WORKFLOW: &str = ".github/workflows/nightly-attested-binaries.yaml";
+const FIRST_ATTESTED_RELEASE: Version = Version::new(1, 1, 0);
 
 #[derive(Deserialize)]
 struct AttestationsResponse {
@@ -31,6 +32,10 @@ struct GitHubAttestation {
 }
 
 pub(crate) fn verify_release(path: &Path, version: &Version) -> Result<()> {
+    if !release_has_attestation(version) {
+        eprintln!("Anchor v{version} does not have signed releases, skipping checks");
+        return Ok(());
+    }
     verify(path, &release_identity(version))
 }
 
@@ -40,6 +45,11 @@ pub(crate) fn verify_nightly(path: &Path) -> Result<()> {
 
 fn release_identity(version: &Version) -> String {
     workflow_identity(RELEASE_WORKFLOW, &format!("refs/tags/v{version}"))
+}
+
+fn release_has_attestation(version: &Version) -> bool {
+    // 1.0.3 was backported after attestation was introduced
+    version >= &FIRST_ATTESTED_RELEASE || version == &Version::new(1, 0, 3)
 }
 
 fn nightly_identity() -> String {
