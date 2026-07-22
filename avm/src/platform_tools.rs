@@ -17,8 +17,12 @@
 //! `platform-tools-{linux|osx|windows}-{x86_64|aarch64}.tar.bz2`.
 use {
     crate::{
-        resolve::{resolve_solana_version, SolanaResolution, SolanaResolutionSource},
-        solana::installable_solana_cli_versions_for_req,
+        resolve::{
+            resolve_solana_version, ResolutionSource, SolanaResolution, SolanaResolutionSource,
+        },
+        solana::{
+            installable_solana_cli_versions_for_req, SolanaCliResolution, SolanaCliResolutionSource,
+        },
         AVM_HOME, DOWNLOAD_CLIENT,
     },
     anyhow::{anyhow, bail, Context, Result},
@@ -115,6 +119,12 @@ pub enum PlatformToolsSource {
         solana: Version,
         solana_source: SolanaResolutionSource,
     },
+    /// Mapped from a Solana version selected through the Anchor release map.
+    AnchorMap {
+        solana: Version,
+        anchor: Version,
+        anchor_source: ResolutionSource,
+    },
     /// Project did not pin Solana → use the map's hardcoded fallback.
     Fallback,
 }
@@ -132,6 +142,14 @@ impl PlatformToolsSource {
             } => format!(
                 "solana {solana} predates map; using earliest entry ({})",
                 solana_source.describe()
+            ),
+            Self::AnchorMap {
+                solana,
+                anchor,
+                anchor_source,
+            } => format!(
+                "solana {solana} recommended for anchor {anchor} ({})",
+                anchor_source.describe()
             ),
             Self::Fallback => "fallback (no Solana version pinned)".to_string(),
         }
@@ -158,6 +176,64 @@ pub fn resolve_platform_tools(start: &Path) -> Result<PlatformToolsResolution> {
         Some(solana_res) => resolve_for_project_solana(&solana_res, required_rust.as_ref()),
         None => resolve_fallback(required_rust.as_ref()),
     }
+}
+
+/// Resolve platform-tools for the exact Solana CLI selected by the Anchor
+/// proxy, while checking that its bundled Rust compiler can build the locked
+/// dependency graph.
+pub fn resolve_platform_tools_for_solana_cli(
+    start: &Path,
+    solana_res: &SolanaCliResolution,
+) -> Result<PlatformToolsResolution> {
+    let required_rust = required_rust_version_from_metadata(start)?;
+    let resolution = match &solana_res.source {
+        SolanaCliResolutionSource::Project(source) => {
+            resolve_for_solana_version(&solana_res.version, source.clone())
+        }
+        SolanaCliResolutionSource::AnchorMap {
+            anchor,
+            anchor_source,
+        } => {
+            let entry = MAP
+                .entries
+                .iter()
+                .rev()
+                .find(|entry| entry.solana <= solana_res.version)
+                .unwrap_or_else(|| {
+                    MAP.entries
+                        .first()
+                        .expect("platform-tools map must have at least one entry")
+                });
+            PlatformToolsResolution {
+                version: entry.platform_tools.clone(),
+                rustc: entry.rustc.clone(),
+                source: PlatformToolsSource::AnchorMap {
+                    solana: solana_res.version.clone(),
+                    anchor: anchor.clone(),
+                    anchor_source: anchor_source.clone(),
+                },
+            }
+        }
+    };
+
+    if let Some(required) = required_rust {
+        if resolution.rustc < required.rustc {
+            bail!(
+                "Solana {} resolved from {} maps to platform-tools {} with rustc {}, but {} {} \
+                 requires rustc {}. Pin a newer `[toolchain] solana_version`, update Cargo.lock, \
+                 or pin a dependency version compatible with the Solana toolchain.",
+                solana_res.version,
+                solana_res.source.describe(),
+                resolution.version,
+                resolution.rustc,
+                required.package,
+                required.package_version,
+                required.rustc,
+            );
+        }
+    }
+
+    Ok(resolution)
 }
 
 #[cfg(test)]
@@ -575,13 +651,49 @@ pub fn download_url(version: &str) -> String {
 /// and atomically renamed on success so a failed install never leaves a
 /// half-populated directory at the canonical path.
 pub fn install_platform_tools(version: &str, force: bool) -> Result<()> {
+    let target = platform_tools_version_path(version);
+    install_platform_tools_at(version, &target, force)
+}
+
+/// Path used by every generation of `cargo-build-sbf` for a cached
+/// platform-tools release.
+pub fn solana_cache_platform_tools_path(version: &str) -> Result<PathBuf> {
     let version = if version.starts_with('v') {
         version.to_string()
     } else {
         format!("v{version}")
     };
-    let target = platform_tools_version_path(&version);
-    if !force && looks_installed(&target) {
+
+    Ok(dirs::home_dir()
+        .ok_or_else(|| anyhow!("Could not find home directory"))?
+        .join(".cache")
+        .join("solana")
+        .join(version)
+        .join("platform-tools"))
+}
+
+/// Install a platform-tools release directly into the cache consumed by
+/// `cargo-build-sbf`.
+///
+/// This is the compatibility path for Solana releases whose bundled
+/// `cargo-build-sbf` predates `--install-only`.
+pub fn install_platform_tools_in_solana_cache(version: &str, force: bool) -> Result<()> {
+    let target = solana_cache_platform_tools_path(version)?;
+    install_platform_tools_at(version, &target, force)
+}
+
+/// Return whether `target` contains an extracted platform-tools Rust sysroot.
+pub fn platform_tools_are_installed_at(target: &Path) -> bool {
+    looks_installed(target)
+}
+
+fn install_platform_tools_at(version: &str, target: &Path, force: bool) -> Result<()> {
+    let version = if version.starts_with('v') {
+        version.to_string()
+    } else {
+        format!("v{version}")
+    };
+    if !force && looks_installed(target) {
         println!(
             "platform-tools {version} is already installed at {}",
             target.display()
@@ -592,7 +704,11 @@ pub fn install_platform_tools(version: &str, force: bool) -> Result<()> {
     fs::create_dir_all(parent).with_context(|| format!("Creating {}", parent.display()))?;
 
     // Stage download + extract in a sibling directory.
-    let staging = parent.join(format!("{version}.partial"));
+    let target_name = target
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| anyhow!("Invalid platform-tools target path: {}", target.display()))?;
+    let staging = parent.join(format!("{target_name}.partial"));
     if staging.exists() {
         fs::remove_dir_all(&staging)
             .with_context(|| format!("Cleaning up stale {}", staging.display()))?;
@@ -625,7 +741,7 @@ pub fn install_platform_tools(version: &str, force: bool) -> Result<()> {
 
     match result {
         Ok(()) => {
-            replace_install_dir(&staging, &target)?;
+            replace_install_dir(&staging, target)?;
             println!("Installed platform-tools {version} to {}", target.display());
             Ok(())
         }
@@ -916,6 +1032,11 @@ mod tests {
     #[test]
     fn known_transition_1_18_0_to_v1_39() {
         assert_eq!(lookup_for_solana_version(&v("1.18.0")).unwrap(), "v1.39");
+    }
+
+    #[test]
+    fn known_transition_1_17_25_to_v1_37() {
+        assert_eq!(lookup_for_solana_version(&v("1.17.25")).unwrap(), "v1.37");
     }
 
     #[test]
