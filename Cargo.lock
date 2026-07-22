@@ -677,7 +677,6 @@ name = "avm"
 version = "1.1.2"
 dependencies = [
  "anyhow",
- "cargo_metadata",
  "cargo_toml",
  "cfg-if",
  "chrono",
