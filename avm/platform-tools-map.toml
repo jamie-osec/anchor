@@ -3,7 +3,7 @@
 # Source of truth: `DEFAULT_PLATFORM_TOOLS_VERSION` (or its predecessor, the
 # `platform_tools_version = String::from("vX.Y")` literal) in cargo-build-sbf:
 #
-#   1.18.x : solana-labs/solana, sdk/cargo-build-sbf/src/main.rs
+#   1.17.x – 1.18.x : solana-labs/solana, sdk/cargo-build-sbf/src/main.rs
 #   2.0.x – 2.3.x : anza-xyz/agave, sdk/cargo-build-sbf/src/main.rs
 #                   (then platform-tools-sdk/cargo-build-sbf/src/main.rs from 2.2)
 #   3.0.x+ : anza-xyz/agave, platform-tools-sdk/cargo-build-sbf/src/toolchain.rs
@@ -20,6 +20,11 @@
 # Keep it equal to the platform-tools version of the newest entry below.
 
 fallback = "v1.54"
+
+[[entries]]
+solana = "1.17.25"
+platform_tools = "v1.37"
+rustc = "1.68.0"
 
 [[entries]]
 solana = "1.18.0"

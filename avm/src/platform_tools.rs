@@ -919,6 +919,11 @@ mod tests {
     }
 
     #[test]
+    fn known_transition_1_17_25_to_v1_37() {
+        assert_eq!(lookup_for_solana_version(&v("1.17.25")).unwrap(), "v1.37");
+    }
+
+    #[test]
     fn known_transition_1_18_8_to_v1_41() {
         assert_eq!(lookup_for_solana_version(&v("1.18.8")).unwrap(), "v1.41");
     }
