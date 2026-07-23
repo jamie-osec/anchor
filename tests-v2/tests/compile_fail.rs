@@ -1212,6 +1212,54 @@ pub unsafe fn load_bad(view: AccountView) {
 }
 
 #[test]
+fn slab_overaligned_tail_does_not_compile() {
+    CompileCase::new(
+        "slab_overaligned_tail",
+        r#"
+use anchor_lang_v2::{
+    accounts::{Slab, SlabSchema},
+    prelude::*,
+    AccountView,
+};
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GoodHeader {
+    value: u64,
+}
+
+unsafe impl anchor_lang_v2::bytemuck::Zeroable for GoodHeader {}
+unsafe impl anchor_lang_v2::bytemuck::Pod for GoodHeader {}
+
+impl SlabSchema for GoodHeader {
+    const DATA_OFFSET: usize = 0;
+    const MIN_DATA_LEN: usize = 8;
+
+    fn validate(
+        _view: &AccountView,
+        _data: &[u8],
+    ) -> core::result::Result<(), ProgramError> {
+        Ok(())
+    }
+}
+
+#[repr(C, align(16))]
+#[derive(Clone, Copy)]
+pub struct OveralignedTail([u8; 16]);
+
+unsafe impl anchor_lang_v2::bytemuck::Zeroable for OveralignedTail {}
+unsafe impl anchor_lang_v2::bytemuck::Pod for OveralignedTail {}
+
+pub unsafe fn load_bad(view: AccountView) {
+    let _ = <Slab<GoodHeader, OveralignedTail> as AnchorAccount>::load_mut(view);
+}
+"#,
+    )
+    .build()
+    .expect_fail(&["Slab tail alignment exceeds Solana's 8-byte account data alignment"]);
+}
+
+#[test]
 fn realloc_on_unchecked_account_does_not_compile() {
     CompileCase::new(
         "realloc_on_unchecked_account",
