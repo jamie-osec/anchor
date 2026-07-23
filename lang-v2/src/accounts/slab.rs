@@ -249,6 +249,33 @@ where
         &self.view
     }
 
+    /// Re-run the slab's load-time schema checks after a CPI that may have
+    /// changed owner, discriminator, data length, or tail metadata.
+    ///
+    /// Unlike [`super::serialized_account::SerializedAccount::reacquire_borrow_mut`],
+    /// this does not need a preceding `release_borrow()`: `Slab` keeps no
+    /// `Ref` / `RefMut` guard alive, only a raw `AccountView` plus cached
+    /// pointers into the same runtime buffer. Use this when a CPI may have
+    /// mutated the account and you want to ensure the live bytes still
+    /// validate as `Slab<H, T>` before continuing.
+    pub fn revalidate_after_cpi(&mut self) -> Result<(), ProgramError> {
+        let data = unsafe { self.view.borrow_unchecked() };
+        H::validate(&self.view, data)?;
+        if data.len() < Self::ITEMS_OFFSET {
+            return Err(ProgramError::AccountDataTooSmall);
+        }
+        Self::validate_tail(data)?;
+
+        self.header_ptr = if self.is_mutable {
+            let mut view_mut = self.view;
+            (unsafe { view_mut.data_mut_ptr().add(Self::HEADER_OFFSET) }) as *mut H
+        } else {
+            (unsafe { self.view.data_ptr().add(Self::HEADER_OFFSET) }) as *mut H
+        };
+
+        Ok(())
+    }
+
     /// Validate `len <= capacity` for the tail region before we do the
     /// lifetime transmute. Works on `&[u8]` directly — no unsafe, no
     /// alignment concerns (uses `u32::from_le_bytes` on a stack copy).

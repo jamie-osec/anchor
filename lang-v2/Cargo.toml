@@ -95,6 +95,10 @@ name = "slab_resize_reproducers"
 required-features = ["testing"]
 
 [[test]]
+name = "slab_cpi_revalidation"
+required-features = ["testing"]
+
+[[test]]
 name = "account_wrapper_checks"
 required-features = ["testing"]
 
