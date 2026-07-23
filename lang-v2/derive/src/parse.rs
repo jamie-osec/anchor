@@ -321,6 +321,12 @@ pub fn parse_account_attrs(attrs: &[Attribute]) -> syn::Result<AccountAttrs> {
                             let key_ident = Ident::parse_any(input)?;
                             // seeds::program = expr — special case, stored separately
                             if ident == "seeds" && key_ident == "program" {
+                                if result.seeds_program.is_some() {
+                                    return Err(syn::Error::new(
+                                        key_ident.span(),
+                                        "`seeds::program` already provided",
+                                    ));
+                                }
                                 input.parse::<Token![=]>()?;
                                 result.seeds_program = Some(input.parse()?);
                                 if !input.is_empty() {
@@ -379,6 +385,13 @@ pub fn parse_account_attrs(attrs: &[Attribute]) -> syn::Result<AccountAttrs> {
                  canonical bump (write `bump` without a value)",
             ));
         }
+    }
+
+    if result.seeds_program.is_some() && result.seeds.is_none() {
+        return Err(syn::Error::new(
+            result.seeds_program.as_ref().unwrap().span(),
+            "`seeds::program` requires `seeds`",
+        ));
     }
 
     Ok(result)
@@ -1314,6 +1327,20 @@ pub fn parse_field(
     let field_name = field.ident.as_ref().expect("named field");
     let field_ty = &field.ty;
     let attrs = parse_account_attrs(&field.attrs)?;
+    if attrs.seeds_program.is_some() {
+        if attrs.is_init {
+            return Err(syn::Error::new(
+                attrs.seeds_program.as_ref().unwrap().span(),
+                "`seeds::program` cannot be used with `init`",
+            ));
+        }
+        if attrs.is_init_if_needed {
+            return Err(syn::Error::new(
+                attrs.seeds_program.as_ref().unwrap().span(),
+                "`seeds::program` cannot be used with `init_if_needed`",
+            ));
+        }
+    }
     if attrs.close.is_some() && !attrs.is_mut {
         return Err(syn::Error::new(
             field_name.span(),
