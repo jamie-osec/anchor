@@ -110,6 +110,22 @@ pub mod seeds {
     ) -> Result<()> {
         Ok(())
     }
+
+    #[discrim = 12]
+    pub fn check_literal_untrusted_bump(
+        _ctx: &mut Context<CheckLiteralUntrustedBump>,
+        _untrusted_bump: u8,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    #[discrim = 13]
+    pub fn check_fn_seeds_untrusted_bump(
+        _ctx: &mut Context<CheckFnSeedsUntrustedBump>,
+        _untrusted_bump: u8,
+    ) -> Result<()> {
+        Ok(())
+    }
 }
 
 // -- Accounts structs --------------------------------------------------------
@@ -169,12 +185,30 @@ pub struct CheckFnSeedsExplicitBumpOptional {
     pub data: Option<Account<Data>>,
 }
 
+// 5c. Verify function-call seeds + explicit untrusted bump on UncheckedAccount.
+#[derive(Accounts)]
+#[instruction(untrusted_bump: u8)]
+pub struct CheckFnSeedsUntrustedBump {
+    pub payer: Signer,
+    #[account(seeds = tag_seeds(), bump = untrusted_bump)]
+    pub data: UncheckedAccount,
+}
+
 // 6. Verify const-item seeds + bare bump
 #[derive(Accounts)]
 pub struct CheckConstSeeds {
     pub payer: Signer,
     #[account(seeds = CONST_TAG_SEEDS, bump)]
     pub data: Account<Data>,
+}
+
+// 6b. Verify literal seeds + explicit untrusted bump on UncheckedAccount.
+#[derive(Accounts)]
+#[instruction(untrusted_bump: u8)]
+pub struct CheckLiteralUntrustedBump {
+    pub payer: Signer,
+    #[account(seeds = [b"data"], bump = untrusted_bump)]
+    pub data: UncheckedAccount,
 }
 
 // 7. Init + mixed seeds (literal + field ref)

@@ -241,36 +241,21 @@ pub fn create_program_address(
 
 /// Verify that `expected` matches the PDA derived from `seeds` and `program_id`.
 ///
-/// On-chain this is hash-only and assumes the seeds are runtime-valid and the
-/// bump is canonical. Off-chain it uses `Address::create_program_address`,
-/// which also performs host-side seed and curve validation. For untrusted bumps
-/// use `find_and_verify_program_address`. Seeds should already include the bump
-/// byte.
+/// This verifies the exact PDA for the provided seeds, including the runtime's
+/// off-curve requirement. Use [`find_and_verify_program_address`] when the bump
+/// is not already included in `seeds` and needs to be discovered canonically.
 #[inline(always)]
 pub fn verify_program_address(
     seeds: &[&[u8]],
     program_id: &Address,
     expected: &Address,
 ) -> Result<(), ProgramError> {
-    #[cfg(target_os = "solana")]
-    {
-        let computed = hash_pda_seeds(seeds, program_id)?;
-        if pinocchio::address::address_eq(&computed, expected) {
-            Ok(())
-        } else {
-            Err(ProgramError::InvalidSeeds)
-        }
-    }
-
-    #[cfg(not(target_os = "solana"))]
-    {
-        let computed = Address::create_program_address(seeds, program_id)
-            .map_err(|_| ProgramError::InvalidSeeds)?;
-        if pinocchio::address::address_eq(&computed, expected) {
-            Ok(())
-        } else {
-            Err(ProgramError::InvalidSeeds)
-        }
+    let computed =
+        create_program_address(seeds, program_id).map_err(|_| ProgramError::InvalidSeeds)?;
+    if pinocchio::address::address_eq(&computed, expected) {
+        Ok(())
+    } else {
+        Err(ProgramError::InvalidSeeds)
     }
 }
 

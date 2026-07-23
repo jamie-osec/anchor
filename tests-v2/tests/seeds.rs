@@ -7,9 +7,11 @@
 use {
     anchor_lang_v2::solana_program::instruction::{AccountMeta, Instruction},
     litesvm::{types::TransactionResult, LiteSVM},
+    sha2::{Digest, Sha256},
+    solana_account::Account,
     solana_keypair::Keypair,
     solana_message::{Message, VersionedMessage},
-    solana_pubkey::Pubkey,
+    solana_pubkey::{bytes_are_curve_point, Pubkey},
     solana_signer::Signer,
     solana_transaction::versioned::VersionedTransaction,
     tests_v2::{build_program, keypair_for, send_instruction},
@@ -27,6 +29,31 @@ fn data_pda() -> Pubkey {
 
 fn user_pda(user: &Pubkey) -> Pubkey {
     Pubkey::find_program_address(&[b"user", user.as_ref()], &program_id()).0
+}
+
+fn raw_program_address(seeds: &[&[u8]], program_id: &Pubkey) -> Pubkey {
+    let mut hasher = Sha256::new();
+    for seed in seeds {
+        hasher.update(seed);
+    }
+    hasher.update(program_id.as_ref());
+    hasher.update(b"ProgramDerivedAddress");
+    Pubkey::new_from_array(hasher.finalize().into())
+}
+
+fn find_on_curve_bump() -> (Pubkey, u8) {
+    for bump in 0..=u8::MAX {
+        let bump_seed = [bump];
+        let address = raw_program_address(&[b"data", &bump_seed], &program_id());
+        if bytes_are_curve_point(address.to_bytes()) {
+            assert!(
+                Pubkey::create_program_address(&[b"data", &bump_seed], &program_id()).is_err(),
+                "host PDA derivation should reject on-curve addresses",
+            );
+            return (address, bump);
+        }
+    }
+    panic!("expected at least one on-curve bump");
 }
 
 fn setup() -> (LiteSVM, Keypair) {
@@ -253,6 +280,20 @@ fn call_raw(
     svm.send_transaction(tx)
 }
 
+fn set_system_account(svm: &mut LiteSVM, address: Pubkey, lamports: u64, data_len: usize) {
+    svm.set_account(
+        address,
+        Account {
+            lamports,
+            data: vec![0u8; data_len],
+            owner: solana_sdk_ids::system_program::ID,
+            executable: false,
+            rent_epoch: 0,
+        },
+    )
+    .unwrap();
+}
+
 #[test]
 fn wrong_bump_value_rejected() {
     let (mut svm, payer) = setup();
@@ -333,5 +374,51 @@ fn mixed_seeds_wrong_order_rejected() {
     assert!(
         result.is_err(),
         "PDA from wrong seed order should be rejected"
+    );
+}
+
+#[test]
+fn literal_untrusted_bump_rejects_on_curve_address() {
+    let (mut svm, payer) = setup();
+    let (fake_pda, bump) = find_on_curve_bump();
+    set_system_account(&mut svm, fake_pda, 1_000_000, 0);
+
+    let result = send_instruction(
+        &mut svm,
+        program_id(),
+        vec![12, bump],
+        vec![
+            AccountMeta::new_readonly(payer.pubkey(), true),
+            AccountMeta::new_readonly(fake_pda, false),
+        ],
+        &payer,
+        &[],
+    );
+    assert!(
+        result.is_err(),
+        "on-curve address derived from explicit bump must be rejected",
+    );
+}
+
+#[test]
+fn fn_seed_untrusted_bump_rejects_on_curve_address() {
+    let (mut svm, payer) = setup();
+    let (fake_pda, bump) = find_on_curve_bump();
+    set_system_account(&mut svm, fake_pda, 1_000_000, 0);
+
+    let result = send_instruction(
+        &mut svm,
+        program_id(),
+        vec![13, bump],
+        vec![
+            AccountMeta::new_readonly(payer.pubkey(), true),
+            AccountMeta::new_readonly(fake_pda, false),
+        ],
+        &payer,
+        &[],
+    );
+    assert!(
+        result.is_err(),
+        "on-curve address derived from explicit bump must be rejected",
     );
 }
