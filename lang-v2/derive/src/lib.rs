@@ -4430,10 +4430,10 @@ fn impl_program(module: &ItemMod, config: &ProgramConfig) -> TokenStream2 {
     // Returns u64 error code on failure (not Err) since __anchor_dispatch
     // returns u64 directly.
     // Build a const expression for the minimum ix_data length across all
-    // instructions: disc_size + min(serialized args size per ix). Uses
-    // `size_of` on a tuple of arg types — only when ALL args are owned
-    // fixed-size types (no references, no dynamic-size). Falls back to 0
-    // for instructions with references or complex types.
+    // instructions: disc_size + min(serialized args size per ix). Uses a
+    // per-argument scalar-size sum only when ALL args are owned fixed-size
+    // primitives (no references, no dynamic-size). Falls back to 0 for
+    // instructions with references or complex types.
     fn is_fixed_size_primitive(ty: &syn::Type) -> bool {
         match ty {
             syn::Type::Path(p) if p.path.segments.len() == 1 => {
@@ -4464,7 +4464,7 @@ fn impl_program(module: &ItemMod, config: &ProgramConfig) -> TokenStream2 {
                 if types.is_empty() || !types.iter().all(is_fixed_size_primitive) {
                     quote! { 0usize }
                 } else {
-                    quote! { core::mem::size_of::<(#(#types,)*)>() }
+                    quote! { 0usize #( + core::mem::size_of::<#types>() )* }
                 }
             })
             .collect();
