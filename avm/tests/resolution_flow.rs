@@ -122,6 +122,7 @@ echo "args=$*" >> "$AVM_TEST_ANCHOR_LOG"
 echo "avm_active=${{AVM_ACTIVE:-}}" >> "$AVM_TEST_ANCHOR_LOG"
 echo "rustup_toolchain=${{RUSTUP_TOOLCHAIN:-}}" >> "$AVM_TEST_ANCHOR_LOG"
 echo "resolver=${{CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS:-}}" >> "$AVM_TEST_ANCHOR_LOG"
+echo "next_lockfile_bump=${{CARGO_UNSTABLE_NEXT_LOCKFILE_BUMP:-}}" >> "$AVM_TEST_ANCHOR_LOG"
 "#
             ),
         );
@@ -358,6 +359,7 @@ exit 0
             .env("HOME", self._temp.path().join("home"))
             .env("PATH", path)
             .env_remove("RUSTUP_TOOLCHAIN")
+            .env_remove("CARGO_UNSTABLE_NEXT_LOCKFILE_BUMP")
             .env("AVM_TEST_ANCHOR_LOG", &self.log_path)
             .env("AVM_TEST_CARGO_LOG", &self.cargo_log_path)
             .env("AVM_TEST_RUSTUP_LOG", &self.rustup_log_path)
@@ -538,6 +540,48 @@ fn anchor_stub_uses_legacy_idl_nightly_for_locked_proc_macro2() {
         rustup_log.contains("toolchain link solana "),
         "{rustup_log}"
     );
+}
+
+#[test]
+fn anchor_stub_enables_v4_lockfile_for_compatible_legacy_cargo() {
+    let fixture = Fixture::new();
+    fixture.install_legacy_build_sbf();
+    fixture.cache_platform_tools("v1.41");
+    fixture.install_anchor("0.30.1");
+    fixture.install_fake_solana("1.18.17");
+    let project = fixture.project("legacy-v4-lockfile");
+    fs::write(
+        project.join("Anchor.toml"),
+        "[toolchain]\nanchor_version = \"0.30.1\"\nsolana_version = \"1.18.17\"\n",
+    )
+    .unwrap();
+    fs::write(project.join("Cargo.lock"), "version = 4\n").unwrap();
+
+    assert_success(&fixture.run_anchor(&project, ["build"]));
+
+    let log = fixture.anchor_log();
+    assert!(log.contains("next_lockfile_bump=true"), "{log}");
+}
+
+#[test]
+fn anchor_stub_does_not_enable_v4_opt_in_for_native_cargo() {
+    let fixture = Fixture::new();
+    fixture.install_legacy_build_sbf();
+    fixture.cache_platform_tools("v1.43");
+    fixture.install_anchor("0.31.1");
+    fixture.install_fake_solana("2.1.0");
+    let project = fixture.project("native-v4-lockfile");
+    fs::write(
+        project.join("Anchor.toml"),
+        "[toolchain]\nanchor_version = \"0.31.1\"\nsolana_version = \"2.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(project.join("Cargo.lock"), "version = 4\n").unwrap();
+
+    assert_success(&fixture.run_anchor(&project, ["build"]));
+
+    let log = fixture.anchor_log();
+    assert!(log.contains("next_lockfile_bump=\n"), "{log}");
 }
 
 #[test]

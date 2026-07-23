@@ -15,6 +15,7 @@ use {
 };
 
 const REAL_CARGO_ENV: &str = "AVM_REAL_CARGO";
+const CARGO_NEXT_LOCKFILE_BUMP_ENV: &str = "CARGO_UNSTABLE_NEXT_LOCKFILE_BUMP";
 
 #[derive(Parser)]
 #[clap(name = "avm", about = "Anchor version manager", version)]
@@ -344,7 +345,7 @@ fn anchor_proxy() -> Result<()> {
     let args = std::env::args().skip(1).collect::<Vec<String>>();
 
     if avm::ensure_nightly_active()?.is_some() {
-        return spawn_anchor(avm::nightly_anchor_binary_path(), args);
+        return spawn_anchor(avm::nightly_anchor_binary_path(), args, false);
     }
 
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -357,11 +358,17 @@ fn anchor_proxy() -> Result<()> {
 
     let binary_path = ensure_resolved_binary(&resolution)?;
     prepend_solana_bin_to_path()?;
-    let _platform_tools_guard = ensure_resolved_solana(&cwd, &resolution)?
+    let platform_tools_guard = ensure_resolved_solana(&cwd, &resolution)?
         .map(|solana| ensure_resolved_platform_tools(&cwd, &solana))
         .transpose()?;
 
-    spawn_anchor(binary_path, args)
+    spawn_anchor(
+        binary_path,
+        args,
+        platform_tools_guard
+            .as_ref()
+            .is_some_and(|guard| guard.enable_next_lockfile_bump),
+    )
 }
 
 /// Spawn the resolved Anchor CLI with a temporary Cargo proxy first on `PATH`.
@@ -369,7 +376,11 @@ fn anchor_proxy() -> Result<()> {
 /// The proxy lives until the child exits and receives the absolute path to the
 /// real Cargo executable through [`REAL_CARGO_ENV`], avoiding recursive proxy
 /// invocation when it delegates the command.
-fn spawn_anchor(binary_path: PathBuf, args: Vec<String>) -> Result<()> {
+fn spawn_anchor(
+    binary_path: PathBuf,
+    args: Vec<String>,
+    enable_next_lockfile_bump: bool,
+) -> Result<()> {
     let cargo_proxy = CargoProxy::new()?;
     let path = env::join_paths(
         [
@@ -380,14 +391,20 @@ fn spawn_anchor(binary_path: PathBuf, args: Vec<String>) -> Result<()> {
         .chain(env::split_paths(&env::var_os("PATH").unwrap_or_default())),
     )?;
 
-    let exit = Command::new(binary_path)
+    let mut command = Command::new(binary_path);
+    command
         .args(args)
         .env("PATH", path)
         .env(REAL_CARGO_ENV, &cargo_proxy.real_cargo)
         // Signal to the spawned anchor-cli that AVM has already resolved the
         // toolchain version, so it must not re-exec via `[toolchain] anchor_version`.
         .env("AVM_ACTIVE", "1")
-        .env("CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS", "fallback")
+        .env("CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS", "fallback");
+    if enable_next_lockfile_bump {
+        command.env(CARGO_NEXT_LOCKFILE_BUMP_ENV, "true");
+    }
+
+    let exit = command
         .spawn()?
         .wait_with_output()
         .expect("Failed to run anchor-cli");
@@ -546,6 +563,7 @@ fn ensure_resolved_solana(
 /// aliases for the duration of the Anchor invocation.
 struct PlatformToolsGuard {
     _lock: fs::File,
+    enable_next_lockfile_bump: bool,
 }
 
 /// Ensure the platform-tools requested by the project are installed in
@@ -603,7 +621,13 @@ fn ensure_resolved_platform_tools(
     let toolchain_name = platform_tools_toolchain_name(solana, &resolution);
     ensure_rustup_toolchain_link(&toolchain_name, &platform_tools_path.join("rust"))?;
 
-    Ok(PlatformToolsGuard { _lock: lock })
+    let enable_next_lockfile_bump =
+        avm::platform_tools::cargo_lock_v4_requires_opt_in(cwd, &resolution)?;
+
+    Ok(PlatformToolsGuard {
+        _lock: lock,
+        enable_next_lockfile_bump,
+    })
 }
 
 fn acquire_platform_tools_lock() -> Result<fs::File> {

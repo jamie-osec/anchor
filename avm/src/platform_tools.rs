@@ -17,7 +17,8 @@
 use {
     crate::{
         resolve::{
-            resolve_solana_version, ResolutionSource, SolanaResolution, SolanaResolutionSource,
+            find_ancestor_file, resolve_solana_version, ResolutionSource, SolanaResolution,
+            SolanaResolutionSource,
         },
         solana::{
             installable_solana_cli_versions_for_req, SolanaCliResolution, SolanaCliResolutionSource,
@@ -48,6 +49,20 @@ struct MapEntry {
     solana: String,
     platform_tools: String,
     rustc: String,
+    cargo_lock_v4: CargoLockV4Support,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum CargoLockV4Support {
+    Unsupported,
+    OptIn,
+    Native,
+}
+
+#[derive(Debug, Deserialize)]
+struct CargoLockHeader {
+    version: Option<u32>,
 }
 
 /// Parsed and validated form of the static map.
@@ -63,6 +78,7 @@ struct PlatformToolsMapEntry {
     solana: Version,
     platform_tools: String,
     rustc: Version,
+    cargo_lock_v4: CargoLockV4Support,
 }
 
 static MAP: LazyLock<ParsedMap> = LazyLock::new(|| {
@@ -82,6 +98,7 @@ static MAP: LazyLock<ParsedMap> = LazyLock::new(|| {
                 solana,
                 platform_tools: e.platform_tools,
                 rustc,
+                cargo_lock_v4: e.cargo_lock_v4,
             }
         })
         .collect();
@@ -160,6 +177,8 @@ pub struct PlatformToolsResolution {
     pub version: String,
     /// Rust compiler bundled in this platform-tools release.
     pub rustc: Version,
+    /// Whether the bundled Cargo can consume a version 4 Cargo.lock.
+    pub cargo_lock_v4: CargoLockV4Support,
     pub source: PlatformToolsSource,
 }
 
@@ -201,6 +220,7 @@ pub fn resolve_platform_tools_for_solana_cli(
             PlatformToolsResolution {
                 version: entry.platform_tools.clone(),
                 rustc: entry.rustc.clone(),
+                cargo_lock_v4: entry.cargo_lock_v4,
                 source: PlatformToolsSource::AnchorMap {
                     solana: solana_res.version.clone(),
                     anchor: anchor.clone(),
@@ -241,6 +261,7 @@ fn resolve_fallback() -> PlatformToolsResolution {
     PlatformToolsResolution {
         version: entry.platform_tools.clone(),
         rustc: entry.rustc.clone(),
+        cargo_lock_v4: entry.cargo_lock_v4,
         source: PlatformToolsSource::Fallback,
     }
 }
@@ -264,6 +285,7 @@ fn resolve_for_solana_version(
         Some(idx) => PlatformToolsResolution {
             version: entries[idx].platform_tools.clone(),
             rustc: entries[idx].rustc.clone(),
+            cargo_lock_v4: entries[idx].cargo_lock_v4,
             source: PlatformToolsSource::Mapped {
                 solana: solana.clone(),
                 solana_source,
@@ -279,12 +301,42 @@ fn resolve_for_solana_version(
             PlatformToolsResolution {
                 version: earliest.platform_tools.clone(),
                 rustc: earliest.rustc.clone(),
+                cargo_lock_v4: earliest.cargo_lock_v4,
                 source: PlatformToolsSource::BelowMap {
                     solana: solana.clone(),
                     solana_source,
                 },
             }
         }
+    }
+}
+
+/// Validate lockfile-v4 compatibility and return whether Cargo needs its
+/// unstable opt-in.
+pub fn cargo_lock_v4_requires_opt_in(
+    start: &Path,
+    resolution: &PlatformToolsResolution,
+) -> Result<bool> {
+    let Some(lockfile) = find_ancestor_file(start, "Cargo.lock") else {
+        return Ok(false);
+    };
+    let text = fs::read_to_string(&lockfile)
+        .with_context(|| format!("Reading Cargo lockfile {}", lockfile.display()))?;
+    let lock: CargoLockHeader = toml::from_str(&text)
+        .with_context(|| format!("Parsing Cargo lockfile {}", lockfile.display()))?;
+    if lock.version != Some(4) {
+        return Ok(false);
+    }
+
+    match resolution.cargo_lock_v4 {
+        CargoLockV4Support::Unsupported => bail!(
+            "{} uses lockfile version 4, but platform-tools {} does not support it. Regenerate \
+             the lockfile in version 3 format or select a compatible Solana toolchain.",
+            lockfile.display(),
+            resolution.version
+        ),
+        CargoLockV4Support::OptIn => Ok(true),
+        CargoLockV4Support::Native => Ok(false),
     }
 }
 
@@ -632,6 +684,14 @@ mod tests {
                 .rustc,
             v("1.84.1")
         );
+        assert_eq!(
+            entries
+                .iter()
+                .find(|entry| entry.platform_tools == "v1.41")
+                .unwrap()
+                .cargo_lock_v4,
+            CargoLockV4Support::OptIn
+        );
     }
 
     #[test]
@@ -741,6 +801,31 @@ mod tests {
     #[test]
     fn known_transition_4_0_0_to_v1_54() {
         assert_eq!(lookup_for_solana_version(&v("4.0.0")).unwrap(), "v1.54");
+    }
+
+    #[test]
+    fn cargo_lock_v4_opt_in_is_scoped_to_compatible_legacy_cargo() {
+        let dir = tempfile::TempDir::new().unwrap();
+        fs::write(dir.path().join("Cargo.lock"), "version = 4\n").unwrap();
+
+        let unsupported = resolve_for_solana(&fake_solana("1.17.25"));
+        let error = cargo_lock_v4_requires_opt_in(dir.path(), &unsupported).unwrap_err();
+        assert!(error.to_string().contains("platform-tools v1.37"));
+
+        let opt_in = resolve_for_solana(&fake_solana("1.18.17"));
+        assert!(cargo_lock_v4_requires_opt_in(dir.path(), &opt_in).unwrap());
+
+        let native = resolve_for_solana(&fake_solana("2.1.0"));
+        assert!(!cargo_lock_v4_requires_opt_in(dir.path(), &native).unwrap());
+    }
+
+    #[test]
+    fn cargo_lock_v4_opt_in_ignores_older_lockfile_formats() {
+        let dir = tempfile::TempDir::new().unwrap();
+        fs::write(dir.path().join("Cargo.lock"), "version = 3\n").unwrap();
+        let resolution = resolve_for_solana(&fake_solana("1.18.17"));
+
+        assert!(!cargo_lock_v4_requires_opt_in(dir.path(), &resolution).unwrap());
     }
 
     // ── URL + asset naming ──────────────────────────────────────────────────
