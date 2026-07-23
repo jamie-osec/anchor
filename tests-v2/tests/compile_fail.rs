@@ -425,6 +425,34 @@ pub fn build_ix(authority: Address, data: Address, owner: Address) -> anchor_lan
 }
 
 #[test]
+fn declare_program_account_group_variants_do_not_collide_with_existing_types() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let surface_idl_path = manifest_dir.join("programs/declare-program/surface/idls/surface.json");
+    let surface_idl = fs::read_to_string(&surface_idl_path)
+        .unwrap_or_else(|err| panic!("failed to read {}: {err}", surface_idl_path.display()));
+    let mut surface: serde_json::Value =
+        serde_json::from_str(&surface_idl).expect("surface fixture should parse");
+    surface["types"]
+        .as_array_mut()
+        .expect("surface types should be an array")
+        .push(serde_json::json!({
+            "name": "Shared2",
+            "type": {
+                "kind": "struct",
+                "fields": [
+                    {
+                        "name": "value",
+                        "type": "u64"
+                    }
+                ]
+            }
+        }));
+    let idl = Box::leak(surface.to_string().into_boxed_str());
+
+    declare_program_case("declare_program_account_group_type_name_collision", idl).expect_pass();
+}
+
+#[test]
 fn declare_program_missing_accounts_array_fails_clearly() {
     declare_program_compile_fail_case(
         "declare_program_missing_accounts_array",

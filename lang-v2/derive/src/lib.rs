@@ -2403,16 +2403,19 @@ fn gen_declared_program(name: &Ident, idl: &serde_json::Value) -> syn::Result<To
     let type_reexports = type_idents
         .iter()
         .map(|ident| quote! { pub use super::#ident; });
+    let reserved_account_group_names: std::collections::BTreeSet<String> =
+        type_idents.iter().map(ToString::to_string).collect();
     let constants = gen_declare_program_constants(idl)?;
     let events = gen_declare_program_events(idl)?;
     let errors = gen_declare_program_errors(idl, name.span())?;
     let mut account_groups = std::collections::BTreeMap::<String, Vec<DeclareAccountField>>::new();
+    let mut account_group_variants =
+        std::collections::BTreeMap::<String, Vec<DeclareAccountGroupVariant>>::new();
     let mut handlers = Vec::new();
     for ix in instructions {
         let ix_name = json_str(ix, "name", name.span())?;
         let ix_ident = Ident::new(&to_snake_case(ix_name), name.span());
         let accounts_name = to_type_name(ix_name);
-        let accounts_ident = Ident::new(&accounts_name, name.span());
         let accounts = ix
             .get("accounts")
             .and_then(serde_json::Value::as_array)
@@ -2422,7 +2425,15 @@ fn gen_declared_program(name: &Ident, idl: &serde_json::Value) -> syn::Result<To
                     format!("instruction `{ix_name}` is missing accounts array"),
                 )
             })?;
-        collect_declare_account_group(&accounts_name, accounts, &mut account_groups, name.span())?;
+        let generated_accounts_name = collect_declare_account_group(
+            &accounts_name,
+            accounts,
+            &reserved_account_group_names,
+            &mut account_groups,
+            &mut account_group_variants,
+            name.span(),
+        )?;
+        let accounts_ident = Ident::new(&generated_accounts_name, name.span());
 
         let discrim = ix
             .get("discriminator")
@@ -2682,16 +2693,91 @@ impl DeclareAccountField {
     }
 }
 
+struct DeclareAccountGroupVariant {
+    signature: String,
+    generated_name: String,
+}
+
+fn declare_account_group_signature(
+    accounts: &[serde_json::Value],
+    span: proc_macro2::Span,
+) -> syn::Result<String> {
+    let mut signature = String::new();
+    for account in accounts {
+        signature.push_str(&declare_account_signature(account, span)?);
+        signature.push(';');
+    }
+    Ok(signature)
+}
+
+fn declare_account_signature(
+    account: &serde_json::Value,
+    span: proc_macro2::Span,
+) -> syn::Result<String> {
+    let name = json_str(account, "name", span)?;
+    if let Some(nested) = account.get("accounts").and_then(serde_json::Value::as_array) {
+        return Ok(format!(
+            "nested:{name}:{}",
+            declare_account_group_signature(nested, span)?
+        ));
+    }
+
+    let writable = account
+        .get("writable")
+        .or_else(|| account.get("isMut"))
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    let signer = account
+        .get("signer")
+        .or_else(|| account.get("isSigner"))
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    let optional = account
+        .get("optional")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+
+    Ok(format!("leaf:{name}:{writable}:{signer}:{optional}"))
+}
+
+fn next_declare_account_group_name(
+    base_name: &str,
+    reserved_names: &std::collections::BTreeSet<String>,
+    groups: &std::collections::BTreeMap<String, Vec<DeclareAccountField>>,
+) -> String {
+    if !groups.contains_key(base_name) && !reserved_names.contains(base_name) {
+        return base_name.to_string();
+    }
+
+    let mut suffix = 2usize;
+    loop {
+        let candidate = format!("{base_name}{suffix}");
+        if !groups.contains_key(&candidate) && !reserved_names.contains(&candidate) {
+            return candidate;
+        }
+        suffix += 1;
+    }
+}
+
 fn collect_declare_account_group(
     group_name: &str,
     accounts: &[serde_json::Value],
+    reserved_names: &std::collections::BTreeSet<String>,
     groups: &mut std::collections::BTreeMap<String, Vec<DeclareAccountField>>,
+    variants: &mut std::collections::BTreeMap<String, Vec<DeclareAccountGroupVariant>>,
     span: proc_macro2::Span,
-) -> syn::Result<()> {
-    if groups.contains_key(group_name) {
-        return Ok(());
+) -> syn::Result<String> {
+    let signature = declare_account_group_signature(accounts, span)?;
+    if let Some(existing_name) = variants.get(group_name).and_then(|group_variants| {
+        group_variants
+            .iter()
+            .find(|variant| variant.signature == signature)
+            .map(|variant| variant.generated_name.clone())
+    }) {
+        return Ok(existing_name);
     }
 
+    let generated_name = next_declare_account_group_name(group_name, reserved_names, groups);
     let mut fields = Vec::new();
     for account in accounts {
         let name = json_str(account, "name", span)?;
@@ -2701,8 +2787,15 @@ fn collect_declare_account_group(
             .and_then(serde_json::Value::as_array)
         {
             let nested_name = to_type_name(name);
-            collect_declare_account_group(&nested_name, nested, groups, span)?;
-            let nested_ident = Ident::new(&nested_name, span);
+            let generated_nested_name = collect_declare_account_group(
+                &nested_name,
+                nested,
+                reserved_names,
+                groups,
+                variants,
+                span,
+            )?;
+            let nested_ident = Ident::new(&generated_nested_name, span);
             fields.push(DeclareAccountField {
                 name: ident,
                 ty: quote! { anchor_lang_v2::Nested<#nested_ident> },
@@ -2745,8 +2838,15 @@ fn collect_declare_account_group(
         });
     }
 
-    groups.insert(group_name.to_string(), fields);
-    Ok(())
+    groups.insert(generated_name.clone(), fields);
+    variants
+        .entry(group_name.to_string())
+        .or_default()
+        .push(DeclareAccountGroupVariant {
+            signature,
+            generated_name: generated_name.clone(),
+        });
+    Ok(generated_name)
 }
 
 fn gen_declare_program_types(idl: &serde_json::Value) -> syn::Result<Vec<TokenStream2>> {

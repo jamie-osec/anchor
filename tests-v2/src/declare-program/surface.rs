@@ -87,6 +87,46 @@ fn declared_surface_deep_nested_accounts_flatten_in_idl_order() {
 }
 
 #[test]
+fn declared_surface_reuses_nested_group_names_only_when_shapes_match() {
+    let first_signer = Pubkey::new_unique();
+    let first_readonly = Pubkey::new_unique();
+    let metas = surface::accounts::SharedAlpha {
+        shared: surface::__client_accounts_shared::Shared {
+            first_signer,
+            first_readonly,
+        }
+        .into(),
+    }
+    .to_account_metas(None);
+
+    assert_eq!(metas.len(), 2);
+    assert_eq!(metas[0], AccountMeta::new_readonly(first_signer, true));
+    assert_eq!(metas[1], AccountMeta::new_readonly(first_readonly, false));
+
+    let second_writable = Pubkey::new_unique();
+    let second_signer_writable = Pubkey::new_unique();
+    let metas = surface::accounts::SharedBeta {
+        shared: surface::__client_accounts_shared2::Shared2 {
+            second_writable,
+            second_signer_writable,
+        }
+        .into(),
+    }
+    .to_account_metas(None);
+
+    assert_eq!(metas.len(), 2);
+    assert_eq!(metas[0], AccountMeta::new(second_writable, false));
+    assert_eq!(
+        metas[1],
+        AccountMeta {
+            pubkey: second_signer_writable,
+            is_writable: true,
+            is_signer: true,
+        }
+    );
+}
+
+#[test]
 fn declared_surface_complex_types_compile_and_serialize() {
     let owner = Pubkey::new_unique();
     let args = surface::SurfaceArgs {

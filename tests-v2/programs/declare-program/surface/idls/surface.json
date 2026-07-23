@@ -156,6 +156,46 @@
           }
         }
       ]
+    },
+    {
+      "name": "sharedAlpha",
+      "discriminator": [60, 61, 62],
+      "accounts": [
+        {
+          "name": "shared",
+          "accounts": [
+            {
+              "name": "firstSigner",
+              "signer": true
+            },
+            {
+              "name": "firstReadonly"
+            }
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "sharedBeta",
+      "discriminator": [63, 64, 65],
+      "accounts": [
+        {
+          "name": "shared",
+          "accounts": [
+            {
+              "name": "secondWritable",
+              "writable": true
+            },
+            {
+              "name": "secondSignerWritable",
+              "writable": true,
+              "signer": true
+            }
+          ]
+        }
+      ],
+      "args": []
     }
   ],
   "types": [
