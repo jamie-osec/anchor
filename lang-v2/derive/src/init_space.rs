@@ -22,10 +22,7 @@ pub fn expand(item: TokenStream) -> TokenStream {
     let name = input.ident;
 
     let process_struct_fields = |fields: Punctuated<Field, Comma>| {
-        let recurse = fields.into_iter().map(|f| {
-            let mut max_len_args = get_max_len_args(&f.attrs);
-            len_from_type(f.ty, &mut max_len_args)
-        });
+        let recurse = fields.into_iter().map(field_len_tokens);
 
         quote! {
             #[automatically_derived]
@@ -48,10 +45,7 @@ pub fn expand(item: TokenStream) -> TokenStream {
         },
         syn::Data::Enum(enm) => {
             let variants = enm.variants.into_iter().map(|v| {
-                let len = v.fields.into_iter().map(|f| {
-                    let mut max_len_args = get_max_len_args(&f.attrs);
-                    len_from_type(f.ty, &mut max_len_args)
-                });
+                let len = v.fields.into_iter().map(field_len_tokens);
 
                 quote! {
                     0 #(+ #len)*
@@ -79,6 +73,34 @@ pub fn expand(item: TokenStream) -> TokenStream {
     };
 
     TokenStream::from(expanded)
+}
+
+fn field_len_tokens(field: Field) -> TokenStream2 {
+    match crate::find_unsupported_wincode_attr(&field.attrs) {
+        Ok(Some((crate::UnsupportedWincodeAttrKind::Skip, span))) => {
+            return syn::Error::new(
+                span,
+                "#[derive(InitSpace)] does not support `#[wincode(skip)]` fields because \
+                 wincode field overrides change the serialized layout; remove the override or \
+                 compute the account size manually",
+            )
+            .to_compile_error();
+        }
+        Ok(Some((crate::UnsupportedWincodeAttrKind::With, span))) => {
+            return syn::Error::new(
+                span,
+                "#[derive(InitSpace)] does not support `#[wincode(with = ...)]` fields because \
+                 custom wincode codecs can change the serialized layout; remove the override or \
+                 compute the account size manually",
+            )
+            .to_compile_error();
+        }
+        Ok(None) => {}
+        Err(err) => return err.to_compile_error(),
+    }
+
+    let mut max_len_args = get_max_len_args(&field.attrs);
+    len_from_type(field.ty, &mut max_len_args)
 }
 
 fn gen_max<T: Iterator<Item = TokenStream2>>(mut iter: T) -> TokenStream2 {

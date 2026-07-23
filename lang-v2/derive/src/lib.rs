@@ -11,7 +11,7 @@ mod pod_wrapper;
 
 use {
     proc_macro::TokenStream,
-    proc_macro2::TokenStream as TokenStream2,
+    proc_macro2::{Span, TokenStream as TokenStream2},
     quote::quote,
     syn::{
         parse::Parser, parse_macro_input, spanned::Spanned, Data, DeriveInput, Expr, Fields, FnArg,
@@ -61,6 +61,60 @@ struct SignerExpr {
 struct AccountMetaAttrs {
     skip: bool,
     duplicate_readonly: bool,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum UnsupportedWincodeAttrKind {
+    Skip,
+    With,
+}
+
+pub(crate) fn find_unsupported_wincode_attr(
+    attrs: &[syn::Attribute],
+) -> syn::Result<Option<(UnsupportedWincodeAttrKind, Span)>> {
+    for attr in attrs {
+        if !attr.path().is_ident("wincode") {
+            continue;
+        }
+
+        let mut unsupported = None;
+        let parse = attr.parse_nested_meta(|meta| {
+            let span = meta.path.span();
+            if meta.path.is_ident("skip") {
+                if meta.input.peek(syn::Token![=]) {
+                    let value = meta.value()?;
+                    let _ = value.parse::<Expr>()?;
+                } else if meta.input.peek(syn::token::Paren) {
+                    meta.parse_nested_meta(|nested| {
+                        if nested.path.is_ident("default") {
+                            return Ok(());
+                        }
+                        if nested.path.is_ident("default_val") {
+                            let value = nested.value()?;
+                            let _ = value.parse::<Expr>()?;
+                        }
+                        Ok(())
+                    })?;
+                }
+                unsupported = Some((UnsupportedWincodeAttrKind::Skip, span));
+            } else if meta.path.is_ident("with") {
+                if meta.input.peek(syn::Token![=]) {
+                    let value = meta.value()?;
+                    let _ = value.parse::<Expr>()?;
+                }
+                unsupported = Some((UnsupportedWincodeAttrKind::With, span));
+            }
+            Ok(())
+        });
+
+        parse?;
+
+        if unsupported.is_some() {
+            return Ok(unsupported);
+        }
+    }
+
+    Ok(None)
 }
 
 fn impl_to_cpi_accounts(input: &DeriveInput) -> TokenStream2 {
@@ -1833,6 +1887,11 @@ pub fn account(attr: TokenStream, item: TokenStream) -> TokenStream {
     let disc_literals: Vec<_> = disc_bytes.iter().map(|b| quote! { #b }).collect();
 
     let struct_docs = idl::extract_doc_lines(attrs);
+    if is_borsh {
+        if let Err(err) = reject_wincode_idl_overrides_in_fields("`#[account(borsh)]`", fields) {
+            return err.to_compile_error().into();
+        }
+    }
     // `#[account]` has two modes: default zero-copy (Pod + repr(C)) and opt-in
     // borsh (`#[account(borsh)]`). The borsh mode is implemented on top of
     // wincode + `BORSH_CONFIG`, which produces byte-identical output to a
@@ -2102,6 +2161,11 @@ pub fn derive_idl_type(input: TokenStream) -> TokenStream {
     // `"bytemuck"` tag here would lie in the IDL for non-Pod types.
     let (idl_type_strings, field_tys) = match &input.data {
         Data::Struct(data) => {
+            if let Err(err) =
+                reject_wincode_idl_overrides_in_fields("`#[derive(IdlType)]`", &data.fields)
+            {
+                return err.to_compile_error().into();
+            }
             let strings = match &data.fields {
                 Fields::Named(named) => idl::build_type_strings(
                     &name_str,
@@ -2135,6 +2199,11 @@ pub fn derive_idl_type(input: TokenStream) -> TokenStream {
             (strings, field_tys)
         }
         Data::Enum(data) => {
+            if let Err(err) =
+                reject_wincode_idl_overrides_in_variants("`#[derive(IdlType)]`", &data.variants)
+            {
+                return err.to_compile_error().into();
+            }
             let strings = idl::build_enum_type_strings(
                 &name_str,
                 &empty_disc,
@@ -3966,6 +4035,47 @@ fn is_unit_type(ty: &Type) -> bool {
     matches!(ty, Type::Tuple(tuple) if tuple.elems.is_empty())
 }
 
+fn reject_wincode_idl_overrides_in_fields(surface: &str, fields: &syn::Fields) -> syn::Result<()> {
+    for field in fields.iter() {
+        if let Some(err) = unsupported_wincode_idl_attr_error(surface, &field.attrs) {
+            return Err(err);
+        }
+    }
+    Ok(())
+}
+
+fn reject_wincode_idl_overrides_in_variants(
+    surface: &str,
+    variants: &syn::punctuated::Punctuated<syn::Variant, syn::token::Comma>,
+) -> syn::Result<()> {
+    for variant in variants {
+        reject_wincode_idl_overrides_in_fields(surface, &variant.fields)?;
+    }
+    Ok(())
+}
+
+fn unsupported_wincode_idl_attr_error(
+    surface: &str,
+    attrs: &[syn::Attribute],
+) -> Option<syn::Error> {
+    match find_unsupported_wincode_attr(attrs) {
+        Ok(Some((UnsupportedWincodeAttrKind::Skip, span))) => Some(syn::Error::new(
+            span,
+            format!(
+                "{surface} does not support `#[wincode(skip)]` fields because generated IDL would not match the serialized wire layout; remove the override or exclude this type from generated IDL"
+            ),
+        )),
+        Ok(Some((UnsupportedWincodeAttrKind::With, span))) => Some(syn::Error::new(
+            span,
+            format!(
+                "{surface} does not support `#[wincode(with = ...)]` fields because custom wincode codecs can change the serialized wire layout; remove the override or exclude this type from generated IDL"
+            ),
+        )),
+        Ok(None) => None,
+        Err(err) => Some(err),
+    }
+}
+
 fn extract_result_return_type(output: &syn::ReturnType) -> syn::Result<Option<Type>> {
     let syn::ReturnType::Type(_, ty) = output else {
         return Ok(None);
@@ -5055,6 +5165,11 @@ pub fn event(attr: TokenStream, item: TokenStream) -> TokenStream {
         EventMode::Bytemuck => idl::TypeKind::BytemuckRepr,
     };
     let struct_docs = idl::extract_doc_lines(attrs);
+    if matches!(mode, EventMode::Wincode) {
+        if let Err(err) = reject_wincode_idl_overrides_in_fields("`#[event]`", fields) {
+            return err.to_compile_error().into();
+        }
+    }
     let event_type_strings = if let Fields::Named(named) = fields {
         idl::build_type_strings(&name_str, disc_bytes, &struct_docs, &named.named, type_kind)
     } else {
@@ -5636,6 +5751,9 @@ pub fn constant(_attr: TokenStream, input: TokenStream) -> TokenStream {
 ///
 /// Variable-size fields (`String`, `Vec<T>`) require a `#[max_len(N)]` helper
 /// attribute to specify the reserved capacity.
+/// Fields using `#[wincode(skip)]` or `#[wincode(with = ...)]` are rejected:
+/// those overrides change the wire layout, so the derive cannot infer a safe
+/// `INIT_SPACE` constant.
 ///
 /// # Example
 ///

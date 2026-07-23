@@ -155,6 +155,136 @@ pub struct Bad<'a> {
     miri,
     ignore = "spawns cargo and writes temporary workspaces; covered by normal cargo test"
 )]
+fn init_space_rejects_wincode_field_overrides() {
+    compile_fail_case(
+        "init_space_wincode_skip",
+        r#"
+use anchor_lang_v2::InitSpace;
+
+#[derive(InitSpace, wincode::SchemaRead, wincode::SchemaWrite)]
+pub struct Bad {
+    #[wincode(skip)]
+    pub skipped: u64,
+    pub kept: u8,
+}
+"#,
+        &[
+            "#[derive(InitSpace)] does not support `#[wincode(skip)]` fields",
+            "serialized layout",
+        ],
+    );
+
+    compile_fail_case(
+        "init_space_wincode_skip_default_val",
+        r#"
+use anchor_lang_v2::InitSpace;
+
+#[derive(InitSpace, wincode::SchemaRead, wincode::SchemaWrite)]
+pub struct Bad {
+    #[wincode(skip(default_val = 9))]
+    pub skipped: u64,
+    pub kept: u8,
+}
+"#,
+        &[
+            "#[derive(InitSpace)] does not support `#[wincode(skip)]` fields",
+            "serialized layout",
+        ],
+    );
+
+    compile_fail_case(
+        "init_space_wincode_with",
+        r#"
+use anchor_lang_v2::InitSpace;
+
+#[derive(InitSpace, wincode::SchemaRead, wincode::SchemaWrite)]
+pub struct Bad {
+    #[wincode(with = "shim::ByteCodec")]
+    pub packed: u64,
+}
+
+mod shim {
+    pub struct ByteCodec;
+}
+"#,
+        &[
+            "#[derive(InitSpace)] does not support `#[wincode(with = ...)]` fields",
+            "custom wincode codecs can change the serialized layout",
+        ],
+    );
+}
+
+#[test]
+#[cfg_attr(
+    miri,
+    ignore = "spawns cargo and writes temporary workspaces; covered by normal cargo test"
+)]
+fn idl_generation_rejects_wincode_field_overrides() {
+    compile_fail_case(
+        "idl_type_wincode_skip",
+        r#"
+use anchor_lang_v2::IdlType;
+
+#[derive(IdlType, wincode::SchemaRead, wincode::SchemaWrite)]
+pub struct Bad {
+    #[wincode(skip)]
+    pub skipped: u64,
+    pub kept: u8,
+}
+"#,
+        &[
+            "`#[derive(IdlType)]` does not support `#[wincode(skip)]` fields",
+            "generated IDL would not match the serialized wire layout",
+        ],
+    );
+
+    compile_fail_case(
+        "account_borsh_wincode_skip",
+        r#"
+use anchor_lang_v2::prelude::*;
+
+declare_id!("11111111111111111111111111111111");
+
+#[account(borsh)]
+pub struct Bad {
+    #[wincode(skip)]
+    pub skipped: u64,
+    pub kept: u8,
+}
+"#,
+        &[
+            "`#[account(borsh)]` does not support `#[wincode(skip)]` fields",
+            "generated IDL would not match the serialized wire layout",
+        ],
+    );
+
+    compile_fail_case(
+        "event_wincode_with",
+        r#"
+use anchor_lang_v2::prelude::*;
+
+#[event]
+pub struct Bad {
+    #[wincode(with = "shim::ByteCodec")]
+    pub packed: u64,
+}
+
+mod shim {
+    pub struct ByteCodec;
+}
+"#,
+        &[
+            "`#[event]` does not support `#[wincode(with = ...)]` fields",
+            "custom wincode codecs can change the serialized wire layout",
+        ],
+    );
+}
+
+#[test]
+#[cfg_attr(
+    miri,
+    ignore = "spawns cargo and writes temporary workspaces; covered by normal cargo test"
+)]
 fn malformed_discriminator_attribute_has_targeted_message() {
     compile_fail_case(
         "bad_discriminator",
