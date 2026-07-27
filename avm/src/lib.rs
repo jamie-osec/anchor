@@ -1264,6 +1264,31 @@ fn update_check_file_path() -> PathBuf {
     AVM_HOME.join(".update-check")
 }
 
+fn auto_update_file_path() -> PathBuf {
+    AVM_HOME.join(".auto-update")
+}
+
+fn auto_update_enabled() -> bool {
+    auto_update_file_path().is_file()
+}
+
+pub fn set_auto_update(enabled: bool) -> Result<()> {
+    ensure_paths();
+    if enabled {
+        fs::write(auto_update_file_path(), b"enabled\n")
+            .context("Enabling automatic AVM updates")?;
+        println!("Automatic AVM updates enabled.");
+    } else {
+        match fs::remove_file(auto_update_file_path()) {
+            Ok(()) => {}
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+            Err(err) => return Err(err).context("Disabling automatic AVM updates"),
+        }
+        println!("Automatic AVM updates disabled.");
+    }
+    Ok(())
+}
+
 /// The cache file stores one of two states:
 ///   Success: `{unix_ts}\n{semver}`   — a successful check at `unix_ts` that found `semver`.
 ///   Error:   `{unix_ts}\n0`          — a failed check at `unix_ts` (`"0"` is not valid semver).
@@ -1298,7 +1323,8 @@ fn write_update_cache_error() {
     let _ = fs::write(update_check_file_path(), content);
 }
 
-/// Check whether a newer AVM release is available and print a warning to stderr if so.
+/// Check whether a newer AVM release is available, installing it when automatic updates are
+/// enabled or printing a warning to stderr otherwise.
 /// Results (including failures) are cached in `$AVM_HOME/.update-check` so the network
 /// is hit at most once per hour.
 pub fn check_avm_version_and_warn() {
@@ -1311,12 +1337,7 @@ pub fn check_avm_version_and_warn() {
     match read_update_cache() {
         // Fresh successful cache: just compare and maybe warn.
         UpdateCacheState::Success(ts, latest) if now - ts < UPDATE_CHECK_INTERVAL_SECS => {
-            if latest > current {
-                eprintln!(
-                    "A new version of avm is available: {latest} (you have {current}). Run `avm \
-                     self-update` to upgrade."
-                );
-            }
+            handle_available_avm_update(&current, &latest);
         }
         // Previous check failed recently: tell the user and skip.
         UpdateCacheState::Error(ts) if now - ts < UPDATE_CHECK_INTERVAL_SECS => {
@@ -1327,12 +1348,7 @@ pub fn check_avm_version_and_warn() {
         _ => match get_latest_version_with_client(&HTTP_CLIENT, false) {
             Ok(latest) => {
                 write_update_cache_success(&latest);
-                if latest > current {
-                    eprintln!(
-                        "A new version of avm is available: {latest} (you have {current}). Run \
-                         `avm self-update` to upgrade."
-                    );
-                }
+                handle_available_avm_update(&current, &latest);
             }
             Err(_) => {
                 write_update_cache_error();
@@ -1341,6 +1357,24 @@ pub fn check_avm_version_and_warn() {
                 );
             }
         },
+    }
+}
+
+fn handle_available_avm_update(current: &Version, latest: &Version) {
+    if latest <= current {
+        return;
+    }
+
+    if auto_update_enabled() {
+        if let Err(err) = install_avm_release(current, latest) {
+            write_update_cache_error();
+            eprintln!("Automatic AVM update failed: {err}");
+        }
+    } else {
+        eprintln!(
+            "A new version of avm is available: {latest} (you have {current}). Run `avm \
+             self-update` to upgrade."
+        );
     }
 }
 
@@ -1353,26 +1387,32 @@ pub fn self_update(include_pre_release: bool, bleeding_edge: bool) -> Result<()>
     let current = Version::parse(env!("CARGO_PKG_VERSION"))
         .map_err(|e| anyhow!("Failed to parse current avm version: {e}"))?;
 
+    if bleeding_edge {
+        println!("Updating avm to the latest commit on master...");
+        return run_avm_install(&["--branch".to_string(), "master".to_string()]);
+    }
+
+    let latest = get_latest_version(include_pre_release)?;
+    if latest <= current {
+        println!("avm is already up to date ({current})");
+        return Ok(());
+    }
+    install_avm_release(&current, &latest)
+}
+
+fn install_avm_release(current: &Version, latest: &Version) -> Result<()> {
+    println!("Updating avm from {current} to {latest}...");
+    run_avm_install(&["--tag".to_string(), format!("v{latest}")])
+}
+
+fn run_avm_install(source_args: &[String]) -> Result<()> {
     let mut args = vec![
         "install".to_string(),
         "--git".to_string(),
         "https://github.com/otter-sec/anchor".to_string(),
         "--locked".to_string(),
     ];
-
-    if bleeding_edge {
-        println!("Updating avm to the latest commit on master...");
-        args.extend_from_slice(&["--branch".to_string(), "master".to_string()]);
-    } else {
-        let latest = get_latest_version(include_pre_release)?;
-        if latest <= current {
-            println!("avm is already up to date ({current})");
-            return Ok(());
-        }
-        println!("Updating avm from {current} to {latest}...");
-        args.extend_from_slice(&["--tag".to_string(), format!("v{latest}")]);
-    }
-
+    args.extend_from_slice(source_args);
     args.extend_from_slice(&["avm".to_string(), "--force".to_string()]);
 
     let status = Command::new("cargo")
@@ -1406,6 +1446,15 @@ mod tests {
         assert!(bin_dir.exists());
         let current_version_file = current_version_file_path();
         assert!(current_version_file.exists());
+    }
+
+    #[test]
+    fn test_set_auto_update() {
+        set_auto_update(true).unwrap();
+        assert!(auto_update_enabled());
+
+        set_auto_update(false).unwrap();
+        assert!(!auto_update_enabled());
     }
 
     #[test]
