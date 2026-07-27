@@ -36,6 +36,7 @@ const LEGACY_IDL_PATH = path.join("target", "bench-legacy-idl.json");
   );
   const originalAnchorToml = await fs.readFile(ANCHOR_TOML_PATH, "utf8");
 
+  const versions = bench.getVersions();
   const unreleased = bench.get("unreleased");
   VersionManager.setSolanaVersion(unreleased.solanaVersion);
 
@@ -45,19 +46,20 @@ const LEGACY_IDL_PATH = path.join("target", "bench-legacy-idl.json");
     RUSTFLAGS: "-Z emit-stack-sizes",
   };
 
-  for (const version of bench.getVersions()) {
-    const platformToolsVersion = await getPlatformToolsVersion(
-      bench.get(version).solanaVersion
-    );
-    bench.setPlatformToolsVersion(version, platformToolsVersion);
-  }
-  await bench.save();
-
   const setProjectVersion = async (version: Version) => {
+    // Reopen the benchmark data because previous iterations update it in a
+    // separate test process.
+    const currentBench = await BenchData.open();
+    const platformToolsVersion = await getPlatformToolsVersion(
+      currentBench.get(version).solanaVersion
+    );
+    currentBench.setPlatformToolsVersion(version, platformToolsVersion);
+    await currentBench.save();
+
     const isUnreleased = version === "unreleased";
 
     await LockFile.replace(version);
-    VersionManager.setSolanaVersion(bench.get(version).solanaVersion);
+    VersionManager.setSolanaVersion(currentBench.get(version).solanaVersion);
 
     cargoToml.replaceValue("idl-build", () => {
       return usesLegacyIdl(version)
@@ -86,6 +88,8 @@ const LEGACY_IDL_PATH = path.join("target", "bench-legacy-idl.json");
         throwOnError: { msg: `Failed to install Anchor CLI ${version}.` },
       });
     }
+
+    return platformToolsVersion;
   };
 
   try {
@@ -103,10 +107,10 @@ const LEGACY_IDL_PATH = path.join("target", "bench-legacy-idl.json");
       { throwOnError: { msg: "Failed to generate the legacy benchmark IDL." } }
     );
 
-    for (const version of bench.getVersions()) {
+    for (const version of versions) {
       console.log(`Updating '${version}'...`);
 
-      await setProjectVersion(version);
+      const expectedPlatformToolsVersion = await setProjectVersion(version);
 
       const cargoBuildSbfVersionResult = spawn(
         "cargo-build-sbf",
@@ -119,8 +123,6 @@ const LEGACY_IDL_PATH = path.join("target", "bench-legacy-idl.json");
         /(?:sbf|platform)-tools (v\d+\.\d+)/.exec(
           cargoBuildSbfVersionResult.stdout.toString()
         )?.[1];
-      const expectedPlatformToolsVersion =
-        bench.get(version).platformToolsVersion;
       if (actualPlatformToolsVersion !== expectedPlatformToolsVersion) {
         throw new Error(
           `Expected platform-tools ${expectedPlatformToolsVersion}, found ${actualPlatformToolsVersion}.`
