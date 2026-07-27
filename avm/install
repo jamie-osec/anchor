@@ -8,7 +8,7 @@ NO_PATH_LINKS="${AVM_INSTALL_NO_PATH_LINKS:-0}"
 
 usage() {
     cat <<'USAGE'
-Install the latest Anchor nightly AVM binary.
+Install AVM and the latest stable Anchor CLI.
 
 Usage:
   curl -sSfL https://raw.githubusercontent.com/solana-foundation/anchor/master/avm/install | sh
@@ -196,23 +196,6 @@ path_contains() {
     esac
 }
 
-backup_stable_avm() {
-    backup="$BIN_DIR/avm-stable"
-
-    [ ! -f "$NIGHTLY_FILE" ] || return 0
-    [ ! -e "$backup" ] || return 0
-
-    if [ -f "$BIN_DIR/avm" ]; then
-        install_binary "$BIN_DIR/avm" "$backup"
-        return 0
-    fi
-
-    if existing_avm="$(command -v avm 2>/dev/null)"; then
-        [ -n "$existing_avm" ] || return 0
-        install_binary "$existing_avm" "$backup"
-    fi
-}
-
 install_artifact() {
     tool="$1"
     line="$2"
@@ -280,27 +263,20 @@ say "Fetching Anchor nightly manifest"
 download "$MANIFEST_URL" "$MANIFEST_FILE"
 
 avm_line="$(extract_artifact avm)"
-anchor_line="$(extract_artifact anchor)"
-nightly_version="$(field "$avm_line" 1)"
+avm_version="$(field "$avm_line" 1)"
 
-anchor_version="$(field "$anchor_line" 1)"
-[ "$nightly_version" = "$anchor_version" ] || fail "manifest has mismatched avm and anchor versions"
-
-backup_stable_avm
-install_artifact avm "$avm_line" "$BIN_DIR/avm-nightly"
-install_artifact anchor "$anchor_line" "$BIN_DIR/anchor-nightly"
-install_binary "$BIN_DIR/avm-nightly" "$BIN_DIR/avm"
+install_artifact avm "$avm_line" "$BIN_DIR/avm"
 link_or_copy "$BIN_DIR/avm" "$BIN_DIR/anchor"
 
-printf 'enabled\n' > "$NIGHTLY_FILE"
-printf '%s\n%s\n' "$(date +%s)" "$nightly_version" > "$NIGHTLY_CACHE_FILE"
-rm -f "$NIGHTLY_ERROR_CACHE_FILE"
+rm -f "$NIGHTLY_FILE" "$NIGHTLY_CACHE_FILE" "$NIGHTLY_ERROR_CACHE_FILE"
 
 install_path_links
 
-say "Installed Anchor nightly $nightly_version"
+say "Installed AVM nightly $avm_version"
 say "AVM: $BIN_DIR/avm"
 say "Anchor: $BIN_DIR/anchor"
+say "Installing the latest stable Anchor CLI"
+"$BIN_DIR/avm" install latest
 
 if ! path_contains "$BIN_DIR"; then
     say "Add this to your shell profile if avm is not already on PATH:"
