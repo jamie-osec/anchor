@@ -6,7 +6,7 @@ pub mod solana;
 use {
     anyhow::{anyhow, bail, Context, Error, Result},
     cargo_toml::Manifest,
-    chrono::{TimeZone, Utc},
+    chrono::{Days, NaiveDate, TimeZone, Utc},
     reqwest::{header::USER_AGENT, StatusCode},
     semver::{Prerelease, Version},
     serde::{de, Deserialize},
@@ -37,6 +37,8 @@ const UPDATE_CHECK_INTERVAL_SECS: i64 = 60 * 60;
 const NIGHTLY_MANIFEST_URL: &str =
     "https://anchor-releases.s3-eu-west-1.amazonaws.com/nightly/latest/manifest.json";
 const NIGHTLY_S3_BASE_URL: &str = "https://anchor-releases.s3-eu-west-1.amazonaws.com/";
+const NIGHTLY_WORKFLOW_RUNS_URL: &str =
+    "https://api.github.com/repos/otter-sec/anchor/actions/workflows/nightly-attested-binaries.yaml/runs";
 /// Shorter HTTP timeout so a slow or unreachable GitHub does not stall the CLI for long.
 const HTTP_CLIENT_TIMEOUT_SECS: u64 = 5;
 /// Longer timeout for release asset downloads, which can take longer than metadata requests.
@@ -906,6 +908,22 @@ struct NightlyArtifact {
     sha256: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct LatestNightly {
+    date: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct NightlyWorkflowRuns {
+    workflow_runs: Vec<NightlyWorkflowRun>,
+}
+
+#[derive(Debug, Deserialize)]
+struct NightlyWorkflowRun {
+    id: u64,
+    head_sha: String,
+}
+
 enum NightlyCacheState {
     Success(i64, String),
     Missing,
@@ -1006,23 +1024,79 @@ fn ensure_nightly_installed(skip_attestation: bool) -> Result<String> {
 }
 
 fn fetch_nightly_manifest() -> Result<NightlyManifest> {
-    let response = HTTP_CLIENT
-        .get(NIGHTLY_MANIFEST_URL)
+    let latest = fetch_nightly_json(NIGHTLY_MANIFEST_URL)?
+        .json::<LatestNightly>()
+        .context("Parsing latest Anchor nightly manifest")?;
+    let date = previous_nightly_date(&latest.date)?;
+    let date_string = date.format("%Y-%m-%d").to_string();
+    let runs = HTTP_CLIENT
+        .get(NIGHTLY_WORKFLOW_RUNS_URL)
+        .query(&[
+            ("branch", "master"),
+            ("status", "success"),
+            ("created", date_string.as_str()),
+            ("per_page", "1"),
+        ])
         .header(
             USER_AGENT,
             "avm https://github.com/solana-foundation/anchor",
         )
         .send()
-        .with_context(|| format!("Sending GET {NIGHTLY_MANIFEST_URL}"))?;
+        .with_context(|| format!("Sending GET {NIGHTLY_WORKFLOW_RUNS_URL}"))?;
+    if !runs.status().is_success() {
+        bail!(
+            "Failed to fetch Anchor nightly workflow runs for {date} (status {})",
+            runs.status()
+        );
+    }
+    let runs = runs
+        .json::<NightlyWorkflowRuns>()
+        .context("Parsing Anchor nightly workflow runs")?;
+    let run = runs
+        .workflow_runs
+        .first()
+        .ok_or_else(|| anyhow!("No successful Anchor nightly workflow run found for {date}"))?;
+    let manifest_url = previous_nightly_manifest_url(date, run);
+
+    fetch_nightly_json(&manifest_url)?
+        .json::<NightlyManifest>()
+        .with_context(|| format!("Parsing Anchor nightly manifest for {date}"))
+}
+
+fn fetch_nightly_json(url: &str) -> Result<reqwest::blocking::Response> {
+    let response = HTTP_CLIENT
+        .get(url)
+        .header(
+            USER_AGENT,
+            "avm https://github.com/solana-foundation/anchor",
+        )
+        .send()
+        .with_context(|| format!("Sending GET {url}"))?;
     if !response.status().is_success() {
         bail!(
-            "Failed to fetch Anchor nightly manifest (status {})",
+            "Failed to fetch Anchor nightly manifest `{url}` (status {})",
             response.status()
         );
     }
-    response
-        .json::<NightlyManifest>()
-        .context("Parsing Anchor nightly manifest")
+    Ok(response)
+}
+
+fn previous_nightly_date(latest: &str) -> Result<NaiveDate> {
+    NaiveDate::parse_from_str(latest, "%Y-%m-%d")
+        .with_context(|| format!("Parsing latest Anchor nightly date `{latest}`"))?
+        .checked_sub_days(Days::new(1))
+        .ok_or_else(|| anyhow!("Anchor nightly date `{latest}` has no previous day"))
+}
+
+fn previous_nightly_manifest_url(date: NaiveDate, run: &NightlyWorkflowRun) -> String {
+    format!(
+        "{NIGHTLY_S3_BASE_URL}nightly/builds/{}/{}/{}/{}/{}/manifest.json",
+        date.format("%Y"),
+        date.format("%m"),
+        date.format("%d"),
+        run.head_sha,
+        run.id
+    )
 }
 
 fn install_nightly_manifest(manifest: &NightlyManifest, skip_attestation: bool) -> Result<()> {
@@ -1558,6 +1632,21 @@ mod tests {
         assert_eq!(
             nightly_artifact_url(&artifact),
             "https://anchor-releases.s3-eu-west-1.amazonaws.com/nightly/latest/x86_64-unknown-linux-gnu/avm.tar.gz"
+        );
+    }
+
+    #[test]
+    fn test_previous_nightly_date_and_manifest_url() {
+        let date = previous_nightly_date("2026-03-01").unwrap();
+        assert_eq!(date, NaiveDate::from_ymd_opt(2026, 2, 28).unwrap());
+
+        let run = NightlyWorkflowRun {
+            id: 12345,
+            head_sha: "abc123".to_string(),
+        };
+        assert_eq!(
+            previous_nightly_manifest_url(date, &run),
+            "https://anchor-releases.s3-eu-west-1.amazonaws.com/nightly/builds/2026/02/28/abc123/12345/manifest.json"
         );
     }
 

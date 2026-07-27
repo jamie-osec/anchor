@@ -94,7 +94,18 @@ echo "args=$*" > "$AVM_TEST_AVM_LOG"
         let avm_archive = nightly_dir.join("avm.tar.gz");
         create_tar_gz(&avm_archive, &avm_src, "avm");
 
-        let manifest = nightly_dir.join("manifest.json");
+        let latest_manifest = nightly_dir.join("latest-manifest.json");
+        fs::write(&latest_manifest, r#"{"date":"2026-07-27"}"#).expect("latest manifest");
+        let workflow_runs = nightly_dir.join("workflow-runs.json");
+        fs::write(
+            &workflow_runs,
+            r#"{"workflow_runs":[{"id":12345,"head_sha":"abc123"}]}"#,
+        )
+        .expect("workflow runs");
+        let manifest = nightly_dir
+            .join("nightly/builds/2026/07/26/abc123/12345")
+            .join("manifest.json");
+        fs::create_dir_all(manifest.parent().unwrap()).expect("manifest parent");
         fs::write(
             &manifest,
             format!(
@@ -137,17 +148,25 @@ echo "fake stable avm"
             .env("AVM_TEST_AVM_LOG", &avm_log)
             .env(
                 "AVM_NIGHTLY_MANIFEST_URL",
-                format!("file://{}", manifest.display()),
+                format!("file://{}", latest_manifest.display()),
             )
             .env(
                 "AVM_NIGHTLY_BASE_URL",
                 format!("file://{}/", nightly_dir.display()),
+            )
+            .env(
+                "AVM_NIGHTLY_WORKFLOW_RUNS_URL",
+                format!("file://{}", workflow_runs.display()),
             )
             .output()
             .expect("run checkout installer");
         assert_success(&output);
 
         let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.contains("Fetching Anchor nightly manifest for 2026-07-26"),
+            "{stdout}"
+        );
         assert!(
             stdout.contains("Installed AVM nightly checkout-nightly-test"),
             "{stdout}"
