@@ -56,6 +56,12 @@ export const BENCH_DIR_PATH = path.join("..", "..", "bench");
 /** Command line argument for Anchor version */
 export const ANCHOR_VERSION_ARG = "--anchor-version";
 
+/** Environment variable containing the benchmark result version. */
+export const BENCHMARK_VERSION_ENV = "ANCHOR_BENCHMARK_VERSION";
+
+/** Environment variable containing the current-format benchmark IDL path. */
+export const BENCHMARK_IDL_ENV = "ANCHOR_BENCHMARK_IDL";
+
 /** Utility class to handle benchmark data related operations */
 export class BenchData {
   /** Benchmark data filepath */
@@ -549,6 +555,9 @@ export class VersionManager {
  * Defaults to `unreleased`.
  */
 export const getVersionFromArgs = () => {
+  const benchmarkVersion = process.env[BENCHMARK_VERSION_ENV];
+  if (benchmarkVersion) return benchmarkVersion as Version;
+
   const args = process.argv;
   const anchorVersionArgIndex = args.indexOf(ANCHOR_VERSION_ARG);
   return anchorVersionArgIndex === -1
@@ -559,6 +568,10 @@ export const getVersionFromArgs = () => {
 /** Whether the version predates IDL generation through the `idl-build` feature. */
 export const usesLegacyIdl = (version: Version) =>
   ["0.27.0", "0.28.0"].includes(version);
+
+/** Whether the version uses the legacy IDL format. */
+export const usesLegacyIdlFormat = (version: Version) =>
+  ["0.27.0", "0.28.0", "0.29.0"].includes(version);
 
 /** Resolve a Solana version using AVM's platform-tools floor lookup. */
 export const getPlatformToolsVersion = async (solanaVersion: Version) => {

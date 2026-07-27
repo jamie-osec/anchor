@@ -9,7 +9,8 @@ import * as fs from "fs/promises";
 import path from "path";
 
 import {
-  ANCHOR_VERSION_ARG,
+  BENCHMARK_IDL_ENV,
+  BENCHMARK_VERSION_ENV,
   BenchData,
   LockFile,
   Toml,
@@ -18,17 +19,22 @@ import {
   getPlatformToolsVersion,
   spawn,
   usesLegacyIdl,
+  usesLegacyIdlFormat,
 } from "./utils";
 
 const CARGO_LOCK_PATH = "Cargo.lock";
 const PROGRAM_MANIFEST_PATH = path.join("programs", "bench", "Cargo.toml");
+const ANCHOR_TOML_PATH = path.join(__dirname, "..", "Anchor.toml");
+const IDL_PATH = path.join("target", "idl", "bench.json");
+const CURRENT_IDL_PATH = path.join("target", "bench-current-idl.json");
+const LEGACY_IDL_PATH = path.join("target", "bench-legacy-idl.json");
 (async () => {
   const bench = await BenchData.open();
 
   const cargoToml = await Toml.open(
     path.join("..", "programs", "bench", "Cargo.toml")
   );
-  const anchorToml = await Toml.open(path.join("..", "Anchor.toml"));
+  const originalAnchorToml = await fs.readFile(ANCHOR_TOML_PATH, "utf8");
 
   const unreleased = bench.get("unreleased");
   VersionManager.setSolanaVersion(unreleased.solanaVersion);
@@ -68,32 +74,34 @@ const PROGRAM_MANIFEST_PATH = path.join("programs", "bench", "Cargo.toml");
     }
     await cargoToml.save();
 
-    anchorToml.replaceValue(
-      "test",
-      (cmd) => {
-        return cmd.includes(ANCHOR_VERSION_ARG)
-          ? cmd.replace(
-              new RegExp(`\\s*${ANCHOR_VERSION_ARG}\\s+(.+)`),
-              (arg, ver) => (isUnreleased ? "" : arg.replace(ver, version))
-            )
-          : isUnreleased
-          ? cmd
-          : `${cmd} ${ANCHOR_VERSION_ARG} ${version}`;
-      },
-      { insideQuotes: true }
+    await fs.writeFile(
+      ANCHOR_TOML_PATH,
+      isUnreleased
+        ? originalAnchorToml
+        : `${originalAnchorToml.trimEnd()}\n\n[toolchain]\nanchor_version = "${version}"\n`
     );
-    await anchorToml.save();
+
+    if (!isUnreleased) {
+      spawn("avm", ["install", version], {
+        throwOnError: { msg: `Failed to install Anchor CLI ${version}.` },
+      });
+    }
   };
 
   try {
-    // Older Anchor versions cannot generate IDLs using the current CLI. Create
-    // one before switching dependencies so those versions can skip IDL builds.
-    const buildResult = spawn("anchor", ["build", "--skip-lint"], {
-      env: buildEnv,
-    });
+    // The current TypeScript client needs the current IDL format, including
+    // when a historical CLI is responsible for starting the validator.
+    await fs.rm(IDL_PATH, { force: true });
+    const buildResult = spawn("anchor", ["build", "--skip-lint"]);
     if (buildResult.status !== 0) {
       throw new Error("Failed to build the current benchmark program.");
     }
+    await fs.copyFile(IDL_PATH, CURRENT_IDL_PATH);
+    spawn(
+      "anchor",
+      ["idl", "convert", IDL_PATH, "--out", LEGACY_IDL_PATH, "--to-legacy"],
+      { throwOnError: { msg: "Failed to generate the legacy benchmark IDL." } }
+    );
 
     for (const version of bench.getVersions()) {
       console.log(`Updating '${version}'...`);
@@ -159,6 +167,16 @@ const PROGRAM_MANIFEST_PATH = path.join("programs", "bench", "Cargo.toml");
         );
       }
 
+      // Give the selected Anchor CLI an IDL in the format it understands. The
+      // test suite loads the current format from BENCHMARK_IDL_ENV.
+      await fs.copyFile(
+        usesLegacyIdlFormat(version) ? LEGACY_IDL_PATH : CURRENT_IDL_PATH,
+        IDL_PATH
+      );
+
+      // Ensure the instrumented build replaces any artifact left by the
+      // initial IDL build or the previous iteration.
+      await fs.rm(path.join("target", "deploy", "bench.so"), { force: true });
       const buildResult = spawn(
         "cargo-build-sbf",
         ["--manifest-path", PROGRAM_MANIFEST_PATH, "--", "--locked"],
@@ -170,11 +188,13 @@ const PROGRAM_MANIFEST_PATH = path.join("programs", "bench", "Cargo.toml");
         return;
       }
 
-      const result = spawn(
-        "anchor",
-        ["test", "--skip-lint", "--skip-build", "--validator", "legacy"],
-        { env: buildEnv }
-      );
+      const result = spawn("anchor", ["test", "--skip-lint", "--skip-build"], {
+        env: {
+          ...buildEnv,
+          [BENCHMARK_IDL_ENV]: path.resolve(CURRENT_IDL_PATH),
+          [BENCHMARK_VERSION_ENV]: version,
+        },
+      });
 
       if (result.status !== 0) {
         console.error("Please fix the error and re-run this command.");
@@ -185,6 +205,8 @@ const PROGRAM_MANIFEST_PATH = path.join("programs", "bench", "Cargo.toml");
 
     spawn("anchor", ["run", "sync-markdown"]);
   } finally {
+    await fs.rm(CURRENT_IDL_PATH, { force: true });
+    await fs.rm(LEGACY_IDL_PATH, { force: true });
     await setProjectVersion("unreleased");
   }
 })();

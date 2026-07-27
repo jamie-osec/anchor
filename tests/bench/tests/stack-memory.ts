@@ -9,13 +9,12 @@ import {
   spawn,
 } from "../scripts/utils";
 
-const IDL = require("../target/idl/bench.json");
 describe("Stack memory", () => {
   const stackMemory: StackMemory = {};
 
   const getInstructionAccountsStructs = async () => {
     const lib = await fs.readFile(
-      path.join("programs", IDL.metadata.name, "src", "lib.rs"),
+      path.join("programs", "bench", "src", "lib.rs"),
       "utf8"
     );
     const structs = new Map<string, string>();
