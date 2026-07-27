@@ -126,7 +126,7 @@ pub fn ensure_paths() {
     let avm_in_bin = bin_dir.join("avm");
     if let Ok(current_avm) = std::env::current_exe() {
         // Only copy if the paths are different
-        if current_avm != avm_in_bin && !nightly_enabled() {
+        if current_avm != avm_in_bin {
             if let Err(e) = fs::copy(current_avm, &avm_in_bin) {
                 eprintln!("Failed to copy avm binary: {e}");
             }
@@ -851,14 +851,6 @@ fn anchor_stub_path() -> PathBuf {
     })
 }
 
-fn nightly_avm_binary_path() -> PathBuf {
-    get_bin_dir_path().join("avm-nightly")
-}
-
-fn stable_avm_backup_path() -> PathBuf {
-    get_bin_dir_path().join("avm-stable")
-}
-
 pub fn nightly_anchor_binary_path() -> PathBuf {
     get_bin_dir_path().join(if cfg!(target_os = "windows") {
         "anchor-nightly.exe"
@@ -869,13 +861,8 @@ pub fn nightly_anchor_binary_path() -> PathBuf {
 
 pub fn enable_nightly(skip_attestation: bool) -> Result<()> {
     ensure_paths();
-    if !nightly_enabled() {
-        backup_stable_avm()?;
-    }
-
     let version = ensure_nightly_installed(skip_attestation)?;
-    point_anchor_stub_to(&stable_avm_backup_path())
-        .context("Pointing anchor stub at nightly proxy")?;
+    point_anchor_stub_to(&avm_binary_path()).context("Pointing anchor stub at nightly proxy")?;
     fs::write(nightly_enabled_file_path(), b"enabled\n").context("Writing Anchor nightly state")?;
     println!("Now using Anchor nightly {version}.");
     Ok(())
@@ -888,7 +875,6 @@ pub fn disable_nightly() -> Result<()> {
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
         Err(err) => return Err(err).context("Removing Anchor nightly state"),
     }
-    restore_stable_avm()?;
     point_anchor_stub_to(&avm_binary_path()).context("Restoring anchor stub")?;
     println!("Anchor nightly disabled. AVM will use normal version resolution.");
     Ok(())
@@ -965,8 +951,8 @@ fn write_nightly_cache_error() {
     );
 }
 
-fn nightly_binaries_exist() -> bool {
-    nightly_anchor_binary_path().is_file() && nightly_avm_binary_path().is_file()
+fn nightly_anchor_exists() -> bool {
+    nightly_anchor_binary_path().is_file()
 }
 
 fn ensure_nightly_installed(skip_attestation: bool) -> Result<String> {
@@ -974,17 +960,15 @@ fn ensure_nightly_installed(skip_attestation: bool) -> Result<String> {
 
     let now = Utc::now().timestamp();
     if let NightlyCacheState::Success(ts, version) = read_nightly_cache() {
-        if now - ts < UPDATE_CHECK_INTERVAL_SECS && nightly_binaries_exist() {
-            activate_nightly_avm()?;
+        if now - ts < UPDATE_CHECK_INTERVAL_SECS && nightly_anchor_exists() {
             return Ok(version);
         }
     }
 
     if let Some(ts) = read_nightly_error_cache() {
-        if now - ts < UPDATE_CHECK_INTERVAL_SECS && nightly_binaries_exist() {
+        if now - ts < UPDATE_CHECK_INTERVAL_SECS && nightly_anchor_exists() {
             let next_attempt_secs = (ts + UPDATE_CHECK_INTERVAL_SECS) - now;
             eprintln!("Anchor nightly update check failed. Next attempt in {next_attempt_secs}s.");
-            activate_nightly_avm()?;
             return Ok(cached_nightly_version().unwrap_or_else(|| "cached".to_string()));
         }
     }
@@ -993,30 +977,27 @@ fn ensure_nightly_installed(skip_attestation: bool) -> Result<String> {
         Ok(manifest) => {
             if let Err(err) = install_nightly_manifest(&manifest, skip_attestation) {
                 write_nightly_cache_error();
-                if nightly_binaries_exist() {
+                if nightly_anchor_exists() {
                     let version = cached_nightly_version().unwrap_or_else(|| "cached".to_string());
                     eprintln!(
                         "Anchor nightly install failed; using cached nightly {version}. Next \
                          attempt in {UPDATE_CHECK_INTERVAL_SECS}s."
                     );
-                    activate_nightly_avm()?;
                     return Ok(version);
                 }
-                return Err(err).context("Installing Anchor nightly binaries");
+                return Err(err).context("Installing Anchor nightly binary");
             }
             write_nightly_cache_success(&manifest.version);
-            activate_nightly_avm()?;
             Ok(manifest.version)
         }
         Err(err) => {
             write_nightly_cache_error();
-            if nightly_binaries_exist() {
+            if nightly_anchor_exists() {
                 let version = cached_nightly_version().unwrap_or_else(|| "cached".to_string());
                 eprintln!(
                     "Anchor nightly update check failed; using cached nightly {version}. Next \
                      attempt in {UPDATE_CHECK_INTERVAL_SECS}s."
                 );
-                activate_nightly_avm()?;
                 return Ok(version);
             }
             Err(err).context("Fetching Anchor nightly manifest")
@@ -1047,17 +1028,15 @@ fn fetch_nightly_manifest() -> Result<NightlyManifest> {
 fn install_nightly_manifest(manifest: &NightlyManifest, skip_attestation: bool) -> Result<()> {
     let target = rustc_host_target()?;
     let anchor = nightly_artifact(manifest, "anchor", &target)?;
-    let avm = nightly_artifact(manifest, "avm", &target)?;
     let cached_version = cached_nightly_version();
     let needs_download =
-        cached_version.as_deref() != Some(manifest.version.as_str()) || !nightly_binaries_exist();
+        cached_version.as_deref() != Some(manifest.version.as_str()) || !nightly_anchor_exists();
 
     if needs_download {
         if skip_attestation {
             warn_attestation_skipped();
         }
         install_nightly_artifact(&anchor, &nightly_anchor_binary_path(), skip_attestation)?;
-        install_nightly_artifact(&avm, &nightly_avm_binary_path(), skip_attestation)?;
     }
     Ok(())
 }
@@ -1209,35 +1188,6 @@ fn rustc_host_target() -> Result<String> {
         .filter(|target| !target.is_empty())
         .map(str::to_string)
         .ok_or_else(|| anyhow!("`host` not found from `rustc -vV` output"))
-}
-
-fn backup_stable_avm() -> Result<()> {
-    let backup = stable_avm_backup_path();
-    let source = if avm_binary_path().is_file() {
-        avm_binary_path()
-    } else {
-        std::env::current_exe().context("Resolving current avm executable")?
-    };
-    install_binary_atomic(&source, &backup)
-        .with_context(|| format!("Backing up stable avm to {}", backup.display()))
-}
-
-fn restore_stable_avm() -> Result<()> {
-    let backup = stable_avm_backup_path();
-    if !backup.is_file() {
-        eprintln!(
-            "No stable avm backup found at {}. Run `avm self-update` to reinstall stable avm.",
-            backup.display()
-        );
-        return Ok(());
-    }
-    install_binary_atomic(&backup, &avm_binary_path())
-        .with_context(|| format!("Restoring stable avm from {}", backup.display()))
-}
-
-fn activate_nightly_avm() -> Result<()> {
-    install_binary_atomic(&nightly_avm_binary_path(), &avm_binary_path())
-        .context("Activating nightly avm")
 }
 
 fn point_anchor_stub_to(target: &Path) -> Result<()> {
@@ -1560,6 +1510,27 @@ mod tests {
             nightly_artifact_url(&artifact),
             "https://anchor-releases.s3-eu-west-1.amazonaws.com/nightly/latest/x86_64-unknown-linux-gnu/avm.tar.gz"
         );
+    }
+
+    #[test]
+    fn test_nightly_manifest_does_not_require_avm_artifact() {
+        ensure_paths();
+        let version = "nightly-anchor-only";
+        fs::write(nightly_anchor_binary_path(), b"cached anchor").unwrap();
+        write_nightly_cache_success(version);
+
+        let manifest = NightlyManifest {
+            version: version.to_string(),
+            artifacts: vec![NightlyArtifact {
+                tool: "anchor".to_string(),
+                target: rustc_host_target().unwrap(),
+                file: "anchor.tar.gz".to_string(),
+                s3_key: "nightly/latest/anchor.tar.gz".to_string(),
+                sha256: "abc".to_string(),
+            }],
+        };
+
+        install_nightly_manifest(&manifest, false).unwrap();
     }
 
     #[test]
