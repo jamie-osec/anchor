@@ -36,7 +36,6 @@ fn initializes_updates_and_removes_metadata_on_the_mint() {
         extension.metadata_address = Some(mint).try_into().unwrap();
     }
     seed_token_2022_account(&mut svm, mint, mint_data);
-    seed_account(&mut svm, new_authority);
     svm.airdrop(&mint_authority.pubkey(), 1_000_000_000)
         .unwrap();
     svm.airdrop(&update_authority.pubkey(), 1_000_000_000)
@@ -95,16 +94,17 @@ fn initializes_updates_and_removes_metadata_on_the_mint() {
     assert_token_2022_cpi_succeeded(&metadata, "token metadata remove_key");
     assert_metadata_field(&svm, mint, "field", None);
 
+    let mut update_authority_data = vec![1];
+    update_authority_data.extend_from_slice(&address_bytes(new_authority));
     let update_authority_metas = vec![
         Meta::new(mint, false),
         Meta::new_readonly(update_authority.pubkey(), true),
-        Meta::new_readonly(new_authority, false),
         Meta::new_readonly(token_2022_program_id(), false),
     ];
     let metadata = send(
         &mut svm,
         id,
-        vec![1],
+        update_authority_data,
         update_authority_metas,
         &payer,
         &[&update_authority],
@@ -143,7 +143,6 @@ fn token_metadata_helpers_reject_wrong_program_before_state_changes() {
         extension.metadata_address = Some(mint).try_into().unwrap();
     }
     seed_token_2022_account(&mut svm, mint, mint_data);
-    seed_account(&mut svm, new_authority);
     svm.airdrop(&mint_authority.pubkey(), 1_000_000_000)
         .unwrap();
     svm.airdrop(&update_authority.pubkey(), 1_000_000_000)
@@ -180,11 +179,14 @@ fn token_metadata_helpers_reject_wrong_program_before_state_changes() {
             vec![&mint_authority],
         ),
         (
-            vec![1],
+            {
+                let mut data = vec![1];
+                data.extend_from_slice(&address_bytes(new_authority));
+                data
+            },
             vec![
                 Meta::new(mint, false),
                 Meta::new_readonly(update_authority.pubkey(), true),
-                Meta::new_readonly(new_authority, false),
                 Meta::new_readonly(wrong_token_program_id(), false),
             ],
             vec![&update_authority],

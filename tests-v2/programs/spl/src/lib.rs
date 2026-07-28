@@ -1356,17 +1356,14 @@ pub mod spl_test {
     #[discrim = 49]
     pub fn token_2022_token_metadata_update_authority(
         ctx: &mut Context<Token2022TokenMetadataUpdateAuthority>,
+        new_authority: Address,
     ) -> Result<()> {
         let accs = token_2022_ext_cpi::TokenMetadataUpdateAuthority {
             metadata: ctx.accounts.metadata.cpi_handle_mut(),
             current_authority: ctx.accounts.current_authority.cpi_handle(),
-            new_authority: ctx.accounts.new_authority.cpi_handle(),
         };
         let cpi_ctx = CpiContext::new(ctx.accounts.token_program.address(), accs);
-        token_2022_ext_cpi::token_metadata_update_authority(
-            cpi_ctx,
-            Some(ctx.accounts.new_authority.address()),
-        )?;
+        token_2022_ext_cpi::token_metadata_update_authority(cpi_ctx, Some(&new_authority))?;
         Ok(())
     }
 
@@ -2101,7 +2098,6 @@ pub struct Token2022TokenMetadataUpdateAuthority {
     #[account(mut)]
     pub metadata: UncheckedAccount,
     pub current_authority: Signer,
-    pub new_authority: UncheckedAccount,
     pub token_program: UncheckedAccount,
 }
 

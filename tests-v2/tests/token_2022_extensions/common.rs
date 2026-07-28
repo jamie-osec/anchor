@@ -84,10 +84,6 @@ pub fn seed_token_2022_account(svm: &mut LiteSVM, address: Pubkey, data: Vec<u8>
     .expect("seed token-2022-owned account");
 }
 
-pub fn seed_account(svm: &mut LiteSVM, address: Pubkey) {
-    seed_token_2022_account(svm, address, vec![0; 256]);
-}
-
 pub fn seed_mint_with_extensions(svm: &mut LiteSVM, address: Pubkey, extensions: &[ExtensionType]) {
     let len = ExtensionType::try_calculate_account_len::<Mint>(extensions)
         .expect("calculate token-2022 mint account length");

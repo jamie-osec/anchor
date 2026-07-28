@@ -4988,19 +4988,19 @@ fn token_metadata_update_authority_helper_rejects_non_token_2022_program() {
     let new_authority = Pubkey::new_unique();
 
     seed_token_owned_account(&mut svm, metadata, token_2022_program_id(), vec![0; 8]);
-    seed_token_owned_account(&mut svm, new_authority, token_2022_program_id(), vec![0; 8]);
 
+    let mut data = vec![49];
+    data.extend_from_slice(&new_authority.to_bytes());
     let metas = vec![
         AccountMeta::new(metadata, false),
         AccountMeta::new_readonly(current_authority.pubkey(), true),
-        AccountMeta::new_readonly(new_authority, false),
         AccountMeta::new_readonly(wrong_token_2022_program_id(), false),
     ];
     assert_incorrect_token_2022_program_error(
         send_instruction(
             &mut svm,
             program_id(),
-            vec![49],
+            data,
             metas,
             &payer,
             &[&current_authority],

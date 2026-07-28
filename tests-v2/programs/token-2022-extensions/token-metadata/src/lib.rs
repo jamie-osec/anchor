@@ -24,15 +24,17 @@ pub mod token_2022_ext_token_metadata {
     }
 
     #[discrim = 1]
-    pub fn update_authority(ctx: &mut Context<UpdateAuthority>) -> Result<()> {
+    pub fn update_authority(
+        ctx: &mut Context<UpdateAuthority>,
+        new_authority: Address,
+    ) -> Result<()> {
         let accs = token_2022_ext::TokenMetadataUpdateAuthority {
             metadata: ctx.accounts.metadata.cpi_handle_mut(),
             current_authority: ctx.accounts.current_authority.cpi_handle(),
-            new_authority: ctx.accounts.new_authority.cpi_handle(),
         };
         token_2022_ext::token_metadata_update_authority(
             CpiContext::new(ctx.accounts.token_program.address(), accs),
-            Some(ctx.accounts.new_authority.address()),
+            Some(&new_authority),
         )?;
         Ok(())
     }
@@ -82,7 +84,6 @@ pub struct UpdateAuthority {
     #[account(mut)]
     pub metadata: UncheckedAccount,
     pub current_authority: Signer,
-    pub new_authority: UncheckedAccount,
     pub token_program: UncheckedAccount,
 }
 

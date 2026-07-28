@@ -23,8 +23,6 @@ pub struct TokenMetadataUpdateAuthority<'a> {
     pub metadata: CpiHandleMut<'a>,
     #[signer]
     pub current_authority: CpiHandle<'a>,
-    #[account_meta(skip)]
-    pub new_authority: CpiHandle<'a>,
 }
 
 #[derive(ToCpiAccounts)]
