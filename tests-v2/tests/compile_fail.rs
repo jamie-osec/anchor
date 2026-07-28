@@ -309,7 +309,77 @@ pub mod program_interface_duplicate_discriminator {
 }
 "#,
     )
-    .expect_fail(&["duplicate `#[discrim = ...]`"]);
+    .expect_fail(&["Ambiguous discriminators for instructions"]);
+}
+
+#[test]
+fn program_interface_allows_distinct_discriminators_with_shared_prefix_bytes() {
+    CompileCase::new(
+        "program_interface_shared_prefix_distinct",
+        r#"
+use anchor_lang_v2::prelude::*;
+
+declare_id!("11111111111111111111111111111111");
+const EXTERNAL_ID: Address =
+    anchor_lang_v2::address!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
+
+#[derive(Accounts)]
+pub struct Empty {}
+
+#[program(interface, program_id = EXTERNAL_ID)]
+pub mod program_interface_shared_prefix_distinct {
+    use super::*;
+
+    #[discrim = [1, 2, 3]]
+    pub fn first(ctx: &mut Context<Empty>) -> Result<()> {
+        let _ = ctx;
+        Ok(())
+    }
+
+    #[discrim = [1, 2, 4]]
+    pub fn second(ctx: &mut Context<Empty>) -> Result<()> {
+        let _ = ctx;
+        Ok(())
+    }
+}
+"#,
+    )
+    .expect_pass();
+}
+
+#[test]
+fn program_interface_rejects_prefix_overlapping_discriminators() {
+    CompileCase::new(
+        "program_interface_prefix_overlap",
+        r#"
+use anchor_lang_v2::prelude::*;
+
+declare_id!("11111111111111111111111111111111");
+const EXTERNAL_ID: Address =
+    anchor_lang_v2::address!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
+
+#[derive(Accounts)]
+pub struct Empty {}
+
+#[program(interface, program_id = EXTERNAL_ID)]
+pub mod program_interface_prefix_overlap {
+    use super::*;
+
+    #[discrim = [1, 2]]
+    pub fn short(ctx: &mut Context<Empty>) -> Result<()> {
+        let _ = ctx;
+        Ok(())
+    }
+
+    #[discrim = [1, 2, 3]]
+    pub fn long(ctx: &mut Context<Empty>) -> Result<()> {
+        let _ = ctx;
+        Ok(())
+    }
+}
+"#,
+    )
+    .expect_fail(&["Ambiguous discriminators for instructions"]);
 }
 
 #[test]

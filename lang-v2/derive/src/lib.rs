@@ -2722,6 +2722,42 @@ fn validate_discriminator_prefixes(
     Ok(())
 }
 
+fn validate_instruction_discriminator_prefixes(
+    handlers: &[&syn::ItemFn],
+    discrim_attrs: &[Option<DiscrimAttr>],
+) -> syn::Result<()> {
+    let discriminators: Vec<_> = handlers
+        .iter()
+        .enumerate()
+        .map(|(i, handler)| {
+            let name = handler.sig.ident.to_string();
+            let bytes = discrim_attrs[i]
+                .as_ref()
+                .map(|d| d.bytes.clone())
+                .unwrap_or_else(|| default_instruction_discriminator(&to_snake_case(&name)));
+            (name, bytes, handler.sig.ident.span())
+        })
+        .collect();
+
+    for (outer_name, outer_disc, outer_span) in &discriminators {
+        for (inner_name, inner_disc, _) in &discriminators {
+            if outer_name != inner_name && outer_disc.starts_with(inner_disc) {
+                return Err(syn::Error::new(
+                    *outer_span,
+                    format!(
+                        "Ambiguous discriminators for instructions: `{inner_name}` discriminator \
+                         {} is a prefix of `{outer_name}` discriminator {}",
+                        format_discriminator_bytes(inner_disc),
+                        format_discriminator_bytes(outer_disc),
+                    ),
+                ));
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn format_discriminator_bytes(discriminator: &[u8]) -> String {
     let bytes = discriminator
         .iter()
@@ -4533,20 +4569,8 @@ fn impl_program(module: &ItemMod, config: &ProgramConfig) -> TokenStream2 {
             }
         }
     } else if config.mode == ProgramMode::Interface {
-        let mut seen: std::collections::HashMap<Vec<u8>, proc_macro2::Span> =
-            std::collections::HashMap::new();
-        for (i, d) in discrim_attrs.iter().enumerate() {
-            let Some(d) = d else { continue };
-            if let Some(_first_span) = seen.insert(d.bytes.clone(), d.span) {
-                return syn::Error::new(
-                    d.span,
-                    format!(
-                        "duplicate `#[discrim = ...]` on instruction `{}`",
-                        handlers[i].sig.ident
-                    ),
-                )
-                .to_compile_error();
-            }
+        if let Err(err) = validate_instruction_discriminator_prefixes(&handlers, &discrim_attrs) {
+            return err.to_compile_error();
         }
     }
     let discrim_attrs: Vec<Option<Vec<u8>>> = discrim_attrs
@@ -6139,6 +6163,41 @@ mod tests {
         assert!(
             !generated.contains("default_allocator"),
             "interface mode must not emit entrypoint runtime: {generated}"
+        );
+    }
+
+    #[test]
+    fn program_interface_mode_rejects_prefix_overlapping_discriminators() {
+        let module: syn::ItemMod = syn::parse_quote! {
+            pub mod external_program {
+                use super::*;
+
+                #[discrim = [1]]
+                pub fn short(_ctx: &mut Context<Short>) -> Result<()> {
+                    unreachable!()
+                }
+
+                #[discrim = [1, 2]]
+                pub fn long(_ctx: &mut Context<Long>) -> Result<()> {
+                    unreachable!()
+                }
+            }
+        };
+        let config = ProgramConfig {
+            mode: ProgramMode::Interface,
+            program_id: syn::parse_quote!(super::ID),
+        };
+
+        let generated = impl_program(&module, &config).to_string();
+
+        assert!(
+            generated.contains("Ambiguous discriminators for instructions"),
+            "expected prefix-overlap rejection: {generated}"
+        );
+        assert!(
+            generated
+                .contains("`short` discriminator [1] is a prefix of `long` discriminator [1, 2]"),
+            "expected targeted prefix diagnostic: {generated}"
         );
     }
 }
