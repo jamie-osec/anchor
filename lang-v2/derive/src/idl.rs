@@ -38,9 +38,8 @@ fn type_str_to_idl_value(s: &str) -> Value {
     let s = strip_ref_and_lifetime(s);
     let s = s.as_str();
     match s {
-        "u8" | "u16" | "u32" | "u64" | "u128" | "i8" | "i16" | "i32" | "i64" | "i128" | "bool" => {
-            Value::String(s.to_owned())
-        }
+        "u8" | "u16" | "u32" | "u64" | "u128" | "i8" | "i16" | "i32" | "i64" | "i128"
+        | "f32" | "f64" | "bool" => Value::String(s.to_owned()),
         // Pod wrappers drop alignment to 1 for zero-copy accounts but
         // the byte representation matches the primitive (LE). Report
         // as primitives so the TS coder's default borsh path decodes
@@ -1083,5 +1082,17 @@ mod tests {
         // The program override gets its own runtime push under the
         // "program" key.
         assert!(ts.contains(r#",\"program\":"#), "missing program key: {ts}");
+    }
+
+    #[test]
+    fn float_primitives_map_to_scalar_idl_types() {
+        assert_eq!(type_str_to_idl_value("f32"), Value::String("f32".into()));
+        assert_eq!(type_str_to_idl_value("f64"), Value::String("f64".into()));
+    }
+
+    #[test]
+    fn float_primitives_do_not_fall_back_to_defined_types() {
+        assert_ne!(type_str_to_idl_value("f32"), json!({ "defined": { "name": "f32" } }));
+        assert_ne!(type_str_to_idl_value("f64"), json!({ "defined": { "name": "f64" } }));
     }
 }
