@@ -272,6 +272,13 @@ where
         &self.view
     }
 
+    #[inline(always)]
+    fn try_cpi_handle_mut(&mut self) -> Result<crate::CpiHandleMut<'_>, ProgramError> {
+        require!(self.account().is_writable(), ProgramError::InvalidArgument);
+        self.release_borrow()?;
+        Ok(crate::CpiHandleMut::writable(&mut self.view))
+    }
+
     fn close(&mut self, mut destination: AccountView) -> pinocchio::ProgramResult {
         let mut self_view = self.view;
         let dest_lamports = destination

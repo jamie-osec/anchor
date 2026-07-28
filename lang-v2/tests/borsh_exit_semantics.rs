@@ -411,6 +411,53 @@ fn release_borrow_commits_in_memory_changes_to_buffer() {
 }
 
 #[test]
+fn cpi_handle_mut_releases_wrapper_and_preserves_callee_writes() {
+    let mut buf = AccountBuffer::<256>::new();
+    setup_counter_buf(&mut buf, 42);
+
+    let view = unsafe { buf.view() };
+    let mut acct = unsafe { BorshAccount::<Counter>::load_mut(view) }.unwrap();
+
+    acct.value = 100;
+
+    {
+        let handle = acct.cpi_handle_mut();
+        let bytes = read_data_bytes(&buf, 8, 8);
+        assert_eq!(
+            u64::from_le_bytes(bytes.try_into().unwrap()),
+            100,
+            "cpi_handle_mut must commit the caller's in-memory state before the writable CPI"
+        );
+
+        set_data_bytes(&mut buf, 8, &777u64.to_le_bytes());
+        let _ = handle;
+    }
+
+    let stale_access = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _ = acct.value;
+    }));
+    assert!(
+        stale_access.is_err(),
+        "typed access must stay released until the wrapper is refreshed after the CPI"
+    );
+
+    acct.exit().unwrap();
+    let bytes = read_data_bytes(&buf, 8, 8);
+    assert_eq!(
+        u64::from_le_bytes(bytes.try_into().unwrap()),
+        777,
+        "exit must not overwrite a successful callee update after cpi_handle_mut released the \
+         wrapper"
+    );
+
+    acct.reacquire_borrow_mut().unwrap();
+    assert_eq!(
+        acct.value, 777,
+        "reacquire_borrow_mut must refresh the released wrapper from the callee's live bytes"
+    );
+}
+
+#[test]
 fn exit_zeroes_bytes_between_new_and_old_serialized_lengths() {
     let mut buf = AccountBuffer::<256>::new();
     setup_shrinkable_bytes_buf(&mut buf, &[1, 2, 3], &[0xAA, 0xBB]);
