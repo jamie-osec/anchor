@@ -4,7 +4,6 @@ use {
     anchor_lang_v2::{testing::AccountBuffer, AccountDeserialize, AnchorAccount},
     anchor_spl_v2::metadata::{self, MetadataAccount},
     borsh::to_vec,
-    solana_address::Address,
     solana_program_error::ProgramError,
     solana_pubkey::Pubkey,
 };
@@ -72,7 +71,7 @@ fn metadata_account_load_validates_owner_and_raw_data() {
     );
     account.write_data(&data);
 
-    let loaded = MetadataAccount::load(unsafe { account.view() }, &Address::default()).unwrap();
+    let loaded = MetadataAccount::load(unsafe { account.view() }).unwrap();
     assert_eq!(loaded.update_authority, expected.update_authority);
     assert_eq!(loaded.seller_fee_basis_points, 250);
 }
@@ -84,7 +83,7 @@ fn metadata_account_rejects_wrong_owner() {
     account.init([9u8; 32], [3u8; 32], data.len(), false, false, false);
     account.write_data(&data);
 
-    let err = MetadataAccount::load(unsafe { account.view() }, &Address::default()).unwrap_err();
+    let err = MetadataAccount::load(unsafe { account.view() }).unwrap_err();
     assert_eq!(err, ProgramError::IllegalOwner);
 }
 
