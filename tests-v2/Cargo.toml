@@ -72,6 +72,7 @@ anyhow = "1"
 anchor-lang-idl = { path = "../idl", version = "0.1.2", features = ["convert"] }
 anchor-spl-v2 = { path = "../spl-v2" }
 anchor-lang-idl-spec = { path = "../idl/spec", version = "0.1.0" }
+bytemuck = { version = "1", features = ["derive"] }
 proptest = "1"
 solana-address = "2.0"
 solana-loader-v3-interface.workspace = true

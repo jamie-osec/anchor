@@ -3,10 +3,12 @@
 //!
 //! Dispatches on the wrapper type: default returns `None` (elides
 //! sysvar/signer/program/unchecked from IDL types). Data-bearing wrappers
-//! (`Box<T>`, `Account<T>`, `BorshAccount<T>`, `Slab<H, T>`, `Nested<T>`)
-//! delegate to the inner type. User `#[account]`/`#[event]`/`#[derive(IdlType)]`
-//! structs get auto-generated impls with both `__IDL_ACCOUNT_ENTRY` and
-//! `__IDL_TYPE_DEF` set at macro-expansion time.
+//! (`Box<T>`, `Account<T>`, `BorshAccount<T>`, `Nested<T>`) delegate to the
+//! inner type. `Slab<H, T>` is a special case: today it forwards only the
+//! header `H`, because the current IDL has no faithful way to describe the
+//! alignment-padded dynamic tail. User `#[account]`/`#[event]`/
+//! `#[derive(IdlType)]` structs get auto-generated impls with both
+//! `__IDL_ACCOUNT_ENTRY` and `__IDL_TYPE_DEF` set at macro-expansion time.
 //!
 //! The trait + helpers are unconditionally compiled — empty default-method
 //! impls cost nothing in BPF. End-user crates opt into IDL emission via
@@ -50,11 +52,12 @@ pub trait IdlAccountType {
     /// Push this type's accounts/types entries (if any) and recursively
     /// register every user-defined type its fields reference. Default: no-op.
     ///
-    /// Wrappers (`Box<T>`, `BorshAccount<T>`, `Slab<H, T>`, `Nested<T>`)
-    /// forward to the inner type; collection impls (`Vec<T>`, `Option<T>`,
-    /// `[T; N]`, `[T]`, `&T`, `PodVec<T, N>`) forward to the element type.
-    /// Primitive impls (bool, u*, i*, f*, String, Address, etc.) use the
-    /// default no-op — they never appear in `types[]`.
+    /// Wrappers (`Box<T>`, `BorshAccount<T>`, `Nested<T>`) forward to the
+    /// inner type. `Slab<H, T>` currently forwards only the header `H`;
+    /// see [`crate::accounts::Slab`] for the limitation. Collection impls
+    /// (`Vec<T>`, `Option<T>`, `[T; N]`, `[T]`, `&T`, `PodVec<T, N>`) forward
+    /// to the element type. Primitive impls (bool, u*, i*, f*, String,
+    /// Address, etc.) use the default no-op — they never appear in `types[]`.
     fn __register_idl_deps(
         _accounts: &mut alloc::vec::Vec<&'static str>,
         _types: &mut alloc::vec::Vec<&'static str>,
