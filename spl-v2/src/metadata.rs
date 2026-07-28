@@ -89,7 +89,7 @@ pub fn burn_edition_nft<'info>(ctx: CpiContext<'info, BurnEditionNft<'info>>) ->
 ///
 /// ```ignore
 /// CpiContext::new(program, BurnNft { .. })
-///     .with_remaining_accounts(vec![ctx.accounts.collection_metadata.cpi_handle()]);
+///     .with_remaining_accounts(vec![ctx.accounts.collection_metadata.cpi_handle_mut().into()]);
 /// ```
 pub fn burn_nft<'info>(
     ctx: CpiContext<'info, BurnNft<'info>>,
