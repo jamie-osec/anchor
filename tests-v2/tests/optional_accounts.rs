@@ -171,6 +171,40 @@ fn mutable_optional_duplicate_check_is_gated_on_some() {
 }
 
 #[test]
+fn optional_duplicate_checks_precede_load_and_skip_none() {
+    let (mut svm, payer) = setup();
+    let data = init_required(&mut svm, &payer);
+
+    let failure = call_raw(
+        &mut svm,
+        &payer,
+        10,
+        vec![AccountMeta::new(data, false), AccountMeta::new(data, false)],
+    )
+    .expect_err("duplicate Some accounts should be rejected");
+    assert!(
+        !failure.meta.pretty_logs().contains("spy_load_mut"),
+        "duplicate rejection must run before unsafe load_mut"
+    );
+
+    svm.expire_blockhash();
+    let success = call_raw(
+        &mut svm,
+        &payer,
+        10,
+        vec![
+            AccountMeta::new(program_id(), false),
+            AccountMeta::new(program_id(), false),
+        ],
+    )
+    .expect("duplicate None sentinels should be ignored");
+    assert!(
+        !success.pretty_logs().contains("spy_load_mut"),
+        "None sentinels must not load optional accounts"
+    );
+}
+
+#[test]
 fn optional_seed_bumps_are_some_only_for_some_accounts() {
     let (mut svm, payer) = setup();
     let data = init_required(&mut svm, &payer);

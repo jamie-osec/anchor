@@ -651,11 +651,6 @@ pub struct AccountField {
     pub load: TokenStream2,
     pub deferred_load: Option<TokenStream2>,
     pub constraints: Vec<TokenStream2>,
-    /// Duplicate-mutable-account check. Collected separately from
-    /// `constraints` so all mut-field dup checks can share a single outer
-    /// `if let Some(__dups) = __duplicates` gate — non-dup txs pay one
-    /// Option-tag branch regardless of field count.
-    pub dup_check: Option<TokenStream2>,
     pub exit: Option<TokenStream2>,
     pub has_bump: bool,
     /// True when the field type is `Option<T>` (optional account).
@@ -670,7 +665,7 @@ pub struct AccountField {
     /// `MUT_MASK`: a non-`Option<_>` mut field without `unsafe(dup)`.
     /// `Option<T>` mut fields are excluded because a `None` slot (the
     /// client sends `program_id` as the address) should still silence the
-    /// dup check; the derive keeps the gated per-field `get()` for those.
+    /// dup check; the derive checks duplicates inside the `Some` branch.
     pub contributes_mut_bit: bool,
     /// `true` iff this optional field contributes to the runtime active
     /// mutable mask when it loads as `Some`.
@@ -1582,7 +1577,6 @@ pub fn parse_field(
             load,
             deferred_load: None,
             constraints: vec![],
-            dup_check: None,
             exit,
             has_bump: false,
             is_optional: false,
@@ -1721,6 +1715,17 @@ pub fn parse_field(
                 };
             }
         });
+        let optional_dup_precheck = (attrs.is_mut && !attrs.is_dup).then(|| {
+            quote! {
+                if let Some(__dups) = __duplicates {
+                    if __dups.get((__base_offset + #offset_expr) as u8) {
+                        return Err(
+                            anchor_lang_v2::ErrorCode::ConstraintDuplicateMutableAccount.into(),
+                        );
+                    }
+                }
+            }
+        });
         let load = quote! {
             #init_if_needed_existed_binding
             let mut #field_name: #field_ty = {
@@ -1728,6 +1733,7 @@ pub fn parse_field(
                 if anchor_lang_v2::address_eq(__target.address(), __program_id) {
                     None
                 } else {
+                    #optional_dup_precheck
                     #inner_action
                 }
             };
@@ -2301,26 +2307,6 @@ pub fn parse_field(
         None
     };
 
-    // Dup-check emission: only `Option<_>` mut fields keep a gated
-    // per-field `get()` check — a `None` slot (the client encodes
-    // `program_id` as the address) must stay silent even when that slot
-    // is also the dup target of another account, and the
-    // `if let Some(...)` wrapper built below preserves that. Non-`Option`
-    // mut fields are folded into the enclosing struct's `MUT_MASK` const
-    // and checked once per dispatch by `run_handler`. Stored separately
-    // from `constraints` so the struct-level codegen can aggregate all
-    // mut fields' dup checks under a single outer
-    // `if let Some(__dups) = __duplicates { ... }` gate.
-    let dup_check = if attrs.is_mut && !attrs.is_dup && is_optional {
-        Some(quote! {
-            if __dups.get((__base_offset + #offset_expr) as u8) {
-                return Err(anchor_lang_v2::ErrorCode::ConstraintDuplicateMutableAccount.into());
-            }
-        })
-    } else {
-        None
-    };
-
     // For `Option<T>` fields, each constraint body was generated against the
     // unwrapped inner — we wrap it in `if let Some(#field_name) = #field_name`
     // so `#field_name.account()`, `#field_name.authority`, etc. resolve on the
@@ -2434,7 +2420,6 @@ pub fn parse_field(
         load,
         deferred_load,
         constraints,
-        dup_check,
         exit,
         has_bump,
         is_optional,
