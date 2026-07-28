@@ -141,3 +141,7 @@ required-features = ["testing"]
 [[test]]
 name = "to_cpi_accounts_derive"
 required-features = ["testing"]
+
+[[test]]
+name = "address_idl_surface"
+required-features = ["testing"]

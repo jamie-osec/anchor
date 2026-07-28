@@ -692,14 +692,20 @@ pub struct AccountField {
     /// build the inverse mapping (matches v1's `get_relations`).
     pub idl_has_one: Vec<String>,
     /// Stringified RHS of `#[account(address = <expr>)]`. Emitted verbatim
-    /// as the `address` key of this field in the accounts JSON. `None` when
-    /// the attr is absent *or* when the RHS was v1-encodable (see
-    /// `idl_address_v1_source`) — in that case the constraint is surfaced
-    /// through `relations` instead, matching v1's IDL shape. Wrapper types
-    /// that carry a compile-time address via `IdlAccountType::__IDL_ADDRESS`
-    /// still emit the trait value when this override is `None`
-    /// (fields like `Program<System>`).
+    /// as the `address` key of this field in the accounts JSON for
+    /// client-resolved dotted paths like `data.authority`. `None` when the
+    /// attr is absent, when the RHS was v1-encodable (see
+    /// `idl_address_v1_source`), or when the RHS is resolved from a static
+    /// expression at IDL-build time (see `idl_address_expr`) — in those cases
+    /// the constraint is surfaced through `relations` / runtime evaluation
+    /// instead. Wrapper types that carry a compile-time address via
+    /// `IdlAccountType::__IDL_ADDRESS` still emit the trait value when both
+    /// overrides are `None` (fields like `Program<System>`).
     pub idl_address: Option<String>,
+    /// Runtime-resolved static `#[account(address = <expr>)]` override.
+    /// Holds constant paths / const-fn calls that can be evaluated inside the
+    /// generated `__idl_accounts()` function and rendered as base58.
+    pub idl_address_expr: Option<TokenStream2>,
     /// Set when `#[account(address = <sibling>.<self_name>)]` was used,
     /// i.e. the same relationship `#[has_one = <self_name>]` on `<sibling>`
     /// would have expressed. The outer derive turns this into an inverse
@@ -731,15 +737,109 @@ pub struct FieldSummary {
     pub attrs: AccountAttrs,
 }
 
-/// Turn the RHS of `#[account(address = <expr>)]` into the string form the
-/// IDL emits. Whitespace from `quote!`'s token reassembly is stripped so
-/// `crate :: ID` → `crate::ID`, `data . authority` → `data.authority`, and
-/// `crate :: id ()` → `crate::id()` — matching what a user would hand-write
-/// and what downstream tooling (the Anchor CLI resolver, TS client path
-/// walkers) expect to parse.
-fn stringify_address_expr(expr: &Expr) -> String {
-    let s = quote!(#expr).to_string();
-    s.split_whitespace().collect()
+fn is_static_idl_address_path(
+    path: &syn::ExprPath,
+    field_names: &[String],
+    ix_arg_names: &[String],
+) -> bool {
+    if path.qself.is_some() {
+        return false;
+    }
+    if path.path.leading_colon.is_some() || path.path.segments.len() != 1 {
+        return true;
+    }
+    let seg = &path.path.segments[0];
+    if !seg.arguments.is_empty() {
+        return false;
+    }
+    let ident = seg.ident.to_string();
+    !field_names.contains(&ident) && !ix_arg_names.contains(&ident)
+}
+
+fn static_idl_address_expr(
+    expr: &Expr,
+    field_names: &[String],
+    ix_arg_names: &[String],
+) -> Option<TokenStream2> {
+    match expr {
+        Expr::Group(group) => static_idl_address_expr(&group.expr, field_names, ix_arg_names),
+        Expr::Paren(paren) => static_idl_address_expr(&paren.expr, field_names, ix_arg_names),
+        Expr::Path(path) if is_static_idl_address_path(path, field_names, ix_arg_names) => {
+            Some(quote! { #expr })
+        }
+        Expr::Call(call) if call.args.is_empty() => match &*call.func {
+            Expr::Path(path) if is_static_idl_address_path(path, field_names, ix_arg_names) => {
+                Some(quote! { #expr })
+            }
+            Expr::Group(group) => {
+                let grouped = static_idl_address_expr(&group.expr, field_names, ix_arg_names)?;
+                Some(grouped)
+            }
+            Expr::Paren(paren) => {
+                let grouped = static_idl_address_expr(&paren.expr, field_names, ix_arg_names)?;
+                Some(grouped)
+            }
+            _ => None,
+        },
+        Expr::Macro(_) => Some(quote! { #expr }),
+        _ => None,
+    }
+}
+
+fn dotted_address_hint(
+    expr: &Expr,
+    field_names: &[String],
+    ix_arg_names: &[String],
+) -> Option<String> {
+    fn walk(
+        expr: &Expr,
+        field_names: &[String],
+        ix_arg_names: &[String],
+        suffix: &mut Vec<String>,
+    ) -> bool {
+        match expr {
+            Expr::Field(field) => {
+                let member = match &field.member {
+                    syn::Member::Named(ident) => ident.to_string(),
+                    syn::Member::Unnamed(_) => return false,
+                };
+                if !walk(&field.base, field_names, ix_arg_names, suffix) {
+                    return false;
+                }
+                suffix.push(member);
+                true
+            }
+            Expr::Path(path) => {
+                if path.qself.is_some()
+                    || path.path.leading_colon.is_some()
+                    || path.path.segments.len() != 1
+                {
+                    return false;
+                }
+                let seg = &path.path.segments[0];
+                if !seg.arguments.is_empty() {
+                    return false;
+                }
+                let ident = seg.ident.to_string();
+                if field_names.contains(&ident) || ix_arg_names.contains(&ident) {
+                    suffix.push(ident);
+                    true
+                } else {
+                    false
+                }
+            }
+            Expr::Group(group) => walk(&group.expr, field_names, ix_arg_names, suffix),
+            Expr::Paren(paren) => walk(&paren.expr, field_names, ix_arg_names, suffix),
+            _ => false,
+        }
+    }
+
+    let mut segments = Vec::new();
+    if walk(expr, field_names, ix_arg_names, &mut segments) && segments.len() >= 2 {
+        Some(segments.join("."))
+    } else {
+        None
+    }
 }
 
 /// If `expr` is the v1-encodable shape `<sibling>.<field>` where both:
@@ -1371,19 +1471,28 @@ pub fn parse_field(
     //     already speaks v1 output sees the same shape for both spellings.
     //     `idl_address` stays `None` to avoid double-encoding the same
     //     check.
-    //   * Anything else — constant path, const-fn call, or a field access
-    //     whose subfield doesn't match self's ident. Emit verbatim under
-    //     the `address` key; the Anchor CLI resolves constants to base58
-    //     pubkeys at IDL-build time, and dotted paths flow through as
-    //     client-side resolution hints.
-    let (idl_address, idl_address_v1_source) = match attrs.address.as_ref() {
+    //   * Constant path / const-fn call / address! macro — evaluate at
+    //     IDL-build time and emit the resolved base58 address.
+    //   * Other dotted field paths — keep as client-side resolution hints.
+    //   * Anything else — omit from the IDL rather than emitting raw Rust
+    //     source that clients cannot resolve faithfully.
+    let (idl_address, idl_address_expr, idl_address_v1_source) = match attrs.address.as_ref() {
         Some(addr) => {
             match address_v1_relation_source(addr, &field_name.to_string(), field_names) {
-                Some(sibling) => (None, Some(sibling)),
-                None => (Some(stringify_address_expr(addr)), None),
+                Some(sibling) => (None, None, Some(sibling)),
+                None => {
+                    if let Some(expr) = static_idl_address_expr(addr, field_names, ix_arg_names) {
+                        (None, Some(expr), None)
+                    } else if let Some(hint) = dotted_address_hint(addr, field_names, ix_arg_names)
+                    {
+                        (Some(hint), None, None)
+                    } else {
+                        (None, None, None)
+                    }
+                }
             }
         }
-        None => (None, None),
+        None => (None, None, None),
     };
     let idl_docs = crate::idl::extract_doc_lines(&field.attrs);
     let idl_pda = attrs.seeds.as_ref().map(|seeds_expr| {
@@ -1488,6 +1597,7 @@ pub fn parse_field(
             idl_init_signer: false,
             idl_has_one: vec![],
             idl_address: None,
+            idl_address_expr: None,
             idl_address_v1_source: None,
             idl_docs: vec![],
             idl_pda: None,
@@ -2336,6 +2446,7 @@ pub fn parse_field(
         idl_init_signer,
         idl_has_one,
         idl_address,
+        idl_address_expr,
         idl_address_v1_source,
         idl_docs,
         idl_pda,
@@ -2521,5 +2632,47 @@ mod tests {
                 .contains("unknown account constraint `bumpp`"),
             "unexpected error: {err}"
         );
+    }
+
+    #[test]
+    fn address_constraint_static_paths_resolve_at_idl_build_time() {
+        use syn::parse::Parser;
+
+        let field: syn::Field = syn::Field::parse_named
+            .parse2(quote::quote! {
+                #[account(address = EXPECTED_PROGRAM)]
+                pub program: UncheckedAccount
+            })
+            .unwrap();
+        let parsed = parse_field(&field, &[], &[], quote::quote!(0usize), &[], &[]).unwrap();
+
+        assert!(parsed.idl_address.is_none());
+        assert!(parsed.idl_address_expr.is_some());
+        assert!(parsed.idl_address_v1_source.is_none());
+    }
+
+    #[test]
+    fn address_constraint_dotted_paths_remain_client_hints() {
+        use syn::parse::Parser;
+
+        let field: syn::Field = syn::Field::parse_named
+            .parse2(quote::quote! {
+                #[account(address = data.expected_program)]
+                pub program: UncheckedAccount
+            })
+            .unwrap();
+        let parsed = parse_field(
+            &field,
+            &["data".into(), "program".into()],
+            &[],
+            quote::quote!(0usize),
+            &[],
+            &[],
+        )
+        .unwrap();
+
+        assert_eq!(parsed.idl_address.as_deref(), Some("data.expected_program"));
+        assert!(parsed.idl_address_expr.is_none());
+        assert!(parsed.idl_address_v1_source.is_none());
     }
 }

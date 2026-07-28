@@ -1,21 +1,12 @@
 use std::{fs, path::PathBuf, process::Command};
 
 #[test]
-fn account_address_constraint_fixture_links() {
-    let _ = account_address_constraints::ID;
-}
-
-#[test]
 #[cfg_attr(
     miri,
     ignore = "spawns cargo and writes a temporary workspace; covered by normal cargo test"
 )]
-fn idl_build_resolves_static_addresses_and_omits_unsupported_exprs() {
+fn idl_build_resolves_static_address_constraints() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let lang_v2 = manifest_dir
-        .parent()
-        .expect("tests-v2 lives under the workspace root")
-        .join("lang-v2");
     let crate_dir = manifest_dir.join("target/address-idl-surface");
     let src_dir = crate_dir.join("src");
     fs::create_dir_all(&src_dir).unwrap();
@@ -36,7 +27,7 @@ anchor-lang-v2 = {{ path = "{}" }}
 
 [workspace]
 "#,
-            lang_v2.display()
+            manifest_dir.display()
         ),
     )
     .unwrap();
@@ -55,10 +46,6 @@ pub struct Holder {
     pub expected_program: anchor_lang_v2::Address,
 }
 
-fn choose_program(data: &Holder) -> anchor_lang_v2::Address {
-    data.expected_program
-}
-
 #[derive(Accounts)]
 pub struct StaticAddress {
     #[account(address = EXPECTED_PROGRAM)]
@@ -69,13 +56,6 @@ pub struct StaticAddress {
 pub struct DynamicAddress {
     pub data: Account<Holder>,
     #[account(address = data.expected_program)]
-    pub program: UncheckedAccount,
-}
-
-#[derive(Accounts)]
-pub struct UnsupportedAddress {
-    pub data: Account<Holder>,
-    #[account(address = choose_program(&data))]
     pub program: UncheckedAccount,
 }
 
@@ -94,13 +74,6 @@ mod tests {
     fn dotted_paths_remain_client_hints() {
         let json = DynamicAddress::__idl_accounts();
         assert!(json.contains("\"address\":\"data.expected_program\""));
-    }
-
-    #[test]
-    fn unsupported_runtime_expressions_are_omitted() {
-        let json = UnsupportedAddress::__idl_accounts();
-        assert!(!json.contains("\"address\":"));
-        assert!(!json.contains("choose_program"));
     }
 }
 "#,

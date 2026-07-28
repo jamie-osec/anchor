@@ -169,10 +169,12 @@ pub struct AccountsJsonField<'a> {
     pub field_ty: &'a Option<Type>,
     /// Stringified RHS of `#[account(address = <expr>)]`. When `Some`,
     /// takes precedence over `IdlAccountType::__IDL_ADDRESS` at emission.
-    /// Holds either a resolvable constant path / const-fn call (which the
-    /// Anchor CLI can turn into a base58 pubkey) or a dotted field path
-    /// like `data.authority` that clients walk at resolution time.
+    /// Holds only dotted field paths like `data.authority` that clients walk
+    /// at resolution time.
     pub address_override: Option<&'a str>,
+    /// Runtime-resolved static address expression. Evaluated inside
+    /// `__idl_accounts()` and rendered as base58.
+    pub address_override_expr: Option<&'a TokenStream2>,
     /// Set when this field is a `Nested<Inner>`, carrying the inner
     /// struct type. The emission splices the inner struct's own
     /// `__idl_accounts()` into the outer array instead of producing a
@@ -255,17 +257,23 @@ pub fn build_accounts_emission(fields: &[AccountsJsonField<'_>]) -> TokenStream2
                         anchor_lang_v2::__alloc::string::String::new();
                 },
             };
-            // `#[account(address = <expr>)]` override, pre-formatted as a
-            // JSON fragment. When set, takes precedence over the wrapper
-            // type's `__IDL_ADDRESS` — emitted at macro time so no runtime
-            // branch is needed to pick one.
+            // `#[account(address = <expr>)]` override. Static address
+            // expressions are evaluated at IDL-build time; dotted field
+            // paths stay as pre-formatted client-side hints.
             let address_override_json = f
                 .address_override
                 .map(|s| format!(",\"address\":\"{s}\""))
                 .unwrap_or_default();
             let init_signer = f.init_signer;
             if let Some(ty) = f.field_ty {
-                let addr_json_expr = if f.address_override.is_some() {
+                let addr_json_expr = if let Some(address_expr) = f.address_override_expr {
+                    quote! {
+                        let __addr: anchor_lang_v2::Address =
+                            ::core::convert::Into::into(#address_expr);
+                        let __addr_json: anchor_lang_v2::__alloc::string::String =
+                            anchor_lang_v2::__alloc::format!(",\"address\":\"{}\"", __addr);
+                    }
+                } else if f.address_override.is_some() {
                     quote! {
                         let __addr_json: anchor_lang_v2::__alloc::string::String =
                             anchor_lang_v2::__alloc::string::String::from(#address_override_json);

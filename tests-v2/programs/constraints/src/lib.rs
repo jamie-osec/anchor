@@ -526,7 +526,8 @@ mod idl_tests {
             let items = parse(&CheckAddress::__idl_accounts());
             let account = single(&items, 0);
             assert_eq!(account.name, "pinned");
-            assert_eq!(account.address.as_deref(), Some("PINNED_ADDRESS"));
+            let expected = PINNED_ADDRESS.to_string();
+            assert_eq!(account.address.as_deref(), Some(expected.as_str()));
         }
 
         #[test]
@@ -537,7 +538,8 @@ mod idl_tests {
             let items = parse(&CheckAddressCustomErr::__idl_accounts());
             let account = single(&items, 0);
             assert_eq!(account.name, "pinned");
-            assert_eq!(account.address.as_deref(), Some("PINNED_ADDRESS"));
+            let expected = PINNED_ADDRESS.to_string();
+            assert_eq!(account.address.as_deref(), Some(expected.as_str()));
         }
 
         #[test]
