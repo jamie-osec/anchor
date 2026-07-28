@@ -17,6 +17,9 @@ use {
 };
 
 const PDA_MARKER: &[u8; 21] = b"ProgramDerivedAddress";
+const MAX_PDA_SEEDS_TOTAL: usize = solana_address::MAX_SEEDS;
+const MAX_PDA_SEED_LEN: usize =  solana_address::MAX_SEED_LEN;
+const MAX_PDA_SEEDS_WITHOUT_BUMP: usize = MAX_PDA_SEEDS_TOTAL - 1;
 
 thread_local! {
     /// `None`   = not yet attempted.
@@ -145,6 +148,12 @@ pub(crate) fn seeds_as_byte_literals(seeds: &[&syn::Expr]) -> Option<Vec<Vec<u8>
 pub(crate) fn precompute_pda(seeds: &[&[u8]], program_id: &[u8; 32]) -> Option<(u8, [u8; 32])> {
     use curve25519_dalek::edwards::CompressedEdwardsY;
 
+    if seeds.len() > MAX_PDA_SEEDS_WITHOUT_BUMP
+        || seeds.iter().any(|seed| seed.len() > MAX_PDA_SEED_LEN)
+    {
+        return None;
+    }
+
     let mut bump: i32 = u8::MAX as i32;
     while bump >= 0 {
         let mut hasher = Sha256::new();
@@ -221,5 +230,27 @@ mod tests {
         ];
         let refs: Vec<&syn::Expr> = seeds.iter().collect();
         assert!(seeds_as_byte_literals(&refs).is_none());
+    }
+
+    #[test]
+    fn precompute_pda_rejects_more_than_fifteen_user_seeds() {
+        let program_id = [3u8; 32];
+        let seeds = vec![b"x".as_ref(); MAX_PDA_SEEDS_TOTAL];
+
+        assert!(
+            precompute_pda(&seeds, &program_id).is_none(),
+            "precompute_pda must mirror runtime finder limits and reserve one slot for the bump"
+        );
+    }
+
+    #[test]
+    fn precompute_pda_rejects_seed_longer_than_thirty_two_bytes() {
+        let program_id = [4u8; 32];
+        let long_seed = [7u8; MAX_PDA_SEED_LEN + 1];
+
+        assert!(
+            precompute_pda(&[&long_seed], &program_id).is_none(),
+            "precompute_pda must reject literal seeds that runtime PDA derivation would reject"
+        );
     }
 }
