@@ -33,7 +33,7 @@ impl<T: Id> AnchorAccount for Program<T> {
     #[inline(always)]
     fn load(view: AccountView) -> Result<Self, ProgramError> {
         #[cfg(feature = "guardrails")]
-        require!(view.executable(), ProgramError::InvalidAccountData);
+        require!(view.executable(), ConstraintExecutable);
         let id = T::id();
         require!(
             crate::address_eq(view.address(), &id),

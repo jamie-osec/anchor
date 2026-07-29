@@ -336,9 +336,9 @@ impl From<ErrorCode> for solana_program_error::ProgramError {
                 solana_program_error::ProgramError::MissingRequiredSignature
             }
             ErrorCode::ConstraintSeeds => solana_program_error::ProgramError::InvalidSeeds,
-            ErrorCode::ConstraintHasOne => solana_program_error::ProgramError::InvalidAccountData,
-            ErrorCode::ConstraintAddress => solana_program_error::ProgramError::InvalidAccountData,
-            ErrorCode::ConstraintClose => solana_program_error::ProgramError::InvalidAccountData,
+            ErrorCode::ConstraintHasOne => solana_program_error::ProgramError::Custom(2001),
+            ErrorCode::ConstraintAddress => solana_program_error::ProgramError::Custom(2012),
+            ErrorCode::ConstraintClose => solana_program_error::ProgramError::Custom(2011),
             ErrorCode::ConstraintOwner => solana_program_error::ProgramError::IllegalOwner,
             ErrorCode::ConstraintRaw => solana_program_error::ProgramError::Custom(2003),
             ErrorCode::ConstraintExecutable => solana_program_error::ProgramError::Custom(2007),
@@ -354,8 +354,8 @@ impl From<ErrorCode> for solana_program_error::ProgramError {
             }
             ErrorCode::RequireViolated => solana_program_error::ProgramError::Custom(2500),
             ErrorCode::RequireEqViolated => solana_program_error::ProgramError::Custom(2501),
-            ErrorCode::RequireNeqViolated => solana_program_error::ProgramError::Custom(2502),
-            ErrorCode::RequireKeysEqViolated => solana_program_error::ProgramError::Custom(2503),
+            ErrorCode::RequireKeysEqViolated => solana_program_error::ProgramError::Custom(2502),
+            ErrorCode::RequireNeqViolated => solana_program_error::ProgramError::Custom(2503),
             ErrorCode::RequireKeysNeqViolated => solana_program_error::ProgramError::Custom(2504),
             ErrorCode::RequireGtViolated => solana_program_error::ProgramError::Custom(2505),
             ErrorCode::RequireGteViolated => solana_program_error::ProgramError::Custom(2506),

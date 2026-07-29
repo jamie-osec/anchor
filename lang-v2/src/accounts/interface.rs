@@ -25,7 +25,7 @@ impl<T: Ids> AnchorAccount for Interface<'_, T> {
     #[inline(always)]
     fn load(view: AccountView) -> Result<Self, ProgramError> {
         #[cfg(feature = "guardrails")]
-        require!(view.executable(), ProgramError::InvalidAccountData);
+        require!(view.executable(), ConstraintExecutable);
         require!(
             T::ids()
                 .iter()

@@ -16,13 +16,13 @@
 use {
     anchor_lang_v2::{
         accounts::{
-            Account, BorshAccount, Program, Signer, SlabSchema, SystemAccount, Sysvar,
+            Account, BorshAccount, Interface, Program, Signer, SlabSchema, SystemAccount, Sysvar,
             UncheckedAccount,
         },
         programs::{System, Token},
         testing::AccountBuffer,
         wincode::{SchemaRead, SchemaWrite},
-        Accounts, AnchorAccount, Discriminator, ErrorCode, Owner, TryAccounts,
+        Accounts, AnchorAccount, Discriminator, ErrorCode, Ids, Owner, TryAccounts,
     },
     bytemuck::{Pod, Zeroable},
     pinocchio::address::Address,
@@ -31,6 +31,15 @@ use {
 
 const PROGRAM_ID: [u8; 32] = [0x42; 32];
 const SYSTEM_PROGRAM_ID: [u8; 32] = [0u8; 32];
+
+struct TestInterface;
+
+impl Ids for TestInterface {
+    fn ids() -> &'static [Address] {
+        static IDS: [Address; 1] = [Address::new_from_array(SYSTEM_PROGRAM_ID)];
+        &IDS
+    }
+}
 
 #[derive(SchemaRead, SchemaWrite, Default)]
 struct Counter {
@@ -365,7 +374,7 @@ fn program_load_rejects_non_executable_under_guardrails() {
     );
     let view = unsafe { buf.view() };
     let err = expect_err(Program::<System>::load(view));
-    assert_eq!(err, ProgramError::InvalidAccountData);
+    assert_eq!(err, ErrorCode::ConstraintExecutable.into());
 }
 
 #[test]
@@ -378,6 +387,18 @@ fn program_load_token_wrong_address_rejects() {
     let view = unsafe { buf.view() };
     let err = expect_err(Program::<Token>::load(view));
     assert_eq!(err, ProgramError::IncorrectProgramId);
+}
+
+#[cfg(feature = "guardrails")]
+#[test]
+fn interface_load_rejects_non_executable_under_guardrails() {
+    let mut buf = AccountBuffer::<128>::new();
+    buf.init(
+        [0u8; 32], [0u8; 32], 0, false, false, /*executable*/ false,
+    );
+    let view = unsafe { buf.view() };
+    let err = expect_err(Interface::<TestInterface>::load(view));
+    assert_eq!(err, ErrorCode::ConstraintExecutable.into());
 }
 
 // -- Sysvar<T> ----------------------------------------------------------
@@ -472,7 +493,7 @@ fn account_load_mut_rejects_non_writable() {
     setup_pod_counter_buf(&mut buf, PROGRAM_ID, false, 17);
     let view = unsafe { buf.view() };
     let err = expect_err(unsafe { Account::<PodCounter>::load_mut(view) });
-    assert_eq!(err, ProgramError::InvalidAccountData);
+    assert_eq!(err, ErrorCode::ConstraintMut.into());
 }
 
 #[test]
@@ -506,7 +527,7 @@ fn borsh_account_load_mut_rejects_non_writable() {
     setup_borsh_counter_buf(&mut buf, PROGRAM_ID, false, 9);
     let view = unsafe { buf.view() };
     let err = expect_err(unsafe { BorshAccount::<Counter>::load_mut(view) });
-    assert_eq!(err, ProgramError::InvalidAccountData);
+    assert_eq!(err, ErrorCode::ConstraintMut.into());
 }
 
 #[test]

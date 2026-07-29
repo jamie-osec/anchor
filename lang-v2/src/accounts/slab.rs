@@ -32,7 +32,7 @@ pub(super) fn cold_owner_error(view: &AccountView) -> ProgramError {
 #[cfg(feature = "guardrails")]
 #[inline(always)]
 pub(super) fn cold_not_writable() -> ProgramError {
-    ProgramError::InvalidAccountData
+    crate::ErrorCode::ConstraintMut.into()
 }
 
 /// Capacity from live `data_len` / `items_offset` / `item_size`. Returns 0
