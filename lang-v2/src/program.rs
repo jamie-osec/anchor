@@ -38,7 +38,7 @@ pub fn invoke_signed<'a, 'seeds>(
     account_handles: &[CpiHandle<'a>],
     signer_seeds: &'seeds [&'seeds [&'seeds [u8]]],
 ) -> ProgramResult {
-    validate_handles(instruction, account_handles)?;
+    validate_handles(instruction, account_handles, signer_seeds.is_empty())?;
     validate_handle_borrows(instruction, account_handles)?;
 
     // SAFETY: Validation above proves every non-sentinel instruction account
@@ -106,6 +106,7 @@ pub unsafe fn invoke_signed_unchecked<'a, 'seeds>(
 pub(crate) fn validate_handles(
     instruction: &Instruction,
     account_handles: &[CpiHandle<'_>],
+    enforce_signers: bool,
 ) -> ProgramResult {
     let mut handle_index = 0;
 
@@ -124,6 +125,9 @@ pub(crate) fn validate_handles(
 
         if meta.is_writable {
             require!(handle.is_writable(), ProgramError::InvalidArgument);
+        }
+        if enforce_signers && meta.is_signer {
+            require!(handle.is_signer(), ProgramError::MissingRequiredSignature);
         }
 
         handle_index += 1;

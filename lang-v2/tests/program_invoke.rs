@@ -45,6 +45,20 @@ fn instruction(account: Address, writable: bool) -> Instruction {
     }
 }
 
+fn signer_instruction(account: Address, writable: bool) -> Instruction {
+    let meta = if writable {
+        AccountMeta::new(account, true)
+    } else {
+        AccountMeta::new_readonly(account, true)
+    };
+
+    Instruction {
+        program_id: ID,
+        accounts: vec![meta],
+        data: vec![9, 9, 9],
+    }
+}
+
 #[test]
 fn checked_invoke_accepts_matching_handles() {
     let buffer = account_view([1; 32], true);
@@ -121,6 +135,28 @@ fn checked_invoke_rejects_readonly_handle_for_writable_meta() {
 }
 
 #[test]
+fn checked_invoke_rejects_nonsigner_handle_for_signer_meta() {
+    let buffer = account_view([1; 32], false);
+    let view = unsafe { buffer.view() };
+    let ix = signer_instruction(*view.address(), false);
+    let handles = [CpiHandle::readonly(&view)];
+
+    let err = program::invoke(&ix, &handles).unwrap_err();
+
+    assert_eq!(err, ProgramError::MissingRequiredSignature);
+}
+
+#[test]
+fn checked_invoke_signed_allows_signer_meta_without_tx_signer_when_seeds_are_supplied() {
+    let buffer = account_view([1; 32], false);
+    let view = unsafe { buffer.view() };
+    let ix = signer_instruction(*view.address(), false);
+    let handles = [CpiHandle::readonly(&view)];
+
+    program::invoke_signed(&ix, &handles, &[&[b"pda", &[7]]]).unwrap();
+}
+
+#[test]
 fn invoke_ix_rejects_readonly_handle_for_writable_meta() {
     let program = ID;
     let buffer = account_view([1; 32], true);
@@ -139,6 +175,38 @@ fn invoke_ix_rejects_readonly_handle_for_writable_meta() {
         .unwrap_err();
 
     assert_eq!(err, ProgramError::InvalidArgument);
+}
+
+#[test]
+fn invoke_ix_rejects_nonsigner_handle_for_signer_meta_without_seeds() {
+    let program = ID;
+    let buffer = account_view([1; 32], false);
+    let view = unsafe { buffer.view() };
+    let accounts = ReadonlyCpi {
+        account: view.to_cpi_handle(),
+    };
+    let ix = signer_instruction(*view.address(), false);
+
+    let err = CpiContext::new(&program, accounts)
+        .invoke_ix(ix)
+        .unwrap_err();
+
+    assert_eq!(err, ProgramError::MissingRequiredSignature);
+}
+
+#[test]
+fn invoke_ix_allows_signer_meta_without_tx_signer_when_seeds_are_supplied() {
+    let program = ID;
+    let buffer = account_view([1; 32], false);
+    let view = unsafe { buffer.view() };
+    let accounts = ReadonlyCpi {
+        account: view.to_cpi_handle(),
+    };
+    let ix = signer_instruction(*view.address(), false);
+
+    CpiContext::new_with_signer(&program, accounts, &[&[b"pda", &[7]]])
+        .invoke_ix(ix)
+        .unwrap();
 }
 
 #[test]

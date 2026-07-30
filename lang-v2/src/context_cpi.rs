@@ -154,7 +154,7 @@ impl<'a, T: ToCpiAccounts<'a>> CpiContext<'a, T> {
 
         let mut handles = self.accounts.to_cpi_handles();
         handles.extend(self.remaining_accounts.iter().copied());
-        crate::program::validate_handles(&ix, &handles)?;
+        crate::program::validate_handles(&ix, &handles, self.signer_seeds.is_empty())?;
 
         // SAFETY: `CpiContext` already ties every handle to a Rust borrow of
         // the caller's typed account. The account metas have been validated
