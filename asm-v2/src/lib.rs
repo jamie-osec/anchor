@@ -79,7 +79,9 @@ macro_rules! include_asm {
 /// and writes the concatenated result to `$OUT_DIR/combined.s`.
 ///
 /// If `src/lib.rs` contains `#[repr(C)]` or `#[account]` structs,
-/// `.equ` constants for field offsets are prepended automatically.
+/// `.equ` constants for field offsets are prepended automatically. Any Rust
+/// modules parsed while generating that preamble are also registered as
+/// `cargo:rerun-if-changed` inputs.
 pub fn build(asm_dir: &str) {
     let manifest_dir = PathBuf::from(
         std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set"),
@@ -90,11 +92,7 @@ pub fn build(asm_dir: &str) {
     let asm_path = manifest_dir.join(asm_dir);
     let lib_rs = manifest_dir.join("src").join("lib.rs");
 
-    let preamble = if lib_rs.exists() {
-        preamble::generate(&lib_rs)
-    } else {
-        String::new()
-    };
+    let (preamble, preamble_files) = preamble_for_build(&lib_rs);
 
     let combined = collect_asm(&asm_path);
 
@@ -107,8 +105,8 @@ pub fn build(asm_dir: &str) {
     std::fs::write(out_dir.join("combined.s"), output).expect("write combined.s");
 
     println!("cargo:rerun-if-changed={asm_dir}");
-    if lib_rs.exists() {
-        println!("cargo:rerun-if-changed=src/lib.rs");
+    for path in preamble_files {
+        println!("cargo:rerun-if-changed={}", path.display());
     }
 }
 
@@ -125,6 +123,14 @@ pub fn build_to(asm_dir: &Path, output_path: &Path) {
 // ---------------------------------------------------------------------------
 
 mod preamble;
+
+fn preamble_for_build(lib_rs: &Path) -> (String, Vec<PathBuf>) {
+    if lib_rs.exists() {
+        preamble::generate_tracked(lib_rs)
+    } else {
+        (String::new(), Vec::new())
+    }
+}
 
 fn collect_asm(dir: &Path) -> String {
     let mut files: Vec<PathBuf> = Vec::new();
@@ -215,5 +221,63 @@ fn walk_dir(dir: &Path, out: &mut Vec<PathBuf>) {
         } else if path.extension().and_then(|e| e.to_str()) == Some("s") {
             out.push(path);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_test_dir(name: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir =
+            std::env::temp_dir().join(format!("anchor-asm-v2-lib-{name}-{}-{unique}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn test_preamble_for_build_tracks_nested_module_files() {
+        let dir = temp_test_dir("tracked-preamble");
+        let src_dir = dir.join("src");
+        std::fs::create_dir_all(&src_dir).unwrap();
+
+        let lib_rs = src_dir.join("lib.rs");
+        let state_rs = src_dir.join("state.rs");
+        let custom_rs = src_dir.join("custom.rs");
+
+        std::fs::write(&lib_rs, "mod state;\n").unwrap();
+        std::fs::write(
+            &state_rs,
+            r#"
+            #[path = "custom.rs"]
+            mod child;
+            "#,
+        )
+        .unwrap();
+        std::fs::write(
+            &custom_rs,
+            r#"
+            #[repr(C)]
+            pub struct BuildTracked {
+                pub value: u64,
+            }
+            "#,
+        )
+        .unwrap();
+
+        let (preamble, tracked_files) = preamble_for_build(&lib_rs);
+        assert!(preamble.contains(".equ BuildTracked__value, 0"));
+
+        let canon = |path: &Path| std::fs::canonicalize(path).unwrap();
+        assert!(tracked_files.contains(&canon(&lib_rs)));
+        assert!(tracked_files.contains(&canon(&state_rs)));
+        assert!(tracked_files.contains(&canon(&custom_rs)));
+
+        std::fs::remove_dir_all(dir).ok();
     }
 }
