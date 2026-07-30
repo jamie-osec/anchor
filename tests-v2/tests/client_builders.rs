@@ -1,5 +1,5 @@
 use {
-    anchor_lang_v2::{InstructionData, ToAccountMetas},
+    anchor_lang_v2::{Discriminator, InstructionData, ToAccountMetas},
     client_builders::{accounts, instruction},
     litesvm::{types::TransactionResult, LiteSVM},
     solana_keypair::Keypair,
@@ -65,6 +65,44 @@ fn external_pda() -> Pubkey {
     Pubkey::find_program_address(&[b"external"], &other_program()).0
 }
 
+fn dynamic_program_pda(program: &Pubkey) -> Pubkey {
+    Pubkey::find_program_address(&[b"other"], program).0
+}
+
+fn macro_program_pda(program: &Pubkey) -> Pubkey {
+    Pubkey::find_program_address(&[b"macro"], program).0
+}
+
+fn set_program_owned_account(svm: &mut LiteSVM, pubkey: Pubkey, data: Vec<u8>) {
+    let account = solana_account::Account {
+        lamports: 1_000_000,
+        data,
+        owner: program_id(),
+        executable: false,
+        rent_epoch: 0,
+    };
+    svm.set_account(pubkey, account).expect("set account");
+}
+
+fn config_account_data(program: &Pubkey) -> Vec<u8> {
+    let mut data = vec![0u8; 40];
+    data[..8].copy_from_slice(<client_builders::Config as Discriminator>::DISCRIMINATOR);
+    data[8..40].copy_from_slice(program.as_ref());
+    data
+}
+
+fn dynamic_program_pda_data() -> Vec<u8> {
+    let mut data = vec![0u8; 16];
+    data[..8].copy_from_slice(<client_builders::DynamicProgramPda as Discriminator>::DISCRIMINATOR);
+    data
+}
+
+fn macro_program_pda_data() -> Vec<u8> {
+    let mut data = vec![0u8; 16];
+    data[..8].copy_from_slice(<client_builders::MacroProgramPda as Discriminator>::DISCRIMINATOR);
+    data
+}
+
 #[test]
 fn resolved_builder_derives_pda_program_id_and_sends_instruction() {
     let (mut svm, payer, authority) = setup();
@@ -109,6 +147,52 @@ fn seeds_program_override_drives_client_pda_derivation() {
     assert_eq!(ix.accounts[0].pubkey, external_pda);
 
     send_ix(&mut svm, ix, &payer, &[]).expect("external PDA derived with seeds::program");
+}
+
+#[test]
+fn seeds_program_from_account_data_uses_manual_client_account() {
+    let (mut svm, payer, _) = setup();
+    let config = Pubkey::new_unique();
+    let program = other_program();
+    let dynamic_pda = dynamic_program_pda(&program);
+
+    set_program_owned_account(&mut svm, config, config_account_data(&program));
+    set_program_owned_account(&mut svm, dynamic_pda, dynamic_program_pda_data());
+
+    // The client-side resolved builder cannot derive this PDA because the
+    // seeds::program value lives in config ACCOUNT DATA rather than in an
+    // address-only sibling account input.
+    let ix =
+        instruction::CheckDynamicProgramPda {}.to_instruction(accounts::CheckDynamicProgramPda {
+            config,
+            dynamic_pda,
+        });
+
+    assert_eq!(ix.accounts[0].pubkey, config);
+    assert_eq!(ix.accounts[1].pubkey, dynamic_pda);
+    send_ix(&mut svm, ix, &payer, &[]).expect("dynamic seeds::program should validate");
+}
+
+#[test]
+fn macro_wrapped_seeds_program_from_account_data_uses_manual_client_account() {
+    let (mut svm, payer, _) = setup();
+    let config = Pubkey::new_unique();
+    let program = other_program();
+    let macro_pda = macro_program_pda(&program);
+
+    set_program_owned_account(&mut svm, config, config_account_data(&program));
+    set_program_owned_account(&mut svm, macro_pda, macro_program_pda_data());
+
+    // The proc macro cannot see through nested macros in `seeds::program`, so
+    // helper generation must conservatively fall back to the manual accounts
+    // struct instead of trying to auto-derive from address-only sibling inputs.
+    let ix = instruction::CheckMacroProgramPda {}
+        .to_instruction(accounts::CheckMacroProgramPda { config, macro_pda });
+
+    assert_eq!(ix.accounts[0].pubkey, config);
+    assert_eq!(ix.accounts[1].pubkey, macro_pda);
+    send_ix(&mut svm, ix, &payer, &[])
+        .expect("macro-wrapped dynamic seeds::program should validate");
 }
 
 #[test]

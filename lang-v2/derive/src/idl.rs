@@ -17,7 +17,7 @@ use {
     proc_macro2::TokenStream as TokenStream2,
     quote::quote,
     serde_json::{json, Value},
-    syn::{Expr, Lit, Type},
+    syn::{visit::Visit, Expr, Lit, Type},
 };
 
 /// Convert a Rust type to its IDL JSON representation (as a `serde_json`
@@ -657,11 +657,80 @@ pub fn classify_program_seed(
 ) -> SeedJson {
     let seed = classify_seed_inner(expr, field_names, ix_arg_names);
     match seed {
-        SeedJson::Static(ref s) if s == r#"{"kind":"expr"}"# => SeedJson::Runtime(quote! {
-            anchor_lang_v2::idl_build::__idl_const_seed_json(#expr)
-        }),
+        SeedJson::Static(ref s) if s == r#"{"kind":"expr"}"# => {
+            if expr_contains_macro(expr)
+                || expr_references_local_binding(expr, field_names, ix_arg_names)
+            {
+                seed
+            } else {
+                SeedJson::Runtime(quote! {
+                    anchor_lang_v2::idl_build::__idl_const_seed_json(#expr)
+                })
+            }
+        }
         _ => seed,
     }
+}
+
+pub fn expr_contains_macro(expr: &Expr) -> bool {
+    struct MacroFinder {
+        found: bool,
+    }
+
+    impl<'ast> Visit<'ast> for MacroFinder {
+        fn visit_expr_macro(&mut self, _expr: &'ast syn::ExprMacro) {
+            self.found = true;
+        }
+    }
+
+    let mut finder = MacroFinder { found: false };
+    finder.visit_expr(expr);
+    finder.found
+}
+
+pub fn expr_references_local_binding(
+    expr: &Expr,
+    field_names: &[String],
+    ix_arg_names: &[String],
+) -> bool {
+    struct LocalBindingFinder<'a> {
+        field_names: &'a [String],
+        ix_arg_names: &'a [String],
+        found: bool,
+    }
+
+    impl LocalBindingFinder<'_> {
+        fn is_local_name(&self, ident: &str) -> bool {
+            self.field_names.iter().any(|name| name == ident)
+                || self.ix_arg_names.iter().any(|name| name == ident)
+        }
+    }
+
+    impl<'ast> Visit<'ast> for LocalBindingFinder<'_> {
+        fn visit_expr_path(&mut self, expr: &'ast syn::ExprPath) {
+            if self.found {
+                return;
+            }
+            if expr.qself.is_none()
+                && expr.path.leading_colon.is_none()
+                && expr.path.segments.len() == 1
+                && expr.path.segments[0].arguments.is_empty()
+                && self.is_local_name(&expr.path.segments[0].ident.to_string())
+            {
+                self.found = true;
+                return;
+            }
+            syn::visit::visit_expr_path(self, expr);
+        }
+    }
+
+    let mut finder = LocalBindingFinder {
+        field_names,
+        ix_arg_names,
+        found: false,
+    };
+    finder.visit_expr(expr);
+    finder.found
 }
 
 fn static_seed(value: Value) -> SeedJson {
@@ -1041,6 +1110,54 @@ mod tests {
         ));
         assert!(ts.contains("__idl_const_seed_json"), "got: {ts}");
         assert!(ts.contains("System :: id"), "got: {ts}");
+    }
+
+    #[test]
+    fn local_field_program_seed_stays_opaque_expr() {
+        let fields = vec!["config".to_string()];
+        let args = Vec::new();
+        let s = expect_static(classify_program_seed(
+            &syn::parse_quote!(config.program_id),
+            &fields,
+            &args,
+        ));
+        assert_eq!(s, r#"{"kind":"expr"}"#);
+    }
+
+    #[test]
+    fn macro_wrapped_local_field_program_seed_stays_opaque_expr() {
+        let fields = vec!["config".to_string()];
+        let args = Vec::new();
+        let s = expect_static(classify_program_seed(
+            &syn::parse_quote!(wrap!(config.program_id)),
+            &fields,
+            &args,
+        ));
+        assert_eq!(s, r#"{"kind":"expr"}"#);
+    }
+
+    #[test]
+    fn local_binding_detector_sees_sibling_field_access() {
+        let fields = vec!["config".to_string()];
+        let args = Vec::new();
+        assert!(expr_references_local_binding(
+            &syn::parse_quote!(config.program_id),
+            &fields,
+            &args,
+        ));
+        assert!(!expr_references_local_binding(
+            &syn::parse_quote!(System::id()),
+            &fields,
+            &args,
+        ));
+    }
+
+    #[test]
+    fn macro_detector_sees_expr_macro() {
+        assert!(expr_contains_macro(&syn::parse_quote!(wrap!(
+            config.program_id
+        ))));
+        assert!(!expr_contains_macro(&syn::parse_quote!(System::id())));
     }
 
     #[test]

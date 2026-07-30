@@ -1313,6 +1313,26 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
                                 } else {
                                     quote! { &#program }
                                 }
+                            } else if idl::expr_contains_macro(program) {
+                                // Nested macros are opaque to this proc macro.
+                                // A macro may expand to sibling account data
+                                // access (e.g. `wrap!(config.program_id)`),
+                                // which cannot be derived from the resolved
+                                // builder's address-only inputs.
+                                all_derivable = false;
+                                quote! {}
+                            } else if idl::expr_references_local_binding(
+                                program,
+                                &raw_field_names,
+                                &ix_arg_names,
+                            ) {
+                                // The client-side resolved accounts struct only
+                                // carries sibling account ADDRESSES. If
+                                // `seeds::program` depends on sibling account
+                                // DATA (e.g. `config.program_id`), this PDA is
+                                // not auto-derivable off-chain.
+                                all_derivable = false;
+                                quote! {}
                             } else {
                                 quote! { &#program }
                             }
@@ -1558,6 +1578,14 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
                         } else {
                             quote! { &#program }
                         }
+                    } else if idl::expr_contains_macro(program) {
+                        return None;
+                    } else if idl::expr_references_local_binding(
+                        program,
+                        &raw_field_names,
+                        &ix_arg_names,
+                    ) {
+                        return None;
                     } else {
                         quote! { &#program }
                     }

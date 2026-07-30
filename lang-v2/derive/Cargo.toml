@@ -11,7 +11,7 @@ proc-macro = true
 [dependencies]
 proc-macro2 = "1"
 quote = "1"
-syn = { version = "2", features = ["full", "parsing", "extra-traits"] }
+syn = { version = "2", features = ["full", "parsing", "extra-traits", "visit"] }
 # Host-only deps used at macro-expansion time to precompute the canonical
 # PDA bump when `#[account(seeds = [b"..."], bump)]` has all byte-literal
 # seeds, or to assemble IDL JSON. Not part of user programs' runtime —
