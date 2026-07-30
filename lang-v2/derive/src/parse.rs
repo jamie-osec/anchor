@@ -651,6 +651,12 @@ pub struct AccountField {
     pub load: TokenStream2,
     pub deferred_load: Option<TokenStream2>,
     pub constraints: Vec<TokenStream2>,
+    pub updates: Vec<TokenStream2>,
+    /// Duplicate-mutable-account check. Collected separately from
+    /// `constraints` so all mut-field dup checks can share a single outer
+    /// `if let Some(__dups) = __duplicates` gate — non-dup txs pay one
+    /// Option-tag branch regardless of field count.
+    pub dup_check: Option<TokenStream2>,
     pub exit: Option<TokenStream2>,
     pub has_bump: bool,
     /// True when the field type is `Option<T>` (optional account).
@@ -1577,6 +1583,8 @@ pub fn parse_field(
             load,
             deferred_load: None,
             constraints: vec![],
+            updates: vec![],
+            dup_check: None,
             exit,
             has_bump: false,
             is_optional: false,
@@ -1857,6 +1865,7 @@ pub fn parse_field(
 
     // --- Constraints ---
     let mut constraints = Vec::new();
+    let mut updates = Vec::new();
 
     // Writable check is now owned by `AnchorAccount::load_mut` (default
     // impl in `lang-v2/src/traits.rs`), so the derive no longer emits a
@@ -2150,8 +2159,9 @@ pub fn parse_field(
     //
     // The `init` dispatch is embedded inline into the init body by
     // `wrap_init_body_with_constraints` above so the hook only fires on
-    // actual creation. Only `check` and `update` emit out here in the
-    // constraint phase.
+    // actual creation. `check` emits into the validation phase here;
+    // `update` is deferred into a later post-validation phase so sibling
+    // field constraints still observe the pre-update state.
     //
     // Field refs thread through `AsRef::as_ref` so the call-site's
     // `V` is inferred from the `AccountConstraint::Value` associated
@@ -2182,8 +2192,9 @@ pub fn parse_field(
             } else {
                 quote! { &mut #field_name }
             };
-            // `update(...)` — fires regardless of init state.
-            constraints.push(quote! {
+            // `update(...)` — fires regardless of init state, but only after
+            // all account validations have completed.
+            updates.push(quote! {
                 <#ns::#key as anchor_lang_v2::AccountConstraint<_>>::update(
                     #update_target, #expected,
                 )?;
@@ -2307,6 +2318,26 @@ pub fn parse_field(
         None
     };
 
+    // Dup-check emission: only `Option<_>` mut fields keep a gated
+    // per-field `get()` check — a `None` slot (the client encodes
+    // `program_id` as the address) must stay silent even when that slot
+    // is also the dup target of another account, and the
+    // `if let Some(...)` wrapper built below preserves that. Non-`Option`
+    // mut fields are folded into the enclosing struct's `MUT_MASK` const
+    // and checked once per dispatch by `run_handler`. Stored separately
+    // from `constraints` so the struct-level codegen can aggregate all
+    // mut fields' dup checks under a single outer
+    // `if let Some(__dups) = __duplicates { ... }` gate.
+    let dup_check = if attrs.is_mut && !attrs.is_dup && is_optional {
+        Some(quote! {
+            if __dups.get((__base_offset + #offset_expr) as u8) {
+                return Err(anchor_lang_v2::ErrorCode::ConstraintDuplicateMutableAccount.into());
+            }
+        })
+    } else {
+        None
+    };
+
     // For `Option<T>` fields, each constraint body was generated against the
     // unwrapped inner — we wrap it in `if let Some(#field_name) = #field_name`
     // so `#field_name.account()`, `#field_name.authority`, etc. resolve on the
@@ -2316,7 +2347,7 @@ pub fn parse_field(
     // Mutable fields use `ref mut` so constraint bodies that need `&mut self`
     // (e.g. BorshAccount::release_borrow in the realloc path) can work.
     // Read-only methods still resolve via auto-deref from `&mut T` to `&T`.
-    let (constraints, exit) = if is_optional {
+    let (constraints, updates, exit) = if is_optional {
         let constraints = constraints
             .into_iter()
             .map(|c| {
@@ -2341,6 +2372,17 @@ pub fn parse_field(
                             let _ = &#field_name;
                             #c
                         }
+                    }
+                }
+            })
+            .collect();
+        let updates = updates
+            .into_iter()
+            .map(|u| {
+                quote! {
+                    if let Some(ref mut #field_name) = #field_name {
+                        let _ = &#field_name;
+                        #u
                     }
                 }
             })
@@ -2403,9 +2445,9 @@ pub fn parse_field(
                 }
             }
         });
-        (constraints, exit)
+        (constraints, updates, exit)
     } else {
-        (constraints, exit)
+        (constraints, updates, exit)
     };
 
     let contributes_mut_bit = attrs.is_mut && !attrs.is_dup && !is_optional;
@@ -2420,6 +2462,8 @@ pub fn parse_field(
         load,
         deferred_load,
         constraints,
+        updates,
+        dup_check,
         exit,
         has_bump,
         is_optional,

@@ -966,6 +966,7 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         .filter_map(|f| f.deferred_load.as_ref())
         .collect();
     let constraints: Vec<_> = fields.iter().flat_map(|f| &f.constraints).collect();
+    let updates: Vec<_> = fields.iter().flat_map(|f| &f.updates).collect();
     let exits: Vec<_> = fields.iter().filter_map(|f| f.exit.as_ref()).collect();
     // Bumps fields. Optional accounts get `Option<u8>` so the default
     // (`None`) maps cleanly to the sentinel-`None` load path; the seeds
@@ -1807,6 +1808,7 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
                 #(#loads)*
                 #(#deferred_loads)*
                 #(#constraints)*
+                #(#updates)*
                 Ok((Self { #(#field_names),* }, __bumps, #ix_args_return))
             }
 

@@ -42,6 +42,10 @@ fn optional_init_if_needed_counter_pda() -> Pubkey {
     Pubkey::find_program_address(&[b"optional-init-if-needed-counter"], &program_id()).0
 }
 
+fn fresh_zeroed_pda() -> Pubkey {
+    Pubkey::find_program_address(&[b"fresh-zeroed-counter"], &program_id()).0
+}
+
 fn setup() -> (LiteSVM, Keypair) {
     let test_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let deploy_dir = test_dir.join("target/deploy");
@@ -101,6 +105,17 @@ fn init_optional_if_needed_counter(svm: &mut LiteSVM, payer: &Keypair) {
     ];
     send_instruction(svm, program_id(), data, metas, payer, &[])
         .expect("handle_optional_init_if_needed should succeed");
+}
+
+fn set_zeroed_counter_account(svm: &mut LiteSVM, pda: Pubkey) {
+    let account = solana_account::Account {
+        lamports: 1_000_000,
+        data: vec![0u8; 16],
+        owner: program_id(),
+        executable: false,
+        rent_epoch: 0,
+    };
+    svm.set_account(pda, account).expect("set zeroed counter");
 }
 
 // ---- `init` method ---------------------------------------------------------
@@ -213,6 +228,27 @@ fn update_hook_writes_new_value() {
 
     // `SetValueConstraint::update` overwrote the value.
     assert_eq!(read_counter_value(&svm, &counter_pda()), 42);
+}
+
+#[test]
+fn update_hook_is_deferred_until_later_field_constraints_pass() {
+    let (mut svm, payer) = setup();
+    let fresh = fresh_zeroed_pda();
+    set_zeroed_counter_account(&mut svm, fresh);
+
+    let data = custom_constraints::instruction::HandleUpdateAfterLaterValidation {}.data();
+    let metas = vec![
+        AccountMeta::new(fresh, false),
+        AccountMeta::new_readonly(payer.pubkey(), true),
+    ];
+    send_instruction(&mut svm, program_id(), data, metas, &payer, &[])
+        .expect("later field constraint should see pre-update value");
+
+    assert_eq!(
+        read_counter_value(&svm, &fresh),
+        7,
+        "update hook should run after later validations succeed",
+    );
 }
 
 // ---- `exit` method ---------------------------------------------------------

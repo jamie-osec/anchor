@@ -89,6 +89,15 @@ pub mod custom_constraints {
     ) -> Result<()> {
         Ok(())
     }
+
+    /// `update(...)` should not mutate `fresh` until later field
+    /// validations have completed. The integration test wires a later
+    /// `witness` constraint that expects the pre-update value.
+    pub fn handle_update_after_later_validation(
+        _ctx: &mut Context<HandleUpdateAfterLaterValidation>,
+    ) -> Result<()> {
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -319,4 +328,22 @@ pub struct HandleOptionalInitIfNeeded {
     )]
     pub counter: Option<BorshAccount<Counter>>,
     pub system_program: Program<System>,
+}
+
+#[derive(Accounts)]
+pub struct HandleUpdateAfterLaterValidation {
+    #[account(
+        zeroed,
+        counter_ns::min_value = 0u64,
+        update(counter_ns::set_value = 7u64)
+    )]
+    pub fresh: BorshAccount<Counter>,
+    #[account(constraint = fresh.value == 0 @ WErr::BadValue)]
+    pub witness: UncheckedAccount,
+}
+
+#[error_code]
+pub enum WErr {
+    #[msg("bad value")]
+    BadValue,
 }
