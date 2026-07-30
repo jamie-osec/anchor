@@ -320,8 +320,10 @@ where
     }
 
     fn exit(&mut self) -> pinocchio::ProgramResult {
-        // Skip serialization if account was closed (lamports == 0, reassigned to system program).
-        if self.view.lamports() == 0 {
+        // Skip serialization only after close() has cleared the account header.
+        // A zero lamport balance can be transient when a later exit refunds this
+        // account, so lamports alone do not prove that write-back is unnecessary.
+        if super::slab::is_closed(&self.view) {
             return Ok(());
         }
         // Belt-and-braces: the derive's `realloc` constraint does

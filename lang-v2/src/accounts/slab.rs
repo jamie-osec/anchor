@@ -28,6 +28,14 @@ pub(super) fn cold_owner_error(view: &AccountView) -> ProgramError {
     }
 }
 
+/// Whether the runtime account header reflects a completed close.
+#[inline(always)]
+pub(super) fn is_closed(view: &AccountView) -> bool {
+    view.lamports() == 0
+        && view.data_len() == 0
+        && view.owned_by(&crate::programs::System::id())
+}
+
 /// Error for read-only account passed to `load_mut`.
 #[cfg(feature = "guardrails")]
 #[inline(always)]
