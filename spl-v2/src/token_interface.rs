@@ -35,7 +35,10 @@ use {
     solana_address::Address,
     solana_program_error::ProgramError,
     spl_token_2022_interface::{
-        extension::{BaseStateWithExtensions, PodStateWithExtensions},
+        extension::{
+            BaseStateWithExtensions, ExtensionType as Token2022ExtensionType,
+            PodStateWithExtensions,
+        },
         pod::{PodAccount, PodMint},
     },
 };
@@ -232,7 +235,7 @@ impl SlabInit for Interface<crate::TokenAccount> {
         let program_id = token_program.address();
         crate::token_shared::validate_token_interface_program(program_id)?;
 
-        let space = core::mem::size_of::<crate::TokenAccount>();
+        let space = token_account_init_space(mint, program_id)?;
         anchor_lang_v2::create_account_with_signers(
             payer,
             account,
@@ -250,6 +253,24 @@ impl SlabInit for Interface<crate::TokenAccount> {
         }
         .invoke()
     }
+}
+
+#[inline(always)]
+fn token_account_init_space(
+    mint: &AccountView,
+    token_program: &Address,
+) -> Result<usize, ProgramError> {
+    if !anchor_lang_v2::address_eq(token_program, &Token2022Program::id()) {
+        return Ok(core::mem::size_of::<crate::TokenAccount>());
+    }
+
+    let mint_data = unsafe { mint.borrow_unchecked() };
+    let mint_state = PodStateWithExtensions::<PodMint>::unpack(mint_data)?;
+    let mint_extensions = mint_state.get_extension_types()?;
+    let required_extensions =
+        Token2022ExtensionType::get_required_init_account_extensions(&mint_extensions);
+
+    Token2022ExtensionType::try_calculate_account_len::<PodAccount>(&required_extensions)
 }
 
 // ---------------------------------------------------------------------------

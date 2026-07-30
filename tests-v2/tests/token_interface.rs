@@ -3,12 +3,23 @@
 use {
     anchor_lang_v2::solana_program::instruction::AccountMeta,
     litesvm::LiteSVM,
+    solana_account::Account,
     solana_keypair::Keypair,
+    solana_program_option::COption,
+    solana_program_pack::Pack as _,
     solana_pubkey::Pubkey,
     solana_signer::Signer,
     spl_token::{
         solana_program::program_pack::Pack,
         state::{Account as SplTokenAccount, Mint as SplMint},
+    },
+    spl_token_2022_interface::{
+        extension::{
+            non_transferable::{NonTransferable, NonTransferableAccount},
+            set_account_type, BaseStateWithExtensions, BaseStateWithExtensionsMut, ExtensionType,
+            StateWithExtensions, StateWithExtensionsMut,
+        },
+        state::{Account as Token2022Account, Mint as Token2022Mint},
     },
     tests_v2::{build_program, keypair_for, send_instruction},
 };
@@ -285,6 +296,76 @@ fn assert_token_state(
     assert_eq!(state.amount, amount);
 }
 
+fn seed_initialized_non_transferable_mint(svm: &mut LiteSVM, mint: Pubkey, authority: Pubkey) {
+    let len = ExtensionType::try_calculate_account_len::<Token2022Mint>(&[
+        ExtensionType::NonTransferable,
+    ])
+    .expect("calculate token-2022 mint length with non-transferable extension");
+    let mut data = vec![0; len];
+    {
+        let mut state = StateWithExtensionsMut::<Token2022Mint>::unpack_uninitialized(&mut data)
+            .expect("unpack uninitialized mint");
+        state
+            .init_extension::<NonTransferable>(false)
+            .expect("initialize non-transferable extension");
+    }
+    Token2022Mint {
+        mint_authority: COption::Some(authority),
+        supply: 0,
+        decimals: 6,
+        is_initialized: true,
+        freeze_authority: COption::None,
+    }
+    .pack_into_slice(&mut data[..Token2022Mint::LEN]);
+    set_account_type::<Token2022Mint>(&mut data).expect("set token-2022 mint account type");
+
+    svm.set_account(
+        mint,
+        Account {
+            lamports: 10_000_000,
+            data,
+            owner: token_2022_program_id(),
+            executable: false,
+            rent_epoch: 0,
+        },
+    )
+    .expect("seed initialized token-2022 mint");
+}
+
+fn assert_non_transferable_token_2022_state(
+    svm: &LiteSVM,
+    token_account: Pubkey,
+    mint: Pubkey,
+    authority: Pubkey,
+) {
+    let account = svm
+        .get_account(&token_account)
+        .expect("token account exists");
+    assert_eq!(account.owner, token_2022_program_id());
+
+    let expected_len = ExtensionType::try_calculate_account_len::<Token2022Account>(&[
+        ExtensionType::NonTransferableAccount,
+        ExtensionType::ImmutableOwner,
+    ])
+    .expect("calculate token-2022 token account length");
+    assert_eq!(account.data.len(), expected_len);
+
+    let state =
+        StateWithExtensions::<Token2022Account>::unpack(&account.data).expect("unpack token-2022");
+    assert_eq!(state.base.mint.to_bytes(), mint.to_bytes());
+    assert_eq!(state.base.owner.to_bytes(), authority.to_bytes());
+    assert_eq!(state.base.amount, 0);
+
+    let extensions = state
+        .get_extension_types()
+        .expect("read token-2022 account extension types");
+    assert!(extensions.contains(&ExtensionType::NonTransferableAccount));
+    assert!(extensions.contains(&ExtensionType::ImmutableOwner));
+    state
+        .get_extension::<NonTransferableAccount>()
+        .expect("non-transferable account extension should be initialized");
+}
+
 #[test]
 fn token_interface_program_accepts_token_and_token_2022_only() {
     let (mut svm, payer) = setup();
@@ -357,6 +438,34 @@ fn interface_init_creates_token_2022_mint_and_token_account() {
         mint.pubkey(),
         token_owner.pubkey(),
         0,
+    );
+}
+
+#[test]
+fn interface_init_sizes_token_2022_accounts_from_mint_extensions() {
+    let (mut svm, payer) = setup();
+    let mint_authority = keypair_for("t22-interface-extended-mint-authority");
+    let token_owner = keypair_for("t22-interface-extended-token-owner");
+    let mint = Keypair::new();
+    let token_account = Keypair::new();
+
+    seed_initialized_non_transferable_mint(&mut svm, mint.pubkey(), mint_authority.pubkey());
+
+    init_token_account(
+        &mut svm,
+        &payer,
+        &mint.pubkey(),
+        &token_account,
+        &token_owner.pubkey(),
+        token_2022_program_id(),
+    )
+    .expect("interface token account init should size from required Token-2022 extensions");
+
+    assert_non_transferable_token_2022_state(
+        &svm,
+        token_account.pubkey(),
+        mint.pubkey(),
+        token_owner.pubkey(),
     );
 }
 
