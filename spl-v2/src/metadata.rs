@@ -846,17 +846,42 @@ pub struct TokenRecordAccount {
 
 impl TokenRecordAccount {
     pub const LEN: usize = mpl_token_metadata::accounts::TokenRecord::LEN;
+    const LEGACY_LEN: usize = Self::LEN - 33;
 
     #[inline]
     fn parse(data: &[u8]) -> Result<mpl_token_metadata::accounts::TokenRecord> {
         mpl_token_metadata::accounts::TokenRecord::safe_deserialize(data)
             .map_err(|_| ProgramError::InvalidAccountData)
     }
+
+    #[inline]
+    fn parse_prefix(data: &[u8]) -> Result<(mpl_token_metadata::accounts::TokenRecord, usize)> {
+        // Token records exist in both the current fixed-size layout and an
+        // older shorter layout without the `locked_transfer` tail. Client-side
+        // `AccountDeserialize` must consume exactly one record and leave any
+        // following bytes untouched, so decode the first valid token-record
+        // prefix and report its consumed length.
+        if data.len() >= Self::LEN {
+            let prefix = &data[..Self::LEN];
+            if let Ok(record) = Self::parse(prefix) {
+                return Ok((record, Self::LEN));
+            }
+        }
+
+        if data.len() < Self::LEGACY_LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        let prefix = &data[..Self::LEGACY_LEN];
+        let record = Self::parse(prefix)?;
+        Ok((record, Self::LEGACY_LEN))
+    }
 }
 
 impl AccountDeserialize for TokenRecordAccount {
     fn try_deserialize(buf: &mut &[u8]) -> Result<Self> {
-        let data = Self::parse(buf)?;
+        let (data, consumed) = Self::parse_prefix(buf)?;
+        *buf = &buf[consumed..];
         Ok(Self { view: None, data })
     }
 

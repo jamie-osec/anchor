@@ -2,7 +2,7 @@
 
 use {
     anchor_lang_v2::{testing::AccountBuffer, AccountDeserialize, AnchorAccount},
-    anchor_spl_v2::metadata::{self, MetadataAccount},
+    anchor_spl_v2::metadata::{self, MetadataAccount, TokenRecordAccount},
     borsh::to_vec,
     solana_program_error::ProgramError,
     solana_pubkey::Pubkey,
@@ -32,6 +32,30 @@ fn sample_metadata() -> mpl_token_metadata::accounts::Metadata {
         collection_details: None,
         programmable_config: None,
     }
+}
+
+fn sample_token_record() -> mpl_token_metadata::accounts::TokenRecord {
+    mpl_token_metadata::accounts::TokenRecord {
+        key: mpl_token_metadata::types::Key::TokenRecord,
+        bump: 7,
+        state: mpl_token_metadata::types::TokenState::Unlocked,
+        rule_set_revision: Some(9),
+        delegate: Some(Pubkey::from([3u8; 32])),
+        delegate_role: Some(mpl_token_metadata::types::TokenDelegateRole::Transfer),
+        locked_transfer: Some(Pubkey::from([4u8; 32])),
+    }
+}
+
+fn sample_legacy_token_record_bytes() -> Vec<u8> {
+    let record = sample_token_record();
+    let mut data = Vec::new();
+    data.extend_from_slice(&to_vec(&record.key).unwrap());
+    data.extend_from_slice(&to_vec(&record.bump).unwrap());
+    data.extend_from_slice(&to_vec(&record.state).unwrap());
+    data.extend_from_slice(&to_vec(&record.rule_set_revision).unwrap());
+    data.extend_from_slice(&to_vec(&record.delegate).unwrap());
+    data.extend_from_slice(&to_vec(&record.delegate_role).unwrap());
+    data
 }
 
 #[test]
@@ -94,4 +118,34 @@ fn metadata_account_rejects_non_metadata_key_without_anchor_discriminator() {
 
     let err = MetadataAccount::try_deserialize(&mut data.as_slice()).unwrap_err();
     assert_eq!(err, ProgramError::InvalidAccountData);
+}
+
+#[test]
+fn token_record_account_deserialize_consumes_full_prefix_with_trailing_bytes() {
+    let mut data = to_vec(&sample_token_record()).unwrap();
+    let trailing = [0xAA, 0xBB, 0xCC];
+    data.extend_from_slice(&trailing);
+
+    let mut cursor = data.as_slice();
+    let account = TokenRecordAccount::try_deserialize(&mut cursor).unwrap();
+
+    assert_eq!(account.key, mpl_token_metadata::types::Key::TokenRecord);
+    assert_eq!(account.bump, 7);
+    assert_eq!(account.locked_transfer, Some(Pubkey::from([4u8; 32])));
+    assert_eq!(cursor, trailing.as_slice());
+}
+
+#[test]
+fn token_record_account_deserialize_consumes_legacy_prefix_with_trailing_bytes() {
+    let mut data = sample_legacy_token_record_bytes();
+    let trailing = [0xFF, 0xEE, 0xDD];
+    data.extend_from_slice(&trailing);
+
+    let mut cursor = data.as_slice();
+    let account = TokenRecordAccount::try_deserialize(&mut cursor).unwrap();
+
+    assert_eq!(account.key, mpl_token_metadata::types::Key::TokenRecord);
+    assert_eq!(account.bump, 7);
+    assert_eq!(account.locked_transfer, None);
+    assert_eq!(cursor, trailing.as_slice());
 }
