@@ -972,7 +972,6 @@ fn emit_seeds_check(
     pda_program: &TokenStream2,
     target_addr_ref: &TokenStream2,
     field_name: &Ident,
-    field_ty: Option<&Type>,
     for_init: bool,
     using_our_program_id: bool,
     is_optional: bool,
@@ -1032,38 +1031,13 @@ fn emit_seeds_check(
         }
     }
 
-    // Fallback: runtime find loop fused with the equality check.
-    //
-    // Skip `sol_curve_validate_point` when the account is provably
-    // signed-for (`MIN_DATA_LEN > 0`), since account creation already
-    // validates the PDA via `create_program_address`.
-    //
-    // Otherwise (`UncheckedAccount` with zero data, non-init): the curve
-    // check is the only proof the address is a real PDA.
-    //
-    // `MIN_DATA_LEN` is a trait const, so the branch is resolved at
-    // compile time — LLVM eliminates the dead path entirely.
-    // TODO: decide whether init paths should assume the subsequent
-    // CreateAccount CPI guarantees the address is off-curve, letting
-    // us skip `sol_curve_validate_point`. Currently we always run the
-    // curve check on init to avoid relying on the trait impl's CPI.
-    let skip_curve = if let Some(ty) = field_ty {
-        quote! { <#ty as anchor_lang_v2::AnchorAccount>::MIN_DATA_LEN > 0 }
-    } else {
-        quote! { false }
-    };
+    // Fallback: runtime canonical find loop fused with the equality check.
     let bump_assign = wrap_bump(quote! { __bump });
     let find = quote! {
         #(#seed_bindings)*
-        let __bump = if #skip_curve {
-            anchor_lang_v2::find_and_verify_program_address_skip_curve(
-                &[#(#seed_refs),*], #pda_program, #target_addr_ref,
-            ).map_err(|_| anchor_lang_v2::ErrorCode::ConstraintSeeds)?
-        } else {
-            anchor_lang_v2::find_and_verify_program_address(
-                &[#(#seed_refs),*], #pda_program, #target_addr_ref,
-            ).map_err(|_| anchor_lang_v2::ErrorCode::ConstraintSeeds)?
-        };
+        let __bump = anchor_lang_v2::find_and_verify_program_address(
+            &[#(#seed_refs),*], #pda_program, #target_addr_ref,
+        ).map_err(|_| anchor_lang_v2::ErrorCode::ConstraintSeeds)?;
         __bumps.#field_name = #bump_assign;
     };
     if for_init {
@@ -1268,7 +1242,6 @@ fn emit_init_body(
                 &pda_program,
                 &quote! { __target.address() },
                 field_name,
-                None,
                 true,
                 using_our_program_id,
                 is_optional,
@@ -1935,7 +1908,6 @@ pub fn parse_field(
                         &pda_program,
                         &target_addr_ref,
                         field_name,
-                        Some(field_ty),
                         false,
                         using_our_program_id,
                         is_optional,
@@ -1981,25 +1953,15 @@ pub fn parse_field(
                         }
                     }
                 } else {
-                    // Bare bump: use find_and_verify with skip_curve
-                    // when the account type guarantees non-zero data.
-                    let skip_curve = quote! {
-                        <#field_ty as anchor_lang_v2::AnchorAccount>::MIN_DATA_LEN > 0
-                    };
+                    // Bare bump: find and verify the canonical PDA.
                     let target_addr = quote! { #field_name.account().address() };
                     quote! {
                         {
                             let __seed_val = #seeds_expr;
                             let __seed_ref: &[&[u8]] = __seed_val.as_ref();
-                            let __bump = if #skip_curve {
-                                anchor_lang_v2::find_and_verify_program_address_skip_curve(
-                                    __seed_ref, #pda_program, #target_addr,
-                                ).map_err(|_| anchor_lang_v2::ErrorCode::ConstraintSeeds)?
-                            } else {
-                                anchor_lang_v2::find_and_verify_program_address(
-                                    __seed_ref, #pda_program, #target_addr,
-                                ).map_err(|_| anchor_lang_v2::ErrorCode::ConstraintSeeds)?
-                            };
+                            let __bump = anchor_lang_v2::find_and_verify_program_address(
+                                __seed_ref, #pda_program, #target_addr,
+                            ).map_err(|_| anchor_lang_v2::ErrorCode::ConstraintSeeds)?;
                             __bumps.#field_name = #bump_assign;
                         }
                     }
