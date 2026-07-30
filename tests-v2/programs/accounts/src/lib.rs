@@ -98,6 +98,16 @@ pub mod accounts_test {
         Ok(())
     }
 
+    /// Manually closes a boxed counter even though the account also carries
+    /// `close = receiver`; the derive exit path will call close a second time.
+    #[discrim = 40]
+    pub fn manual_close_boxed(ctx: &mut Context<CloseBoxed>) -> Result<()> {
+        ctx.accounts
+            .counter
+            .close(*ctx.accounts.receiver.account())?;
+        Ok(())
+    }
+
     /// Reads the Clock sysvar through `Deref` forwarding to the inner type.
     #[discrim = 5]
     pub fn read_clock(ctx: &mut Context<ReadClock>) -> Result<()> {
@@ -588,6 +598,17 @@ pub mod accounts_test {
         Ok(())
     }
 
+    /// Manually closes a borsh-backed account even though the account also
+    /// carries `close = receiver`; the derive exit path will call close a
+    /// second time, which is a no-op for `BorshAccount`.
+    #[discrim = 39]
+    pub fn manual_close_borsh_counter(ctx: &mut Context<CloseBorshCounter>) -> Result<()> {
+        ctx.accounts
+            .counter
+            .close(*ctx.accounts.receiver.account())?;
+        Ok(())
+    }
+
     /// Mutates a foreign-owned `BorshAccount<T>` in memory. The generated exit
     /// path serializes mutable borrows; the runtime rejects the resulting
     /// foreign account data write.
@@ -754,6 +775,17 @@ pub mod accounts_test {
         ctx.accounts.counter.value = ctx.accounts.counter.value.wrapping_add(args.amount);
         Ok(())
     }
+
+    /// Manually closes a slab-backed account even though the account also
+    /// carries `close = receiver`; the derive exit path will try to close it
+    /// again after `is_mutable` was flipped by the first close.
+    #[discrim = 38]
+    pub fn manual_close_ledger(ctx: &mut Context<CloseLedger>) -> Result<()> {
+        ctx.accounts
+            .ledger
+            .close(*ctx.accounts.receiver.account())?;
+        Ok(())
+    }
 }
 
 // -- Accounts structs --------------------------------------------------------
@@ -838,6 +870,14 @@ pub struct TransferFromBorshCounterWithLamportsHelpers {
 }
 
 #[derive(Accounts)]
+pub struct CloseBorshCounter {
+    #[account(mut, close = receiver, seeds = [b"borsh-counter"], bump)]
+    pub counter: BorshAccount<BorshCounter>,
+    #[account(mut)]
+    pub receiver: SystemAccount,
+}
+
+#[derive(Accounts)]
 pub struct MutateForeignBorshCounter {
     #[account(mut)]
     pub counter: BorshAccount<ForeignBorshCounter>,
@@ -868,6 +908,14 @@ pub struct InitializeBoxed {
 pub struct CloseBoxed {
     #[account(mut, close = receiver, seeds = [b"boxed-counter"], bump)]
     pub counter: Box<Account<Counter>>,
+    #[account(mut)]
+    pub receiver: SystemAccount,
+}
+
+#[derive(Accounts)]
+pub struct CloseLedger {
+    #[account(mut, close = receiver, seeds = [b"ledger"], bump)]
+    pub ledger: LedgerAccount,
     #[account(mut)]
     pub receiver: SystemAccount,
 }

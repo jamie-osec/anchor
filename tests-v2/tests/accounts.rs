@@ -344,6 +344,60 @@ fn dynamic_slab_methods_work_in_program_execution() {
 }
 
 #[test]
+fn manual_close_ledger_then_derive_close_fails_and_rolls_back() {
+    let (mut svm, payer) = setup();
+    let ledger = ledger_pda();
+    let init_metas = vec![
+        AccountMeta::new(payer.pubkey(), true),
+        AccountMeta::new(ledger, false),
+        AccountMeta::new_readonly(solana_sdk_ids::system_program::ID, false),
+    ];
+    call_raw(&mut svm, &payer, 35, init_metas).expect("initialize_ledger should succeed");
+
+    let receiver = keypair_for("ledger-manual-close-receiver");
+    svm.airdrop(&receiver.pubkey(), 10_000_000).unwrap();
+
+    let ledger_before = svm.get_account(&ledger).expect("ledger exists");
+    let receiver_before = svm.get_account(&receiver.pubkey()).unwrap().lamports;
+
+    let metas = vec![
+        AccountMeta::new(ledger, false),
+        AccountMeta::new(receiver.pubkey(), false),
+    ];
+    let result = send_instruction(&mut svm, program_id(), vec![38], metas, &payer, &[]);
+    let err = format!(
+        "{:?}",
+        result
+            .as_ref()
+            .err()
+            .expect("manual_close_ledger should fail")
+    );
+    assert!(
+        err.contains("Program failed to complete")
+            || err.contains("panic")
+            || err.contains("Tried to mutate `Slab<H, T>` through a read-only load"),
+        "expected the second derive close to trip the Slab mutability guard, got: {err}"
+    );
+
+    let ledger_after = svm
+        .get_account(&ledger)
+        .expect("failed transaction should roll back");
+    let receiver_after = svm.get_account(&receiver.pubkey()).unwrap().lamports;
+    assert_eq!(
+        ledger_after.lamports, ledger_before.lamports,
+        "the failed transaction should roll back the first manual close",
+    );
+    assert_eq!(
+        ledger_after.data, ledger_before.data,
+        "the failed transaction should preserve the slab contents",
+    );
+    assert_eq!(
+        receiver_after, receiver_before,
+        "the receiver must not keep lamports from a failed double-close transaction",
+    );
+}
+
+#[test]
 fn explicit_space_annotation_allocates_requested_bytes() {
     let (mut svm, payer) = setup();
     let counter = do_initialize_borsh_counter(&mut svm, &payer);
@@ -907,6 +961,85 @@ fn close_boxed_transfers_lamports_and_clears_account() {
     match svm.get_account(&counter) {
         None => {}
         Some(account) => assert_eq!(account.lamports, 0, "closed boxed account should be empty"),
+    }
+}
+
+#[test]
+fn manual_close_boxed_then_derive_close_fails_and_rolls_back() {
+    let (mut svm, payer) = setup();
+    let counter = do_initialize_boxed(&mut svm, &payer);
+    let receiver = keypair_for("boxed-manual-close-receiver");
+    svm.airdrop(&receiver.pubkey(), 10_000_000).unwrap();
+
+    let receiver_before = svm.get_account(&receiver.pubkey()).unwrap().lamports;
+    let counter_before = svm.get_account(&counter).unwrap().lamports;
+    let counter_data_before = svm.get_account(&counter).unwrap().data;
+
+    let metas = vec![
+        AccountMeta::new(counter, false),
+        AccountMeta::new(receiver.pubkey(), false),
+    ];
+    let result = send_instruction(&mut svm, program_id(), vec![40], metas, &payer, &[]);
+    let err = format!(
+        "{:?}",
+        result
+            .as_ref()
+            .err()
+            .expect("manual_close_boxed should fail")
+    );
+    assert!(
+        err.contains("Program failed to complete")
+            || err.contains("panic")
+            || err.contains("Tried to mutate `Slab<H, T>` through a read-only load"),
+        "expected the second derive close to trip the Slab mutability guard, got: {err}"
+    );
+
+    let receiver_after = svm.get_account(&receiver.pubkey()).unwrap().lamports;
+    let counter_after = svm
+        .get_account(&counter)
+        .expect("failed transaction should roll back");
+    assert_eq!(
+        receiver_after, receiver_before,
+        "the failed transaction should not leave lamports with the receiver",
+    );
+    assert_eq!(
+        counter_after.lamports, counter_before,
+        "the failed transaction should roll back the first manual close",
+    );
+    assert_eq!(
+        counter_after.data, counter_data_before,
+        "the failed transaction should preserve the boxed account contents",
+    );
+}
+
+#[test]
+fn manual_close_borsh_counter_then_derive_close_still_succeeds() {
+    let (mut svm, payer) = setup();
+    let counter = do_initialize_borsh_counter(&mut svm, &payer);
+    let receiver = keypair_for("borsh-manual-close-receiver");
+    svm.airdrop(&receiver.pubkey(), 10_000_000).unwrap();
+
+    let receiver_before = svm.get_account(&receiver.pubkey()).unwrap().lamports;
+    let counter_before = svm.get_account(&counter).unwrap().lamports;
+
+    let metas = vec![
+        AccountMeta::new(counter, false),
+        AccountMeta::new(receiver.pubkey(), false),
+    ];
+    send_instruction(&mut svm, program_id(), vec![39], metas, &payer, &[]).expect(
+        "manual_close_borsh_counter should still succeed after the derive issues a second close",
+    );
+
+    let receiver_after = svm.get_account(&receiver.pubkey()).unwrap().lamports;
+    assert_eq!(
+        receiver_after,
+        receiver_before + counter_before,
+        "the borsh manual close should transfer the lamports exactly once",
+    );
+
+    match svm.get_account(&counter) {
+        None => {}
+        Some(account) => assert_eq!(account.lamports, 0, "closed borsh account should be empty"),
     }
 }
 
