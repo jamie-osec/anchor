@@ -1,6 +1,6 @@
 use {
     super::common::validate_token_2022_program,
-    crate::token_2022::spl_token_2022,
+    crate::{token_2022::spl_token_2022, token_shared::multisig_signer_addresses},
     anchor_lang_v2::{CpiContext, CpiHandle, CpiHandleMut, ToCpiAccounts},
     pinocchio::address::Address,
     solana_program_error::ProgramError,
@@ -40,11 +40,12 @@ pub fn transfer_hook_update<'a>(
 ) -> Result<(), ProgramError> {
     validate_token_2022_program(ctx.program)?;
     let program = *ctx.program;
+    let signer_addresses = multisig_signer_addresses(&ctx.remaining_accounts);
     let ix = spl_token_2022::extension::transfer_hook::instruction::update(
         &program,
         ctx.accounts.mint.address(),
         ctx.accounts.authority.address(),
-        &[],
+        &signer_addresses,
         transfer_hook_program_id.copied(),
     )?;
     ctx.invoke_ix(ix)

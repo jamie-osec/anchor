@@ -375,6 +375,9 @@ pub fn set_authority<'a>(
 /// letting callers avoid manually building `CpiContext` for simple Token CPIs.
 /// Pass `&[]` for transaction signers, or PDA signer seeds for program-signed
 /// authorities on methods that support PDA signing.
+///
+/// SPL multisig authorities use the corresponding free function and attach
+/// member signer handles with `CpiContext::with_remaining_accounts`.
 pub trait TokenCpiExt {
     fn mint_to<'a, M, T, A>(
         &'a self,
