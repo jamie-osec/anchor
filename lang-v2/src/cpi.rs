@@ -628,6 +628,11 @@ pub fn realloc_account(
 ) -> Result<(), ProgramError> {
     use pinocchio::Resize;
 
+    require!(
+        !pinocchio::address::address_eq(payer.address(), account.address()),
+        ProgramError::InvalidArgument
+    );
+
     let old_space = account.data_len();
     let new_rent_minimum = rent_exempt_lamports(new_space)?;
     let current_lamports = account.lamports();

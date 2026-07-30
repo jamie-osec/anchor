@@ -107,6 +107,10 @@ name = "lamports"
 required-features = ["testing"]
 
 [[test]]
+name = "realloc_payer_target_check"
+required-features = ["testing"]
+
+[[test]]
 name = "cursor_and_remaining_accounts"
 required-features = ["testing"]
 
