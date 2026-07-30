@@ -717,6 +717,11 @@ where
     /// touching lamports. Compose with `top_up` / `refund` afterward to
     /// settle rent. Re-derives `header_ptr` after the resize; `guard_bytes*`
     /// pick up the new size from `view.data_len()` automatically.
+    ///
+    /// No `self.view = view_mut` write-back is needed here. `AccountView` is
+    /// a raw-pointer wrapper over the shared `RuntimeAccount` header; Pinocchio
+    /// resizes by mutating that header's `data_len` in place, so all
+    /// `AccountView` copies observe the updated length.
     pub fn resize_to_capacity(&mut self, new_capacity: u32) -> Result<(), ProgramError> {
         use pinocchio::Resize;
 
@@ -855,9 +860,13 @@ where
         self.assert_mutable();
         let mut view = *self.account();
         if new_space != view.data_len() {
-            if new_space < Self::ITEMS_OFFSET {
+            if new_space < Self::MIN_DATA_LEN {
                 return Err(ProgramError::AccountDataTooSmall);
             }
+            // No `self.view = view` write-back is needed: `AccountView` is a
+            // raw-pointer wrapper over the shared `RuntimeAccount` header, and
+            // `crate::realloc_account` updates that header's `data_len` in
+            // place. All `AccountView` copies therefore observe the new size.
             crate::realloc_account(&mut view, new_space, &payer, zero)?;
             self.header_ptr = unsafe { view.data_mut_ptr().add(Self::HEADER_OFFSET) } as *mut H;
             if Self::HAS_TAIL {

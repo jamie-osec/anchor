@@ -506,6 +506,61 @@ fn slab_resize_to_capacity_clamps_len() {
     drop(slab);
 }
 
+#[test]
+fn slab_resize_to_capacity_updates_live_capacity_and_supports_push() {
+    let buf = setup_ledger(/*capacity*/ 1, /*len*/ 1);
+
+    let view = unsafe { buf.view() };
+    let mut slab = unsafe { CounterLedger::load_mut(view) }.unwrap();
+
+    slab.resize_to_capacity(3).unwrap();
+
+    assert_eq!(slab.current_space(), ITEMS_OFFSET + 3 * ITEM_SIZE);
+    assert_eq!(slab.capacity(), 3);
+
+    slab.try_push([0x11; 8]).unwrap();
+    slab.try_push([0x22; 8]).unwrap();
+    assert_eq!(slab.len(), 3);
+    assert_eq!(slab.capacity(), 3);
+
+    drop(slab);
+
+    let reloaded = CounterLedger::load(view).unwrap();
+    assert_eq!(reloaded.current_space(), ITEMS_OFFSET + 3 * ITEM_SIZE);
+    assert_eq!(reloaded.capacity(), 3);
+    assert_eq!(reloaded.len(), 3);
+}
+
+#[test]
+fn slab_realloc_growth_updates_live_capacity_and_supports_push() {
+    let buf = setup_ledger(/*capacity*/ 1, /*len*/ 1);
+    let payer = AccountBuffer::<128>::new();
+    payer.init([0xCC; 32], PROGRAM_ID, 0, true, true, false);
+    payer.set_lamports(1_000_000_000);
+
+    let view = unsafe { buf.view() };
+    let mut slab = unsafe { CounterLedger::load_mut(view) }.unwrap();
+    let payer_view = unsafe { payer.view() };
+
+    slab.realloc_account(ITEMS_OFFSET + 3 * ITEM_SIZE, payer_view, false)
+        .unwrap();
+
+    assert_eq!(slab.current_space(), ITEMS_OFFSET + 3 * ITEM_SIZE);
+    assert_eq!(slab.capacity(), 3);
+
+    slab.try_push([0x33; 8]).unwrap();
+    slab.try_push([0x44; 8]).unwrap();
+    assert_eq!(slab.len(), 3);
+    assert_eq!(slab.capacity(), 3);
+
+    drop(slab);
+
+    let reloaded = CounterLedger::load(view).unwrap();
+    assert_eq!(reloaded.current_space(), ITEMS_OFFSET + 3 * ITEM_SIZE);
+    assert_eq!(reloaded.capacity(), 3);
+    assert_eq!(reloaded.len(), 3);
+}
+
 // -- Rent helpers -----------------------------------------------------
 
 #[test]
