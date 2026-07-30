@@ -156,5 +156,9 @@ name = "address_idl_surface"
 required-features = ["testing"]
 
 [[test]]
+name = "pod_native_ops"
+required-features = ["testing"]
+
+[[test]]
 name = "slab_min_data_len_realloc"
 required-features = ["testing"]

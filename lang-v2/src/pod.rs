@@ -5,9 +5,10 @@
 //! account data without alignment concerns — critical for `#[repr(C)]`
 //! zero-copy structs on Solana.
 //!
-//! Arithmetic operators (`+`, `-`, `*`) are overflow-checked in debug builds
-//! and wrapping in release. Use `checked_add`, `checked_sub`, `checked_mul`,
-//! `checked_div` where overflow must be detected.
+//! Arithmetic operators use Rust's native operator behavior, so overflow
+//! follows the build's `overflow-checks` setting. Use `checked_add`,
+//! `checked_sub`, `checked_mul`, `checked_div` where overflow must be
+//! detected explicitly.
 
 use core::fmt;
 
@@ -27,18 +28,7 @@ macro_rules! define_pod_signed {
             type Output = Self;
             #[inline(always)]
             fn neg(self) -> Self {
-                #[cfg(debug_assertions)]
-                {
-                    Self::from(
-                        self.get()
-                            .checked_neg()
-                            .expect("attempt to negate with overflow"),
-                    )
-                }
-                #[cfg(not(debug_assertions))]
-                {
-                    Self::from(self.get().wrapping_neg())
-                }
+                Self::from(-self.get())
             }
         }
     };
@@ -161,54 +151,21 @@ macro_rules! define_pod_arithmetic {
             type Output = Self;
             #[inline(always)]
             fn add(self, rhs: $native) -> Self {
-                #[cfg(debug_assertions)]
-                {
-                    Self::from(
-                        self.get()
-                            .checked_add(rhs)
-                            .expect("attempt to add with overflow"),
-                    )
-                }
-                #[cfg(not(debug_assertions))]
-                {
-                    Self::from(self.get().wrapping_add(rhs))
-                }
+                Self::from(self.get() + rhs)
             }
         }
         impl core::ops::Sub<$native> for $name {
             type Output = Self;
             #[inline(always)]
             fn sub(self, rhs: $native) -> Self {
-                #[cfg(debug_assertions)]
-                {
-                    Self::from(
-                        self.get()
-                            .checked_sub(rhs)
-                            .expect("attempt to subtract with overflow"),
-                    )
-                }
-                #[cfg(not(debug_assertions))]
-                {
-                    Self::from(self.get().wrapping_sub(rhs))
-                }
+                Self::from(self.get() - rhs)
             }
         }
         impl core::ops::Mul<$native> for $name {
             type Output = Self;
             #[inline(always)]
             fn mul(self, rhs: $native) -> Self {
-                #[cfg(debug_assertions)]
-                {
-                    Self::from(
-                        self.get()
-                            .checked_mul(rhs)
-                            .expect("attempt to multiply with overflow"),
-                    )
-                }
-                #[cfg(not(debug_assertions))]
-                {
-                    Self::from(self.get().wrapping_mul(rhs))
-                }
+                Self::from(self.get() * rhs)
             }
         }
         impl core::ops::Div<$native> for $name {
