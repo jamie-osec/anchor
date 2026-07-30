@@ -216,8 +216,8 @@ fn slab_realloc_shrink_refund_is_capped_by_available_lamports_above_new_floor() 
 }
 
 #[test]
-fn slab_realloc_shrink_with_self_payer_preserves_lamports_and_still_resizes() {
-    let mut buf = setup_ledger(/*capacity*/ 4, /*len*/ 1);
+fn slab_realloc_shrink_with_self_payer_is_rejected() {
+    let buf = setup_ledger(/*capacity*/ 4, /*len*/ 1);
 
     let old_space = ITEMS_OFFSET + 4 * ITEM_SIZE;
     let new_space = ITEMS_OFFSET + ITEM_SIZE;
@@ -230,17 +230,21 @@ fn slab_realloc_shrink_with_self_payer_preserves_lamports_and_still_resizes() {
     let view = unsafe { buf.view() };
     let mut slab = unsafe { CounterLedger::load_mut(view) }.unwrap();
 
-    slab.realloc_account(new_space, payer_view, false).unwrap();
-
+    // #4692: realloc rejects payer == target before any resize / lamport
+    // transfer.
+    let err = slab
+        .realloc_account(new_space, payer_view, false)
+        .expect_err("realloc must reject using the target account as the payer");
+    assert_eq!(err, ProgramError::InvalidArgument);
     assert_eq!(
         slab.view().lamports(),
         old_required + vault_balance,
-        "when payer == account, shrinking should not burn lamports while refunding to self",
+        "rejected self-payer realloc must leave lamports unchanged",
     );
     assert_eq!(
         slab.current_space(),
-        new_space,
-        "self-payer shrink should still resize the account",
+        old_space,
+        "rejected self-payer realloc must leave account size unchanged",
     );
 }
 
@@ -436,9 +440,7 @@ fn swap_remove_panics_when_index_geq_effective_len() {
 }
 
 #[test]
-#[should_panic(
-    expected = "Tried to mutate `Slab<H, T>` through a read-only load"
-)]
+#[should_panic(expected = "Tried to mutate `Slab<H, T>` through a read-only load")]
 fn clear_panics_when_tail_mutation_uses_guard_bytes_mut_on_read_only_slab() {
     let buf = setup_ledger(/*capacity*/ 2, /*len*/ 1);
 
@@ -448,9 +450,7 @@ fn clear_panics_when_tail_mutation_uses_guard_bytes_mut_on_read_only_slab() {
 }
 
 #[test]
-#[should_panic(
-    expected = "Tried to mutate `Slab<H, T>` through a read-only load"
-)]
+#[should_panic(expected = "Tried to mutate `Slab<H, T>` through a read-only load")]
 fn resize_to_capacity_panics_when_loaded_read_only() {
     let buf = setup_ledger(/*capacity*/ 2, /*len*/ 1);
 
@@ -599,9 +599,7 @@ fn refund_moves_excess_lamports_to_recipient() {
 }
 
 #[test]
-#[should_panic(
-    expected = "Tried to mutate `Slab<H, T>` through a read-only load"
-)]
+#[should_panic(expected = "Tried to mutate `Slab<H, T>` through a read-only load")]
 fn refund_panics_when_loaded_read_only() {
     let mut buf = setup_ledger(/*capacity*/ 4, /*len*/ 1);
 
@@ -641,9 +639,7 @@ fn refund_is_noop_when_account_is_at_rent_floor() {
 }
 
 #[test]
-#[should_panic(
-    expected = "Tried to mutate `Slab<H, T>` through a read-only load"
-)]
+#[should_panic(expected = "Tried to mutate `Slab<H, T>` through a read-only load")]
 fn top_up_panics_when_loaded_read_only() {
     let mut buf = setup_ledger(/*capacity*/ 4, /*len*/ 1);
 

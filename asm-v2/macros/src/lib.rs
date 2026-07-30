@@ -81,6 +81,7 @@ impl Parse for AsmProgram {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut items = Vec::new();
         let mut asm_tokens = Vec::new();
+        let mut saw_asm = false;
 
         while !input.is_empty() {
             // Check for `asm { ... }` block
@@ -88,11 +89,18 @@ impl Parse for AsmProgram {
                 let lookahead = input.fork();
                 let ident: Ident = lookahead.parse()?;
                 if ident == "asm" {
+                    if saw_asm {
+                        return Err(syn::Error::new(
+                            ident.span(),
+                            "multiple `asm { ... }` blocks are not allowed",
+                        ));
+                    }
                     let _: Ident = input.parse()?;
                     let content;
                     braced!(content in input);
                     // Collect all tokens verbatim
                     asm_tokens = content.parse::<proc_macro2::TokenStream>()?.into_iter().collect();
+                    saw_asm = true;
                     continue;
                 }
             }
@@ -691,5 +699,37 @@ mod tests {
         assert!(expanded.contains("DISC_UPDATE = const Instruction :: Update as u32"));
         assert!(expanded.contains("DISC_CLOSE = const Instruction :: Close as u32"));
         assert!(expanded.contains("DISC_SWEEP = const Instruction :: Sweep as u32"));
+    }
+
+    #[test]
+    fn test_multiple_asm_blocks_are_rejected() {
+        let err = syn::parse_str::<AsmProgram>(
+            r#"
+            asm { "" }
+            asm { "" }
+            "#,
+        )
+        .err()
+        .expect("multiple asm blocks should be rejected");
+
+        assert!(err
+            .to_string()
+            .contains("multiple `asm { ... }` blocks are not allowed"));
+    }
+
+    #[test]
+    fn test_single_asm_block_is_accepted() {
+        let program = syn::parse_str::<AsmProgram>(
+            r#"
+            pub struct Helper;
+
+            asm { include_str!("asm/errors.s"), }
+            "#,
+        )
+        .unwrap();
+
+        let asm_tokens = proc_macro2::TokenStream::from_iter(program.asm_tokens);
+        assert_eq!(program.items.len(), 1);
+        assert_eq!(asm_tokens.to_string(), "include_str ! (\"asm/errors.s\") ,");
     }
 }
