@@ -33,7 +33,9 @@ use quote::{format_ident, quote};
 use syn::{
     braced,
     parse::{Parse, ParseStream},
+    punctuated::Punctuated,
     Expr, Fields, Ident, Item, Lit, Meta,
+    Token,
 };
 
 /// Default first custom error code. Mirrors `anchor_lang_v2::error_code`.
@@ -185,10 +187,13 @@ fn default_prefix(kind: &str) -> String {
 #[proc_macro]
 pub fn asm_program(input: TokenStream) -> TokenStream {
     let program = syn::parse_macro_input!(input as AsmProgram);
-    expand_asm_program(program).into()
+    match expand_asm_program(program) {
+        Ok(expanded) => expanded.into(),
+        Err(err) => err.to_compile_error().into(),
+    }
 }
 
-fn expand_asm_program(program: AsmProgram) -> TokenStream2 {
+fn expand_asm_program(program: AsmProgram) -> syn::Result<TokenStream2> {
     let mut rust_items = Vec::new();
     let mut const_operands: Vec<TokenStream2> = Vec::new();
 
@@ -225,6 +230,7 @@ fn expand_asm_program(program: AsmProgram) -> TokenStream2 {
                 }
             }
             AnnotatedItem::Offsets { prefix, item } => {
+                ensure_repr_c(item, "offsets")?;
                 rust_items.push(quote! { #item });
                 let struct_name = &item.ident;
                 if let Fields::Named(fields) = &item.fields {
@@ -249,6 +255,7 @@ fn expand_asm_program(program: AsmProgram) -> TokenStream2 {
                 }
             }
             AnnotatedItem::Frame { prefix, item } => {
+                ensure_repr_c(item, "frame")?;
                 rust_items.push(quote! { #item });
                 let struct_name = &item.ident;
                 if let Fields::Named(fields) = &item.fields {
@@ -310,7 +317,7 @@ fn expand_asm_program(program: AsmProgram) -> TokenStream2 {
         );
     };
 
-    expanded
+    Ok(expanded)
 }
 
 // ---------------------------------------------------------------------------
@@ -334,6 +341,28 @@ fn to_screaming_snake(s: &str) -> String {
     result
 }
 
+fn ensure_repr_c(item: &syn::ItemStruct, attr_name: &str) -> syn::Result<()> {
+    let has_repr_c = item.attrs.iter().any(|attr| {
+        attr.path().is_ident("repr")
+            && attr
+                .parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)
+                .map(|metas| {
+                    metas.into_iter().any(
+                        |meta| matches!(meta, Meta::Path(path) if path.is_ident("C")),
+                    )
+                })
+                .unwrap_or(false)
+    });
+    if has_repr_c {
+        Ok(())
+    } else {
+        Err(syn::Error::new_spanned(
+            &item.ident,
+            format!("#[{attr_name}] requires #[repr(C)]"),
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -345,6 +374,203 @@ mod tests {
         assert_eq!(to_screaming_snake("BaseVaultHasData"), "BASE_VAULT_HAS_DATA");
         assert_eq!(to_screaming_snake("UserHasData"), "USER_HAS_DATA");
     }
+
+    #[test]
+    fn test_offsets_require_repr_c() {
+        let program = syn::parse_str::<AsmProgram>(
+            r#"
+            #[offsets(prefix = "CTR")]
+            pub struct Counter {
+                pub value: u64,
+            }
+
+            asm { "" }
+            "#,
+        )
+        .unwrap();
+
+        let err = expand_asm_program(program).unwrap_err();
+        assert!(err.to_string().contains("#[offsets] requires #[repr(C)]"));
+    }
+
+    #[test]
+    fn test_offsets_accept_repr_c() {
+        let program = syn::parse_str::<AsmProgram>(
+            r#"
+            #[offsets(prefix = "CTR")]
+            #[repr(C)]
+            pub struct Counter {
+                pub value: u64,
+            }
+
+            asm { "" }
+            "#,
+        )
+        .unwrap();
+
+        let expanded = expand_asm_program(program).unwrap().to_string();
+        assert!(expanded.contains("CTR_VALUE"));
+        assert!(expanded.contains("CTR_SIZE"));
+    }
+
+    #[test]
+    fn test_offsets_accept_combined_repr_c_and_align() {
+        let program = syn::parse_str::<AsmProgram>(
+            r#"
+            #[offsets(prefix = "CTR")]
+            #[repr(C, align(8))]
+            pub struct Counter {
+                pub value: u64,
+            }
+
+            asm { "" }
+            "#,
+        )
+        .unwrap();
+
+        let expanded = expand_asm_program(program).unwrap().to_string();
+        assert!(expanded.contains("CTR_VALUE"));
+        assert!(expanded.contains("CTR_SIZE"));
+    }
+
+    #[test]
+    fn test_offsets_accept_split_repr_c_and_align() {
+        let program = syn::parse_str::<AsmProgram>(
+            r#"
+            #[offsets(prefix = "CTR")]
+            #[repr(C)]
+            #[repr(align(8))]
+            pub struct Counter {
+                pub value: u64,
+            }
+
+            asm { "" }
+            "#,
+        )
+        .unwrap();
+
+        let expanded = expand_asm_program(program).unwrap().to_string();
+        assert!(expanded.contains("CTR_VALUE"));
+        assert!(expanded.contains("CTR_SIZE"));
+    }
+
+    #[test]
+    fn test_offsets_reject_repr_transparent() {
+        let program = syn::parse_str::<AsmProgram>(
+            r#"
+            #[offsets(prefix = "CTR")]
+            #[repr(transparent)]
+            pub struct Counter {
+                pub value: u64,
+            }
+
+            asm { "" }
+            "#,
+        )
+        .unwrap();
+
+        let err = expand_asm_program(program).unwrap_err();
+        assert!(err.to_string().contains("#[offsets] requires #[repr(C)]"));
+    }
+
+    #[test]
+    fn test_frame_requires_repr_c() {
+        let program = syn::parse_str::<AsmProgram>(
+            r#"
+            #[frame(prefix = "FM")]
+            pub struct Frame {
+                pub value: u64,
+            }
+
+            asm { "" }
+            "#,
+        )
+        .unwrap();
+
+        let err = expand_asm_program(program).unwrap_err();
+        assert!(err.to_string().contains("#[frame] requires #[repr(C)]"));
+    }
+
+    #[test]
+    fn test_frame_accepts_repr_c() {
+        let program = syn::parse_str::<AsmProgram>(
+            r#"
+            #[frame(prefix = "FM")]
+            #[repr(C)]
+            pub struct Frame {
+                pub value: u64,
+            }
+
+            asm { "" }
+            "#,
+        )
+        .unwrap();
+
+        let expanded = expand_asm_program(program).unwrap().to_string();
+        assert!(expanded.contains("FM_VALUE"));
+        assert!(expanded.contains("FM_SIZE"));
+    }
+
+    #[test]
+    fn test_frame_accepts_combined_repr_c_and_packed() {
+        let program = syn::parse_str::<AsmProgram>(
+            r#"
+            #[frame(prefix = "FM")]
+            #[repr(C, packed)]
+            pub struct Frame {
+                pub value: u64,
+            }
+
+            asm { "" }
+            "#,
+        )
+        .unwrap();
+
+        let expanded = expand_asm_program(program).unwrap().to_string();
+        assert!(expanded.contains("FM_VALUE"));
+        assert!(expanded.contains("FM_SIZE"));
+    }
+
+    #[test]
+    fn test_frame_accepts_split_repr_c_and_packed() {
+        let program = syn::parse_str::<AsmProgram>(
+            r#"
+            #[frame(prefix = "FM")]
+            #[repr(C)]
+            #[repr(packed)]
+            pub struct Frame {
+                pub value: u64,
+            }
+
+            asm { "" }
+            "#,
+        )
+        .unwrap();
+
+        let expanded = expand_asm_program(program).unwrap().to_string();
+        assert!(expanded.contains("FM_VALUE"));
+        assert!(expanded.contains("FM_SIZE"));
+    }
+
+    #[test]
+    fn test_frame_rejects_repr_packed_without_c() {
+        let program = syn::parse_str::<AsmProgram>(
+            r#"
+            #[frame(prefix = "FM")]
+            #[repr(packed)]
+            pub struct Frame {
+                pub value: u64,
+            }
+
+            asm { "" }
+            "#,
+        )
+        .unwrap();
+
+        let err = expand_asm_program(program).unwrap_err();
+        assert!(err.to_string().contains("#[frame] requires #[repr(C)]"));
+    }
+
 
     #[test]
     fn test_enum_constants_follow_rust_discriminants() {
@@ -368,7 +594,7 @@ mod tests {
         )
         .unwrap();
 
-        let expanded = expand_asm_program(program).to_string();
+        let expanded = expand_asm_program(program).unwrap().to_string();
         assert!(expanded.contains("E_ALPHA = const (Errors :: Alpha as u32 + 6000u32)"));
         assert!(expanded.contains("E_BETA = const (Errors :: Beta as u32 + 6000u32)"));
         assert!(expanded.contains("E_GAMMA = const (Errors :: Gamma as u32 + 6000u32)"));
@@ -393,7 +619,7 @@ mod tests {
         )
         .unwrap();
 
-        let expanded = expand_asm_program(program).to_string();
+        let expanded = expand_asm_program(program).unwrap().to_string();
         assert!(expanded.contains("ERR_ALPHA = const (Errors :: Alpha as u32 + 6000u32)"));
         assert!(expanded.contains("ERR_BETA = const (Errors :: Beta as u32 + 6000u32)"));
         assert!(expanded.contains("ERR_GAMMA = const (Errors :: Gamma as u32 + 6000u32)"));
@@ -416,7 +642,7 @@ mod tests {
         )
         .unwrap();
 
-        let expanded = expand_asm_program(program).to_string();
+        let expanded = expand_asm_program(program).unwrap().to_string();
         assert!(expanded.contains("ERR_SMALL = const (Errors :: Small as u32 + 6000u32)"));
         assert!(expanded.contains("ERR_LARGE = const (Errors :: Large as u32 + 6000u32)"));
         assert!(!expanded.contains("Errors :: Large as i32"));
@@ -437,7 +663,7 @@ mod tests {
         )
         .unwrap();
 
-        let expanded = expand_asm_program(program).to_string();
+        let expanded = expand_asm_program(program).unwrap().to_string();
         assert!(expanded.contains("ERR_INVALID_SIGNATURE = const (Errors :: InvalidSignature as u32 + 6000u32)"));
         assert!(expanded.contains("ERR_UNAUTHORIZED = const (Errors :: Unauthorized as u32 + 6000u32)"));
         assert!(!expanded.contains("ERR_INVALID_SIGNATURE = const Errors :: InvalidSignature as u32"));
@@ -460,7 +686,7 @@ mod tests {
         )
         .unwrap();
 
-        let expanded = expand_asm_program(program).to_string();
+        let expanded = expand_asm_program(program).unwrap().to_string();
         assert!(expanded.contains("DISC_INIT = const Instruction :: Init as u32"));
         assert!(expanded.contains("DISC_UPDATE = const Instruction :: Update as u32"));
         assert!(expanded.contains("DISC_CLOSE = const Instruction :: Close as u32"));
