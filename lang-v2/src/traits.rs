@@ -677,6 +677,12 @@ impl<T> core::ops::DerefMut for Nested<T> {
 impl<T: crate::IdlAccountType> crate::IdlAccountType for Nested<T> {
     const __IDL_ACCOUNT_ENTRY: Option<&'static str> = T::__IDL_ACCOUNT_ENTRY;
     const __IDL_TYPE_DEF: Option<&'static str> = T::__IDL_TYPE_DEF;
+    fn __idl_account_entry() -> Option<&'static str> {
+        T::__idl_account_entry()
+    }
+    fn __idl_type_def() -> Option<&'static str> {
+        T::__idl_type_def()
+    }
     fn __register_idl_deps(
         accounts: &mut ::alloc::vec::Vec<&'static str>,
         types: &mut ::alloc::vec::Vec<&'static str>,

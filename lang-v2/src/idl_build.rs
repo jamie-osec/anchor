@@ -52,6 +52,20 @@ pub trait IdlAccountType {
     const __IDL_IS_SIGNER: bool = false;
     const __IDL_ADDRESS: Option<&'static str> = None;
 
+    /// Dynamic accessor for the `accounts[]` entry. Defaults to the trait
+    /// const, but derive-generated impls can override it when the final IDL
+    /// string depends on cfg-pruned items.
+    fn __idl_account_entry() -> Option<&'static str> {
+        Self::__IDL_ACCOUNT_ENTRY
+    }
+
+    /// Dynamic accessor for the `types[]` entry. Defaults to the trait const,
+    /// but derive-generated impls can override it when the final IDL string
+    /// depends on cfg-pruned fields or variants.
+    fn __idl_type_def() -> Option<&'static str> {
+        Self::__IDL_TYPE_DEF
+    }
+
     /// Push this type's accounts/types entries (if any) and recursively
     /// register every user-defined type its fields reference. Default: no-op.
     ///

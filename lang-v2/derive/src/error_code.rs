@@ -8,10 +8,9 @@
 
 use {
     proc_macro::TokenStream,
-    proc_macro2::Span,
     quote::quote,
     syn::{
-        parse_macro_input, spanned::Spanned, Attribute, Expr, ItemEnum, Lit, Meta, MetaNameValue,
+        parse_macro_input, Attribute, Expr, ItemEnum, Lit, Meta, MetaNameValue,
     },
 };
 
@@ -23,17 +22,14 @@ pub fn expand(args: TokenStream, input: TokenStream) -> TokenStream {
     let mut item = parse_macro_input!(input as ItemEnum);
     let name = item.ident.clone();
 
-    let mut discriminator = 0;
-    let mut entries = Vec::new();
     let mut errors = Vec::new();
+    let mut idl_entry_pushes = Vec::new();
     for variant in item.variants.iter_mut() {
         let message = extract_msg(&variant.attrs);
         // Strip used `msg` attribute
         variant.attrs.retain(|a| !a.path().is_ident("msg"));
         if let Some((_, discr)) = &variant.discriminant {
-            if let Some(discr) = parse_discrim(discr) {
-                discriminator = discr;
-            } else {
+            if parse_discrim(discr).is_none() {
                 errors.push(
                     syn::Error::new_spanned(discr, "discriminant must be a u32 literal")
                         .to_compile_error(),
@@ -41,28 +37,33 @@ pub fn expand(args: TokenStream, input: TokenStream) -> TokenStream {
                 continue;
             }
         }
-        entries.push(ErrorEntry {
-            name: variant.ident.to_string(),
-            message,
-            discriminator,
-            span: variant.span(),
+        let variant_ident = variant.ident.clone();
+        let cfg_attrs = crate::cfg_attrs(&variant.attrs);
+        let escaped_name = escape_json(&variant.ident.to_string());
+        let suffix = match message {
+            Some(message) => {
+                format!(
+                    ",\"name\":\"{}\",\"msg\":\"{}\"}}",
+                    escaped_name,
+                    escape_json(&message),
+                )
+            }
+            None => format!(",\"name\":\"{}\"}}", escaped_name),
+        };
+        idl_entry_pushes.push(quote! {
+            #(#cfg_attrs)*
+            {
+                let __code = (#name::#variant_ident as u32)
+                    .checked_add(#offset)
+                    .expect("error code overflowed");
+                __parts.push(anchor_lang_v2::__alloc::format!(
+                    "{{\"code\":{}{}",
+                    __code,
+                    #suffix,
+                ));
+            }
         });
-        if let Some(next_discrim) = discriminator.checked_add(1) {
-            discriminator = next_discrim;
-        } else {
-            errors
-                .push(syn::Error::new_spanned(variant, "error code overflowed").to_compile_error());
-            break;
-        }
     }
-
-    let idl_json = match build_idl_errors_json(&entries, offset) {
-        Ok(json) => json,
-        Err(e) => {
-            errors.push(e.to_compile_error());
-            Default::default()
-        }
-    };
     let idl_fn_name = quote::format_ident!(
         "__anchor_private_print_idl_errors_{}",
         name.to_string().to_lowercase()
@@ -88,7 +89,21 @@ pub fn expand(args: TokenStream, input: TokenStream) -> TokenStream {
         impl #name {
             #[doc(hidden)]
             pub fn __idl_errors() -> anchor_lang_v2::__alloc::string::String {
-                anchor_lang_v2::__alloc::string::String::from(#idl_json)
+                let mut __parts: anchor_lang_v2::__alloc::vec::Vec<
+                    anchor_lang_v2::__alloc::string::String
+                > = anchor_lang_v2::__alloc::vec::Vec::new();
+                #(#idl_entry_pushes)*
+                let mut __payload = anchor_lang_v2::__alloc::string::String::from("[");
+                let mut __first = true;
+                for __part in &__parts {
+                    if !__first {
+                        __payload.push(',');
+                    }
+                    __first = false;
+                    __payload.push_str(__part);
+                }
+                __payload.push(']');
+                __payload
             }
         }
 
@@ -155,39 +170,6 @@ fn extract_msg(attrs: &[Attribute]) -> Option<String> {
             _ => None,
         }
     })
-}
-
-struct ErrorEntry {
-    name: String,
-    message: Option<String>,
-    /// The specified or calculated Rust discriminator
-    discriminator: u32,
-    span: Span,
-}
-
-fn build_idl_errors_json(entries: &[ErrorEntry], offset: u32) -> Result<String, syn::Error> {
-    let parts: Vec<String> = entries
-        .iter()
-        .map(|error| {
-            let Some(code) = offset.checked_add(error.discriminator) else {
-                return Err(syn::Error::new(
-                    error.span,
-                    "error code overflowed when adding offset",
-                ));
-            };
-            let escaped_name = escape_json(&error.name);
-            match &error.message {
-                Some(m) => Ok(format!(
-                    r#"{{"code":{},"name":"{}","msg":"{}"}}"#,
-                    code,
-                    escaped_name,
-                    escape_json(m),
-                )),
-                None => Ok(format!(r#"{{"code":{},"name":"{}"}}"#, code, escaped_name)),
-            }
-        })
-        .collect::<Result<_, _>>()?;
-    Ok(format!("[{}]", parts.join(",")))
 }
 
 fn escape_json(s: &str) -> String {

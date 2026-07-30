@@ -997,6 +997,12 @@ where
     // `[len][pad][items..]`, not a plain `Vec<T>` encoding.
     const __IDL_ACCOUNT_ENTRY: Option<&'static str> = H::__IDL_ACCOUNT_ENTRY;
     const __IDL_TYPE_DEF: Option<&'static str> = H::__IDL_TYPE_DEF;
+    fn __idl_account_entry() -> Option<&'static str> {
+        H::__idl_account_entry()
+    }
+    fn __idl_type_def() -> Option<&'static str> {
+        H::__idl_type_def()
+    }
     fn __register_idl_deps(
         accounts: &mut ::alloc::vec::Vec<&'static str>,
         types: &mut ::alloc::vec::Vec<&'static str>,
