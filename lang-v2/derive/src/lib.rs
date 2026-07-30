@@ -649,18 +649,10 @@ fn with_ix_lifetime(ty: &Type, ix: &syn::Lifetime) -> Type {
 
 fn nested_client_accounts_type(ty: &Type) -> Option<TokenStream2> {
     let inner = parse::extract_nested_inner_type(ty)?;
-    let Type::Path(inner_path) = inner else {
-        return None;
-    };
-    let inner_ident = &inner_path.path.segments.last()?.ident;
-    let module_ident = Ident::new(
-        &format!(
-            "__client_accounts_{}",
-            inner_ident.to_string().to_lowercase()
-        ),
-        inner_ident.span(),
-    );
-    Some(quote! { super::#module_ident::#inner_ident })
+    let inner_path = QualifiedTypePath::from_type(inner)?;
+    let inner_ident = &inner_path.leaf_ident;
+    let module_path = inner_path.helper_module_path("__client_accounts_", 1, inner_ident.span());
+    Some(quote! { #module_path::#inner_ident })
 }
 
 fn idl_field_ty(field: &parse::AccountField) -> Option<&Type> {
@@ -1688,15 +1680,13 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
                     let inner_ty = parse::extract_nested_inner_type(&f.ty).expect(
                         "is_nested_type was true but extract_nested_inner_type returned None",
                     );
-                    let inner_name = parse::field_ty_str(inner_ty);
-                    let inner_ident = syn::Ident::new(&inner_name, n.span());
-                    let inner_mod = syn::Ident::new(
-                        &format!("__cpi_accounts_{}", inner_name.to_lowercase()),
-                        n.span(),
-                    );
+                    let inner_path = QualifiedTypePath::from_type(inner_ty)
+                        .expect("Nested<T> inner type must be a path");
+                    let inner_ident = &inner_path.leaf_ident;
+                    let inner_mod = inner_path.helper_module_path("__cpi_accounts_", 1, n.span());
                     quote! {
                         #[nested]
-                        pub #n: super::#inner_mod::#inner_ident<'a>
+                        pub #n: #inner_mod::#inner_ident<'a>
                     }
                 } else if f.is_optional && f.idl_writable {
                     let signer_expr = cpi_meta_signer_expr(f);
@@ -4106,6 +4096,70 @@ impl HandlerCodegen {
     }
 }
 
+#[derive(Clone)]
+struct QualifiedTypePath {
+    path: syn::Path,
+    leaf_ident: Ident,
+}
+
+impl QualifiedTypePath {
+    fn from_type(ty: &Type) -> Option<Self> {
+        let Type::Path(type_path) = ty else {
+            return None;
+        };
+        Self::from_path(&type_path.path)
+    }
+
+    fn from_path(path: &syn::Path) -> Option<Self> {
+        let leaf_ident = path.segments.last()?.ident.clone();
+        Some(Self {
+            path: path.clone(),
+            leaf_ident,
+        })
+    }
+
+    fn helper_module_path(
+        &self,
+        prefix: &str,
+        relative_depth: usize,
+        span: proc_macro2::Span,
+    ) -> TokenStream2 {
+        let helper_ident = Ident::new(
+            &format!("{prefix}{}", self.leaf_ident.to_string().to_lowercase()),
+            span,
+        );
+
+        let mut prefix_segments: Vec<_> = self.path.segments.iter().cloned().collect();
+        prefix_segments.pop();
+
+        let is_absolute = self.path.leading_colon.is_some()
+            || prefix_segments
+                .first()
+                .map(|seg| seg.ident == "crate")
+                .unwrap_or(false);
+
+        if prefix_segments
+            .first()
+            .map(|seg| seg.ident == "self")
+            .unwrap_or(false)
+        {
+            prefix_segments.remove(0);
+        }
+
+        let super_prefix: Vec<_> = if is_absolute {
+            Vec::new()
+        } else {
+            (0..relative_depth).map(|_| quote! { super :: }).collect()
+        };
+
+        quote! {
+            #(#super_prefix)*
+            #(#prefix_segments ::)*
+            #helper_ident
+        }
+    }
+}
+
 fn is_unit_type(ty: &Type) -> bool {
     matches!(ty, Type::Tuple(tuple) if tuple.elems.is_empty())
 }
@@ -4280,10 +4334,12 @@ fn process_handler(
             )
         }
     };
-    let accounts_type = match extract_context_accounts_ident(first_arg) {
+    let accounts_type = match extract_context_accounts_path(first_arg) {
         Ok(accounts_type) => accounts_type,
         Err(err) => return HandlerCodegen::error(handler, err),
     };
+    let accounts_path = &accounts_type.path;
+    let accounts_ident = &accounts_type.leaf_ident;
 
     let extra_args: Vec<(&Ident, &Type)> = args_iter
         .filter_map(|arg| {
@@ -4321,7 +4377,7 @@ fn process_handler(
                 #[inline(always)]
                 fn __anchor_assert_no_ix_args(_: ()) {}
 
-                match anchor_lang_v2::run_handler::<#accounts_type, #return_ty>(
+                match anchor_lang_v2::run_handler::<#accounts_path, #return_ty>(
                     __program_id,
                     __cursor,
                     __ix_data,
@@ -4373,7 +4429,7 @@ fn process_handler(
                     }
                 }
 
-                match anchor_lang_v2::run_handler::<#accounts_type, #return_ty>(
+                match anchor_lang_v2::run_handler::<#accounts_path, #return_ty>(
                     __program_id,
                     __cursor,
                     __ix_data,
@@ -4437,30 +4493,19 @@ fn process_handler(
     };
 
     // Client accounts re-export.
-    let client_mod = syn::Ident::new(
-        &format!(
-            "__client_accounts_{}",
-            accounts_type.to_string().to_lowercase()
-        ),
-        fn_name.span(),
-    );
-    let resolved_type = syn::Ident::new(&format!("{accounts_type}Resolved"), accounts_type.span());
+    let client_mod = accounts_type.helper_module_path("__client_accounts_", 1, fn_name.span());
+    let resolved_type =
+        syn::Ident::new(&format!("{accounts_ident}Resolved"), accounts_ident.span());
     let accounts_reexport = quote! {
-        pub use super::#client_mod::#accounts_type;
-        pub use super::#client_mod::#resolved_type;
+        pub use #client_mod::#accounts_ident;
+        pub use #client_mod::#resolved_type;
     };
 
     // CPI accounts re-export — `__cpi_accounts_<lowercase>` is emitted by
     // `#[derive(Accounts)]` at the same scope as the program's outputs.
-    let cpi_mod = syn::Ident::new(
-        &format!(
-            "__cpi_accounts_{}",
-            accounts_type.to_string().to_lowercase()
-        ),
-        fn_name.span(),
-    );
+    let cpi_mod = accounts_type.helper_module_path("__cpi_accounts_", 2, fn_name.span());
     let cpi_accounts_reexport = quote! {
-        pub use super::super::#cpi_mod::#accounts_type;
+        pub use #cpi_mod::#accounts_ident;
     };
 
     // CPI wrapper function — mirrors the handler's argument list (sans
@@ -4489,7 +4534,7 @@ fn process_handler(
         };
         quote! {
             pub fn #fn_name #lt_decl(
-                __ctx: anchor_lang_v2::CpiContext<'a, accounts::#accounts_type<'a>>,
+                __ctx: anchor_lang_v2::CpiContext<'a, accounts::#accounts_ident<'a>>,
                 #(#extra_arg_names: #extra_arg_types,)*
             ) #ret_ty {
                 let __ix = super::instruction::#ix_struct_name #ix_lt_use_local {
@@ -4523,13 +4568,13 @@ fn process_handler(
         accounts_reexport,
         cpi_wrapper,
         cpi_accounts_reexport,
-        accounts_type_name: accounts_type.to_string(),
+        accounts_type_name: quote! { #accounts_path }.to_string(),
         idl_name: fn_name_str,
         idl_disc: idl::disc_json(&disc_bytes_for_idl),
         idl_args: idl::build_args_json(&extra_args),
         idl_returns_json,
         idl_docs_json,
-        idl_accounts_type: quote! { #accounts_type },
+        idl_accounts_type: quote! { #accounts_path },
         arg_types: extra_args.iter().map(|(_, t)| (*t).clone()).collect(),
         return_type,
     }
@@ -5967,7 +6012,7 @@ fn parse_discrim_attr(handler: &syn::ItemFn) -> syn::Result<Option<DiscrimAttr>>
     Ok(None)
 }
 
-fn extract_context_accounts_ident(arg: &FnArg) -> syn::Result<Ident> {
+fn extract_context_accounts_path(arg: &FnArg) -> syn::Result<QualifiedTypePath> {
     let ty = match arg {
         FnArg::Typed(pt) => &*pt.ty,
         _ => {
@@ -6068,7 +6113,12 @@ fn extract_context_accounts_ident(arg: &FnArg) -> syn::Result<Ident> {
         ));
     }
 
-    Ok(accounts_segment.ident.clone())
+    QualifiedTypePath::from_path(&accounts_path.path).ok_or_else(|| {
+        syn::Error::new(
+            accounts_path.span(),
+            "Context generic must be an accounts struct type, for example `Context<Buy>`",
+        )
+    })
 }
 
 /// Converts `snake_case` to `CamelCase` (e.g. `execute_transfer` → `ExecuteTransfer`).
@@ -6142,6 +6192,40 @@ mod tests {
         assert!(
             wrapper.contains("impl < 'ix > __AnchorIxArgCoerce < 'ix > for ()"),
             "expected missing-#[instruction] fallback impl in wrapper: {wrapper}"
+        );
+    }
+
+    #[test]
+    fn extract_context_accounts_path_preserves_qualified_segments() {
+        let arg: FnArg = syn::parse_quote! {
+            ctx: &mut Context<shared::Inner>
+        };
+
+        let accounts_path =
+            extract_context_accounts_path(&arg).expect("qualified context path should parse");
+        let full_path = &accounts_path.path;
+
+        assert_eq!(quote!(#full_path).to_string(), "shared :: Inner");
+        assert_eq!(accounts_path.leaf_ident.to_string(), "Inner");
+    }
+
+    #[test]
+    fn qualified_type_helper_module_path_tracks_original_scope() {
+        let ty: Type = syn::parse_quote!(crate::shared::Inner);
+        let qualified =
+            QualifiedTypePath::from_type(&ty).expect("qualified nested path should parse");
+        let client_path =
+            qualified.helper_module_path("__client_accounts_", 1, proc_macro2::Span::call_site());
+        let cpi_path =
+            qualified.helper_module_path("__cpi_accounts_", 2, proc_macro2::Span::call_site());
+
+        assert_eq!(
+            quote!(#client_path::Inner).to_string(),
+            "crate :: shared :: __client_accounts_inner :: Inner"
+        );
+        assert_eq!(
+            quote!(#cpi_path::Inner).to_string(),
+            "crate :: shared :: __cpi_accounts_inner :: Inner"
         );
     }
 

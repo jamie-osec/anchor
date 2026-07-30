@@ -45,6 +45,46 @@ wincode = {{ version = "0.5", features = ["derive"] }}
     }
 }
 
+fn compile_pass_case(name: &str, source: &str) {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let crate_dir = manifest_dir.join("target/macro-diagnostics").join(name);
+    let src_dir = crate_dir.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
+    fs::write(
+        crate_dir.join("Cargo.toml"),
+        format!(
+            r#"[package]
+name = "{name}"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+anchor-lang-v2 = {{ path = "{}" }}
+wincode = {{ version = "0.5", features = ["derive"] }}
+
+[workspace]
+"#,
+            manifest_dir.display()
+        ),
+    )
+    .unwrap();
+    fs::write(src_dir.join("lib.rs"), source).unwrap();
+
+    let output = Command::new("cargo")
+        .args(["check", "--offline", "--manifest-path"])
+        .arg(crate_dir.join("Cargo.toml"))
+        .output()
+        .unwrap_or_else(|err| panic!("failed to run cargo check for {name}: {err}"));
+
+    assert!(
+        output.status.success(),
+        "{name} failed to compile\n\nstdout:\n{}\n\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+}
+
 #[test]
 #[cfg_attr(
     miri,
@@ -364,6 +404,58 @@ fn check() {
 }
 "#,
         &["SlotHashes", "SysvarId"],
+    );
+}
+
+#[test]
+#[cfg_attr(
+    miri,
+    ignore = "spawns cargo and writes temporary workspaces; covered by normal cargo test"
+)]
+fn qualified_accounts_paths_compile() {
+    compile_pass_case(
+        "qualified_accounts_paths",
+        r#"
+use anchor_lang_v2::prelude::*;
+
+declare_id!("11111111111111111111111111111111");
+
+pub mod shared {
+    use super::*;
+
+    #[derive(Accounts)]
+    pub struct Inner {
+        pub signer: Signer,
+    }
+
+    #[derive(Accounts)]
+    pub struct Outer {
+        pub inner: Nested<crate::shared2::Leaf>,
+    }
+}
+
+pub mod shared2 {
+    use super::*;
+
+    #[derive(Accounts)]
+    pub struct Leaf {
+        pub signer: Signer,
+    }
+}
+
+#[program]
+pub mod qualified_paths {
+    use super::*;
+
+    pub fn use_qualified_ctx(_ctx: &mut Context<shared::Inner>) -> Result<()> {
+        Ok(())
+    }
+
+    pub fn use_nested(_ctx: &mut Context<shared::Outer>) -> Result<()> {
+        Ok(())
+    }
+}
+"#,
     );
 }
 
