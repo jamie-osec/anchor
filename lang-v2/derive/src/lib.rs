@@ -819,6 +819,13 @@ fn parse_instruction_attrs(attrs: &[syn::Attribute]) -> syn::Result<Vec<(Ident, 
         attr.parse_args_with(|input: syn::parse::ParseStream| {
             while !input.is_empty() {
                 let name: Ident = input.parse()?;
+                if name.to_string().starts_with("__") {
+                    return Err(syn::Error::new(
+                        name.span(),
+                        "instruction argument names beginning with `__` are reserved for \
+                         generated code",
+                    ));
+                }
                 input.parse::<syn::Token![:]>()?;
                 let ty: Type = input.parse()?;
                 result.push((name, ty));

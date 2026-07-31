@@ -394,6 +394,30 @@ pub struct Bad {
     miri,
     ignore = "spawns cargo and writes temporary workspaces; covered by normal cargo test"
 )]
+fn instruction_args_reject_generated_name_namespace() {
+    compile_fail_case(
+        "reserved_instruction_arg",
+        r#"
+use anchor_lang_v2::prelude::*;
+
+#[derive(Accounts)]
+#[instruction(__base_offset: usize)]
+pub struct Bad {
+    #[account(mut)]
+    pub data: Option<UncheckedAccount>,
+}
+"#,
+        &[
+            "instruction argument names beginning with `__` are reserved for generated code",
+        ],
+    );
+}
+
+#[test]
+#[cfg_attr(
+    miri,
+    ignore = "spawns cargo and writes temporary workspaces; covered by normal cargo test"
+)]
 fn cfg_gated_public_handlers_do_not_emit_missing_wrappers() {
     compile_pass_case(
         "cfg_gated_handler",
