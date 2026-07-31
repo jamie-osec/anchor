@@ -216,7 +216,7 @@ fn slab_realloc_shrink_refund_is_capped_by_available_lamports_above_new_floor() 
 }
 
 #[test]
-fn slab_realloc_shrink_with_self_payer_is_rejected() {
+fn slab_realloc_shrink_with_self_payer_is_allowed() {
     let buf = setup_ledger(/*capacity*/ 4, /*len*/ 1);
 
     let old_space = ITEMS_OFFSET + 4 * ITEM_SIZE;
@@ -230,21 +230,16 @@ fn slab_realloc_shrink_with_self_payer_is_rejected() {
     let view = unsafe { buf.view() };
     let mut slab = unsafe { CounterLedger::load_mut(view) }.unwrap();
 
-    // #4692: realloc rejects payer == target before any resize / lamport
-    // transfer.
-    let err = slab
-        .realloc_account(new_space, payer_view, false)
-        .expect_err("realloc must reject using the target account as the payer");
-    assert_eq!(err, ProgramError::InvalidArgument);
+    slab.realloc_account(new_space, payer_view, false).unwrap();
     assert_eq!(
         slab.view().lamports(),
         old_required + vault_balance,
-        "rejected self-payer realloc must leave lamports unchanged",
+        "a self-payer refund is a no-op and must not burn vault lamports",
     );
     assert_eq!(
         slab.current_space(),
-        old_space,
-        "rejected self-payer realloc must leave account size unchanged",
+        new_space,
+        "self-payer realloc must still shrink the account",
     );
 }
 
