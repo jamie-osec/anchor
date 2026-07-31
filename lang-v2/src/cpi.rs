@@ -274,76 +274,18 @@ pub fn verify_program_address(
     }
 }
 
-/// Like [`find_and_verify_program_address`] but skips `sol_curve_validate_point`.
+/// Compatibility alias for [`find_and_verify_program_address`].
 ///
-/// Safe when the account was signed for (`MIN_DATA_LEN > 0` or `init`):
-/// signing goes through `invoke_signed` → `create_program_address` which
-/// includes the runtime's own curve check. The loop tries all 256 bumps
-/// via hash-and-compare; SHA-256 collision resistance ensures only the
-/// canonical bump matches.
+/// This historically skipped curve checks for initialized data accounts, but
+/// doing so accepted any matching off-curve bump rather than the canonical
+/// first off-curve bump.
 #[inline(always)]
 pub fn find_and_verify_program_address_skip_curve(
     seeds: &[&[u8]],
     program_id: &Address,
     expected: &Address,
 ) -> Result<u8, ProgramError> {
-    validate_pda_seeds(seeds, MAX_PDA_SEEDS_WITHOUT_BUMP)?;
-
-    #[cfg(target_os = "solana")]
-    {
-        use solana_define_syscall::definitions::sol_sha256;
-        const PDA_MARKER: &[u8; 21] = b"ProgramDerivedAddress";
-
-        let n = seeds.len();
-        let mut slices = core::mem::MaybeUninit::<[&[u8]; 19]>::uninit();
-        let sptr = slices.as_mut_ptr() as *mut &[u8];
-        let mut i = 0;
-        while i < n {
-            unsafe { sptr.add(i).write(seeds[i]) };
-            i += 1;
-        }
-        unsafe {
-            sptr.add(n + 1).write(program_id.as_ref());
-            sptr.add(n + 2).write(PDA_MARKER.as_slice());
-        }
-        let mut bump_arr = [u8::MAX];
-        let bump_ptr = bump_arr.as_mut_ptr();
-        unsafe { sptr.add(n).write(core::slice::from_raw_parts(bump_ptr, 1)) };
-        let input = unsafe { core::slice::from_raw_parts(sptr, n + 3) };
-        let mut hash = core::mem::MaybeUninit::<[u8; 32]>::uninit();
-        let mut bump: u64 = u8::MAX as u64;
-
-        loop {
-            unsafe { bump_ptr.write(bump as u8) };
-            unsafe {
-                sol_sha256(
-                    input as *const _ as *const u8,
-                    input.len() as u64,
-                    hash.as_mut_ptr() as *mut u8,
-                )
-            };
-            let h = unsafe { hash.assume_init() };
-            let derived = Address::new_from_array(h);
-            if pinocchio::address::address_eq(&derived, expected) {
-                return Ok(bump as u8);
-            }
-            if bump == 0 {
-                break;
-            }
-            bump -= 1;
-        }
-        Err(ProgramError::InvalidSeeds)
-    }
-
-    #[cfg(not(target_os = "solana"))]
-    {
-        let (pda, bump) = Address::find_program_address(seeds, program_id);
-        if pinocchio::address::address_eq(&pda, expected) {
-            Ok(bump)
-        } else {
-            Err(ProgramError::InvalidSeeds)
-        }
-    }
+    find_and_verify_program_address(seeds, program_id, expected)
 }
 
 /// Verify that `addr` is off the Ed25519 curve (i.e. a valid PDA).
@@ -433,6 +375,25 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(err, ProgramError::MaxSeedLengthExceeded);
+    }
+
+    #[test]
+    fn compatibility_finder_rejects_noncanonical_off_curve_bump() {
+        let program_id = program_id();
+        let seeds = [b"vault".as_ref()];
+        let (_, canonical_bump) = Address::find_program_address(&seeds, &program_id);
+        let alias = (0..canonical_bump).rev().find_map(|bump| {
+            Address::create_program_address(&[seeds[0], &[bump]], &program_id)
+                .ok()
+                .map(|address| (address, bump))
+        });
+        let (alias, alias_bump) = alias.expect("expected a lower off-curve bump");
+
+        assert_ne!(alias_bump, canonical_bump);
+        assert_eq!(
+            find_and_verify_program_address_skip_curve(&seeds, &program_id, &alias),
+            Err(ProgramError::InvalidSeeds),
+        );
     }
 
     #[test]
