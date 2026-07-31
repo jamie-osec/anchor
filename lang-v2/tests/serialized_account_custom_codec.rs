@@ -269,10 +269,10 @@ fn le_codec_reacquire_rejects_owner_change() {
     assert_eq!(err, ProgramError::IllegalOwner);
 }
 
-// -- 1.10 exit on zero-lamport account is a no-op ------------------------
+// -- 1.10 exit on transient zero-lamport account serializes --------------
 
 #[test]
-fn le_codec_exit_on_closed_account_is_noop() {
+fn le_codec_exit_on_transient_zero_lamport_account_serializes() {
     let mut buf = AccountBuffer::<256>::new();
     setup_stats_buf(&mut buf, 1, 0xAABB_CCDD);
 
@@ -282,9 +282,10 @@ fn le_codec_exit_on_closed_account_is_noop() {
     buf.set_lamports(0);
     acct.exit().unwrap();
 
-    // The buffer still reflects the original count, not 555.
+    // Zero lamports alone do not prove the account was closed. Persist the
+    // update unless the closed-account discriminator is also present.
     let bytes = read_data_bytes(&buf, 8, 4);
-    assert_eq!(u32::from_le_bytes(bytes.try_into().unwrap()), 1);
+    assert_eq!(u32::from_le_bytes(bytes.try_into().unwrap()), 555);
 }
 
 // =========================================================================

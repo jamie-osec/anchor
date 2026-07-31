@@ -8,7 +8,8 @@
 //!    the buffer, picking up any CPI-induced changes. A CPI that
 //!    reassigned the account or swapped its disc is rejected.
 //! 3. `exit` serializes `self.data` through the held mutable guard.
-//!    On a closed account (lamports == 0) it is a no-op.
+//!    On an account whose runtime header reflects a completed close it
+//!    is a no-op.
 //! 4. `exit`'s stale-size detection fires when an external resize
 //!    happened without the user going through release / reacquire.
 //!    It does not fire on content-only out-of-band mutation (same
@@ -353,13 +354,10 @@ fn reacquire_rejects_when_owner_changes_during_release() {
     );
 }
 
-// -- 4. Exit on a closed account is a no-op --------------------------
-//
-// The first line of exit checks `view.lamports() == 0` and bails.
-// This prevents serializing back to a closed/about-to-close account.
+// -- 4. Exit distinguishes a transient zero balance from close -------
 
 #[test]
-fn exit_on_zero_lamport_account_is_noop() {
+fn exit_on_transient_zero_lamport_account_serializes() {
     let mut buf = AccountBuffer::<256>::new();
     setup_counter_buf(&mut buf, 42);
 
@@ -369,19 +367,41 @@ fn exit_on_zero_lamport_account_is_noop() {
     // Modify self.data.
     acct.value = 999;
 
-    // Simulate close: set lamports to 0 (bypassing normal close path
-    // for test purposes).
+    // A later account exit can refund this account, so zero lamports
+    // without the close header transition is not a completed close.
     buf.set_lamports(0);
 
-    // exit should be a no-op — closed account's data should not be
-    // serialized over.
+    acct.exit().unwrap();
+
+    let bytes = read_data_bytes(&buf, 8, 8);
+    assert_eq!(
+        u64::from_le_bytes(bytes.try_into().unwrap()),
+        999,
+        "a transient zero balance must not suppress write-back"
+    );
+}
+
+#[test]
+fn exit_on_closed_account_is_noop() {
+    let mut buf = AccountBuffer::<256>::new();
+    setup_counter_buf(&mut buf, 42);
+
+    let view = unsafe { buf.view() };
+    let mut acct = unsafe { BorshAccount::<Counter>::load_mut(view) }.unwrap();
+    acct.value = 999;
+
+    // pinocchio's close() clears these runtime header fields.
+    buf.set_lamports(0);
+    buf.set_data_len(0);
+    buf.set_owner([0; 32]);
+
     acct.exit().unwrap();
 
     let bytes = read_data_bytes(&buf, 8, 8);
     assert_eq!(
         u64::from_le_bytes(bytes.try_into().unwrap()),
         42,
-        "exit on zero-lamport account must not write back — correct"
+        "a completed close must suppress write-back"
     );
 }
 
