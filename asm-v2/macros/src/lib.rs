@@ -21,8 +21,8 @@
 //!     }
 //!
 //!     asm {
-//!         "asm/errors.s",
-//!         "asm/entrypoint.s",
+//!         include_str!("asm/errors.s"),
+//!         include_str!("asm/entrypoint.s"),
 //!     }
 //! }
 //! ```
@@ -736,5 +736,34 @@ mod tests {
         let asm_tokens = proc_macro2::TokenStream::from_iter(program.asm_tokens);
         assert_eq!(program.items.len(), 1);
         assert_eq!(asm_tokens.to_string(), "include_str ! (\"asm/errors.s\") ,");
+    }
+
+    #[test]
+    fn test_asm_block_accepts_include_str_tokens() {
+        let program = syn::parse_str::<AsmProgram>(
+            r#"
+            asm { include_str!("asm/errors.s"), }
+            "#,
+        )
+        .unwrap();
+
+        let asm_tokens = proc_macro2::TokenStream::from_iter(program.asm_tokens);
+        assert_eq!(asm_tokens.to_string(), "include_str ! (\"asm/errors.s\") ,");
+    }
+
+    #[test]
+    fn test_asm_block_accepts_include_str_concat_tokens() {
+        let program = syn::parse_str::<AsmProgram>(
+            r#"
+            asm { include_str!(concat!(env!("OUT_DIR"), "/combined.s")), }
+            "#,
+        )
+        .unwrap();
+
+        let asm_tokens = proc_macro2::TokenStream::from_iter(program.asm_tokens);
+        assert_eq!(
+            asm_tokens.to_string(),
+            "include_str ! (concat ! (env ! (\"OUT_DIR\") , \"/combined.s\")) ,"
+        );
     }
 }
