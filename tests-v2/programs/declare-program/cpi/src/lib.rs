@@ -18,7 +18,7 @@ pub mod declare_program {
             authority: ctx.accounts.authority.cpi_handle(),
         };
         let cpi_ctx = CpiContext::new(ctx.accounts.external_program.address(), cpi_accounts);
-        external_cpi::cpi::set_value(cpi_ctx, value);
+        external_cpi::cpi::set_value(cpi_ctx, value)?;
         Ok(())
     }
 
@@ -32,7 +32,7 @@ pub mod declare_program {
             payer: ctx.accounts.payer.cpi_handle_mut(),
         };
         let cpi_ctx = CpiContext::new(ctx.accounts.external_program.address(), cpi_accounts);
-        external_cpi::cpi::composite(cpi_ctx, count);
+        external_cpi::cpi::composite(cpi_ctx, count)?;
         Ok(())
     }
 
@@ -54,7 +54,7 @@ pub mod declare_program {
                 tag,
                 owner: *ctx.accounts.authority.address(),
             },
-        );
+        )?;
         Ok(())
     }
 
@@ -65,7 +65,7 @@ pub mod declare_program {
             authority: ctx.accounts.authority.cpi_handle(),
         };
         let cpi_ctx = CpiContext::new(ctx.accounts.alt_program.address(), cpi_accounts);
-        alt_cpi::cpi::bump(cpi_ctx, delta);
+        alt_cpi::cpi::bump(cpi_ctx, delta)?;
         Ok(())
     }
 
@@ -81,7 +81,7 @@ pub mod declare_program {
             authority: ctx.accounts.authority.cpi_handle(),
         };
         let cpi_ctx = CpiContext::new(ctx.accounts.hash_program.address(), cpi_accounts);
-        hash_cpi::cpi::apply(cpi_ctx, delta, flag, marker);
+        hash_cpi::cpi::apply(cpi_ctx, delta, flag, marker)?;
         Ok(())
     }
 }

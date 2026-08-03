@@ -762,6 +762,7 @@ where
 {
     type Data = H;
     const MIN_DATA_LEN: usize = Slab::<H, T>::MIN_DATA_LEN;
+    const RELAX_READONLY_CPI_BORROW_FROM_MUT: bool = true;
 
     #[inline(always)]
     fn load(view: AccountView) -> Result<Self, ProgramError> {
@@ -810,6 +811,21 @@ where
     #[inline(always)]
     fn account(&self) -> &AccountView {
         &self.view
+    }
+
+    #[inline(always)]
+    fn cpi_handle(&self) -> crate::CpiHandle<'_> {
+        crate::CpiHandle::readonly_with_flags(
+            self.account(),
+            !self.is_mutable,
+            self.is_mutable,
+        )
+    }
+
+    #[inline(always)]
+    fn try_cpi_handle_mut(&mut self) -> Result<crate::CpiHandleMut<'_>, ProgramError> {
+        require!(self.account().is_writable(), ProgramError::InvalidArgument);
+        Ok(crate::CpiHandleMut::without_borrow_check(self.account()))
     }
 }
 

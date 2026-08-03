@@ -69,8 +69,7 @@ pub fn create<'a>(ctx: CpiContext<'a, Create<'a>>) -> Result<(), ProgramError> {
         );
     }
     crate::token_shared::validate_token_interface_program(ctx.accounts.token_program.address())?;
-    ctx.invoke(&[0]);
-    Ok(())
+    ctx.invoke(&[0])
 }
 
 pub fn create_idempotent<'a>(
@@ -91,6 +90,5 @@ pub fn create_idempotent<'a>(
         );
     }
     crate::token_shared::validate_token_interface_program(ctx.accounts.token_program.address())?;
-    ctx.invoke(&[1]);
-    Ok(())
+    ctx.invoke(&[1])
 }

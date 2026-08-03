@@ -222,6 +222,7 @@ where
     S: AnchorAccountSerialize<T>,
 {
     type Data = T;
+    const RELAX_READONLY_CPI_BORROW_FROM_MUT: bool = true;
     const MIN_DATA_LEN: usize = 8;
 
     fn load(view: AccountView) -> Result<Self, ProgramError> {

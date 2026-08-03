@@ -3,7 +3,11 @@ use pinocchio::account::{Ref, RefMut};
 use {
     crate::require,
     core::ops::Deref,
-    pinocchio::{account::AccountView, address::Address, instruction::InstructionAccount},
+    pinocchio::{
+        account::{AccountView, NOT_BORROWED},
+        address::Address,
+        instruction::InstructionAccount,
+    },
     solana_program_error::{ProgramError, ProgramResult},
 };
 
@@ -11,8 +15,9 @@ use {
 ///
 /// Obtained via [`AnchorAccount::cpi_handle`] (shared borrow) or by erasing a
 /// [`CpiHandleMut`] produced from [`AnchorAccount::cpi_handle_mut`].
-/// Pinocchio's `borrow_state` is never modified — CPI is routed through
-/// `invoke_signed_unchecked` by [`CpiContext::invoke`].
+/// Handles participate in raw `AccountView` borrow validation before CPI by
+/// default. Wrappers with their own borrow-state discipline may opt out when
+/// the CPI account meta guarantees the callee cannot mutate the account.
 ///
 /// Deliberately does NOT implement `Deref<Target = AccountView>` to
 /// prevent accidental use with pinocchio's checked invoke builders.
@@ -20,6 +25,8 @@ use {
 pub struct CpiHandle<'a> {
     view: &'a AccountView,
     writable: bool,
+    borrow_check: bool,
+    relax_readonly_borrow: bool,
 }
 
 /// Typed mutable CPI handle for API-facing CPI account structs.
@@ -29,22 +36,51 @@ pub struct CpiHandle<'a> {
 #[derive(Clone, Copy)]
 pub struct CpiHandleMut<'a> {
     view: &'a AccountView,
+    borrow_check: bool,
+}
+
+pub(crate) struct CpiBorrowGuard {
+    borrow_state: *mut u8,
+    restore_to: u8,
 }
 
 impl<'a> CpiHandle<'a> {
     #[inline(always)]
     pub fn readonly(view: &'a AccountView) -> Self {
+        Self::readonly_with_borrow_check(view, true)
+    }
+
+    #[inline(always)]
+    pub(crate) fn readonly_with_borrow_check(view: &'a AccountView, borrow_check: bool) -> Self {
+        Self::readonly_with_flags(view, borrow_check, false)
+    }
+
+    #[inline(always)]
+    pub(crate) fn readonly_with_flags(
+        view: &'a AccountView,
+        borrow_check: bool,
+        relax_readonly_borrow: bool,
+    ) -> Self {
         Self {
             view,
             writable: false,
+            borrow_check,
+            relax_readonly_borrow,
         }
     }
 
     #[inline(always)]
     pub fn writable(view: &'a mut AccountView) -> Self {
+        Self::writable_with_borrow_check(view, true)
+    }
+
+    #[inline(always)]
+    pub(crate) fn writable_with_borrow_check(view: &'a AccountView, borrow_check: bool) -> Self {
         Self {
             view,
             writable: true,
+            borrow_check,
+            relax_readonly_borrow: false,
         }
     }
 
@@ -78,12 +114,46 @@ impl<'a> CpiHandle<'a> {
     pub(crate) fn account_view(&self) -> &'a AccountView {
         self.view
     }
+
+    #[inline(always)]
+    pub(crate) fn requires_borrow_check(&self) -> bool {
+        self.borrow_check
+    }
+
+    #[inline(always)]
+    pub(crate) fn enter_cpi(&self) -> Option<CpiBorrowGuard> {
+        if !self.writable && self.relax_readonly_borrow {
+            let borrow_state = self.view.account_ptr().cast_mut().cast::<u8>();
+            // Mutable Slab wrappers pin the runtime borrow state at `0` while
+            // the wrapper is alive. For readonly CPIs that state is too
+            // strong: the callee only needs shared borrows, and readonly metas
+            // prevent writes. Downgrade to a single shared borrow for the CPI
+            // and restore the exclusive marker afterwards.
+            unsafe { *borrow_state = NOT_BORROWED - 1 };
+            Some(CpiBorrowGuard {
+                borrow_state,
+                restore_to: 0,
+            })
+        } else {
+            None
+        }
+    }
 }
 
 impl<'a> CpiHandleMut<'a> {
     #[inline(always)]
     pub fn writable(view: &'a mut AccountView) -> Self {
-        Self { view }
+        Self::writable_with_borrow_check(view, true)
+    }
+
+    #[inline(always)]
+    pub(crate) fn without_borrow_check(view: &'a AccountView) -> Self {
+        Self::writable_with_borrow_check(view, false)
+    }
+
+    #[inline(always)]
+    fn writable_with_borrow_check(view: &'a AccountView, borrow_check: bool) -> Self {
+        Self { view, borrow_check }
     }
 
     /// The account's on-chain address.
@@ -111,8 +181,26 @@ impl<'a> From<CpiHandleMut<'a>> for CpiHandle<'a> {
         Self {
             view: handle.view,
             writable: true,
+            borrow_check: handle.borrow_check,
+            relax_readonly_borrow: false,
         }
     }
+}
+
+impl Drop for CpiBorrowGuard {
+    fn drop(&mut self) {
+        unsafe { *self.borrow_state = self.restore_to };
+    }
+}
+
+pub(crate) fn enter_cpi<'a>(handles: &[CpiHandle<'a>]) -> alloc::vec::Vec<CpiBorrowGuard> {
+    let mut guards = alloc::vec::Vec::new();
+    for handle in handles {
+        if let Some(guard) = handle.enter_cpi() {
+            guards.push(guard);
+        }
+    }
+    guards
 }
 
 /// Converts a CPI accounts struct into instruction metadata and handles.
@@ -144,6 +232,15 @@ pub trait AnchorAccount: Deref<Target = Self::Data> + Sized {
     /// UncheckedAccount / zero-data wrappers leave it at `0` (forces the curve
     /// check).
     const MIN_DATA_LEN: usize = 0;
+
+    /// Whether readonly CPI handles borrowed from a mutable wrapper need their
+    /// runtime borrow marker temporarily relaxed during CPI entry.
+    ///
+    /// Wrappers that keep an exclusive marker alive after `load_mut()` (for
+    /// example `Account<T>` / `Slab<H, T>` and `SerializedAccount<T, S>`)
+    /// override this so derive-generated readonly CPI accounts can preserve
+    /// compatibility without reopening writable aliasing.
+    const RELAX_READONLY_CPI_BORROW_FROM_MUT: bool = false;
 
     fn load(view: AccountView) -> core::result::Result<Self, ProgramError>;
 
@@ -202,10 +299,7 @@ pub trait AnchorAccount: Deref<Target = Self::Data> + Sized {
     /// it is alive. The handle's `is_writable` flag is `false`.
     #[inline(always)]
     fn cpi_handle(&self) -> CpiHandle<'_> {
-        CpiHandle {
-            view: self.account(),
-            writable: false,
-        }
+        CpiHandle::readonly(self.account())
     }
 
     /// Obtain a writable CPI handle for this account.
@@ -230,9 +324,10 @@ pub trait AnchorAccount: Deref<Target = Self::Data> + Sized {
     #[inline(always)]
     fn try_cpi_handle_mut(&mut self) -> Result<CpiHandleMut<'_>, ProgramError> {
         require!(self.account().is_writable(), ProgramError::InvalidArgument);
-        Ok(CpiHandleMut {
-            view: self.account(),
-        })
+        Ok(CpiHandleMut::writable_with_borrow_check(
+            self.account(),
+            true,
+        ))
     }
 }
 
