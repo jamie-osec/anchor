@@ -386,7 +386,7 @@ fn type_layout(ty: &syn::Type) -> Option<(usize, usize)> {
     }
 }
 
-/// Compute layout for `PodVec<T, MAX>`: `[u16 len][T; MAX]` with alignment 1.
+/// Compute layout for `PodVec<T, MAX>`: `[len: PodU16 (2 bytes, align 1)][padding?][T; MAX]`.
 fn pod_vec_layout(args: &syn::PathArguments) -> Option<(usize, usize)> {
     let syn::PathArguments::AngleBracketed(ab) = args else {
         return None;
@@ -397,7 +397,7 @@ fn pod_vec_layout(args: &syn::PathArguments) -> Option<(usize, usize)> {
     let syn::GenericArgument::Type(elem_ty) = iter.next()? else {
         return None;
     };
-    let (elem_size, _) = type_layout(elem_ty)?;
+    let (elem_size, elem_align) = type_layout(elem_ty)?;
 
     // Second arg: MAX capacity (const generic)
     let max = match iter.next()? {
@@ -410,8 +410,9 @@ fn pod_vec_layout(args: &syn::PathArguments) -> Option<(usize, usize)> {
         _ => return None,
     };
 
-    // PodVec layout: 2 bytes (u16 len) + elem_size * max
-    Some((2 + elem_size * max, 1))
+    let data_offset = align_up(2, elem_align);
+    let size = align_up(data_offset + elem_size * max, elem_align);
+    Some((size, elem_align))
 }
 
 /// Extract a usize from a const expression (integer literal).
@@ -892,5 +893,45 @@ mod tests {
         assert!(visited_files.contains(&canon(&custom_rs)));
 
         std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn test_pod_vec_layout_respects_element_alignment() {
+        let source = r#"
+            #[repr(C)]
+            pub struct Holder {
+                pub prefix: u8,
+                pub values: PodVec<u16, 1>,
+                pub suffix: u8,
+            }
+        "#;
+        let tmp = std::env::temp_dir().join("anchor_asm_test_pod_vec.rs");
+        std::fs::write(&tmp, source).unwrap();
+        let result = generate(&tmp);
+        assert!(result.contains(".equ Holder__prefix, 0"));
+        assert!(result.contains(".equ Holder__values, 2"));
+        assert!(result.contains(".equ Holder__suffix, 6"));
+        assert!(result.contains(".equ Holder__SIZE, 8"));
+        std::fs::remove_file(tmp).ok();
+    }
+
+    #[test]
+    fn test_pod_vec_layout_stays_padding_free_for_align1_elements() {
+        let source = r#"
+            #[repr(C)]
+            pub struct ByteHolder {
+                pub prefix: u8,
+                pub values: PodVec<u8, 1>,
+                pub suffix: u8,
+            }
+        "#;
+        let tmp = std::env::temp_dir().join("anchor_asm_test_pod_vec_u8.rs");
+        std::fs::write(&tmp, source).unwrap();
+        let result = generate(&tmp);
+        assert!(result.contains(".equ ByteHolder__prefix, 0"));
+        assert!(result.contains(".equ ByteHolder__values, 1"));
+        assert!(result.contains(".equ ByteHolder__suffix, 4"));
+        assert!(result.contains(".equ ByteHolder__SIZE, 5"));
+        std::fs::remove_file(tmp).ok();
     }
 }

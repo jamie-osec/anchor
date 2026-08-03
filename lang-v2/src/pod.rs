@@ -982,6 +982,21 @@ impl From<CapacityError> for solana_program_error::ProgramError {
 mod tests {
     extern crate alloc;
     use {super::*, alloc::format};
+    use core::mem::{align_of, offset_of, size_of};
+
+    #[repr(C)]
+    struct PodVecU8Layout {
+        prefix: u8,
+        values: PodVec<u8, 1>,
+        suffix: u8,
+    }
+
+    #[repr(C)]
+    struct PodVecU16Layout {
+        prefix: u8,
+        values: PodVec<u16, 1>,
+        suffix: u8,
+    }
 
     // ---- Unsigned integer Pod types ---------------------------------------
 
@@ -1226,6 +1241,25 @@ mod tests {
         }
         let doubled: alloc::vec::Vec<u16> = (&v).into_iter().map(|p| p.get()).collect();
         assert_eq!(doubled, alloc::vec![20, 40, 60]);
+    }
+
+    #[test]
+    fn pod_vec_u8_layout_uses_align1_length_prefix() {
+        assert_eq!(align_of::<PodU16>(), 1);
+        assert_eq!(align_of::<PodVec<u8, 1>>(), 1);
+        assert_eq!(size_of::<PodVec<u8, 1>>(), 3);
+        assert_eq!(offset_of!(PodVecU8Layout, values), 1);
+        assert_eq!(offset_of!(PodVecU8Layout, suffix), 4);
+        assert_eq!(size_of::<PodVecU8Layout>(), 5);
+    }
+
+    #[test]
+    fn pod_vec_u16_layout_tracks_element_alignment() {
+        assert_eq!(align_of::<PodVec<u16, 1>>(), 2);
+        assert_eq!(size_of::<PodVec<u16, 1>>(), 4);
+        assert_eq!(offset_of!(PodVecU16Layout, values), 2);
+        assert_eq!(offset_of!(PodVecU16Layout, suffix), 6);
+        assert_eq!(size_of::<PodVecU16Layout>(), 8);
     }
 
     #[test]
