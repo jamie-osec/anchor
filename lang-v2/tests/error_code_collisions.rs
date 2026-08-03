@@ -38,6 +38,7 @@ fn all_labeled_variants() -> Vec<(&'static str, ErrorCode)> {
             | ErrorCode::ConstraintAddress
             | ErrorCode::ConstraintClose
             | ErrorCode::ConstraintOwner
+            | ErrorCode::ConstraintSpace
             | ErrorCode::ConstraintRaw
             | ErrorCode::ConstraintExecutable
             | ErrorCode::ConstraintZero
@@ -65,6 +66,7 @@ fn all_labeled_variants() -> Vec<(&'static str, ErrorCode)> {
         ("ConstraintAddress", ErrorCode::ConstraintAddress),
         ("ConstraintClose", ErrorCode::ConstraintClose),
         ("ConstraintOwner", ErrorCode::ConstraintOwner),
+        ("ConstraintSpace", ErrorCode::ConstraintSpace),
         ("ConstraintRaw", ErrorCode::ConstraintRaw),
         ("ConstraintExecutable", ErrorCode::ConstraintExecutable),
         ("ConstraintZero", ErrorCode::ConstraintZero),
@@ -114,7 +116,7 @@ fn no_two_variants_share_a_custom_code() {
     }
     // Snapshot — adding a new Custom variant forces a review of this number.
     assert_eq!(
-        custom_count, 15,
+        custom_count, 16,
         "Number of Custom error codes changed; update this snapshot after review"
     );
 }
@@ -231,6 +233,13 @@ fn builtin_groupings_are_stable() {
         "ConstraintClose",
         ErrorCode::ConstraintClose.into(),
         Custom(2011),
+    );
+
+    // Dedicated constraint custom code
+    check(
+        "ConstraintSpace",
+        ErrorCode::ConstraintSpace.into(),
+        Custom(2019),
     );
 
     // Grouped under InvalidInstructionData

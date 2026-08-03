@@ -366,6 +366,54 @@ fn init_if_needed_creates_reuses_and_skips_none() {
 }
 
 #[test]
+fn init_if_needed_rejects_optional_existing_account_with_wrong_space() {
+    let (mut svm, payer) = setup();
+    let maybe = maybe_pda();
+
+    send_instruction(
+        &mut svm,
+        program_id(),
+        vec![6],
+        vec![
+            AccountMeta::new(payer.pubkey(), true),
+            AccountMeta::new(maybe, false),
+            AccountMeta::new_readonly(solana_sdk_ids::system_program::ID, false),
+        ],
+        &payer,
+        &[],
+    )
+    .expect("Some missing should create account");
+    assert_eq!(data_value(&svm, maybe), 1);
+
+    let mut account = svm.get_account(&maybe).expect("maybe account exists");
+    account.data.extend_from_slice(&[0u8; 8]);
+    svm.set_account(maybe, account)
+        .expect("grow maybe account data");
+    svm.expire_blockhash();
+
+    let result = call_raw(
+        &mut svm,
+        &payer,
+        6,
+        vec![
+            AccountMeta::new(payer.pubkey(), true),
+            AccountMeta::new(maybe, false),
+            AccountMeta::new_readonly(solana_sdk_ids::system_program::ID, false),
+        ],
+    );
+    let err = format!("{:?}", result.unwrap_err().err);
+    assert!(
+        err.contains("Custom(2019)"),
+        "mismatched optional init_if_needed space should be rejected, got: {err}"
+    );
+    assert_eq!(
+        data_value(&svm, maybe),
+        1,
+        "rejected reuse should not mutate the existing optional account",
+    );
+}
+
+#[test]
 fn zeroed_optional_initializes_some_and_skips_none() {
     let (mut svm, payer) = setup();
     let zeroed = Pubkey::new_unique();

@@ -1016,6 +1016,55 @@ fn init_if_needed_with_token_program_passes_when_token_2022_ata_exists() {
 }
 
 #[test]
+fn init_if_needed_space_check_preserves_existing_token_2022_ata_size() {
+    let (mut svm, payer) = setup();
+    let mint_authority = keypair_for("spl-ata-space-check-mint-authority");
+    let owner = keypair_for("spl-ata-space-check-owner");
+    let mint = Keypair::new();
+    let ata = associated_token_address(&owner.pubkey(), &mint.pubkey(), &token_2022_program_id());
+
+    init_interface_mint_with_token_program(
+        &mut svm,
+        &payer,
+        &mint,
+        mint_authority.pubkey(),
+        token_2022_program_id(),
+    )
+    .expect("init token-2022 mint");
+    send_init_interface_ata_with_token_program(
+        &mut svm,
+        &payer,
+        mint.pubkey(),
+        owner.pubkey(),
+        ata,
+        token_2022_program_id(),
+    )
+    .expect("init token-2022 ata");
+
+    let before_len = svm.get_account(&ata).expect("ata exists").data.len();
+
+    assert!(send_init_interface_ata_if_needed_with_token_program(
+        &mut svm,
+        &payer,
+        mint.pubkey(),
+        owner.pubkey(),
+        ata,
+        token_2022_program_id(),
+    )
+    .is_ok());
+
+    let after_len = svm
+        .get_account(&ata)
+        .expect("ata still exists after reuse")
+        .data
+        .len();
+    assert_eq!(
+        after_len, before_len,
+        "init_if_needed reuse should preserve the existing token-2022 ATA size",
+    );
+}
+
+#[test]
 fn mut_constraint_still_rejects_wrong_ata_before_cpi() {
     let (mut svm, payer) = setup();
     let mint_authority = keypair_for("spl-ata-mint-authority");

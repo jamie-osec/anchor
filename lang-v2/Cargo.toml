@@ -108,6 +108,10 @@ name = "optional_mut_duplicate_check"
 required-features = ["testing"]
 
 [[test]]
+name = "init_if_needed_space_check"
+required-features = ["testing"]
+
+[[test]]
 name = "lamports"
 required-features = ["testing"]
 

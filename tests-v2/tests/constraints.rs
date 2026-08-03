@@ -720,6 +720,49 @@ fn init_if_needed_allows_explicit_bump_on_reuse() {
 }
 
 #[test]
+fn init_if_needed_rejects_existing_account_with_wrong_space() {
+    let (mut svm, payer, _) = setup();
+    let pda = maybe_pda();
+
+    call(
+        &mut svm,
+        &payer,
+        12,
+        vec![
+            AccountMeta::new(payer.pubkey(), true),
+            AccountMeta::new(pda, false),
+            AccountMeta::new_readonly(solana_sdk_ids::system_program::ID, false),
+        ],
+        &[],
+    )
+    .expect("first init_if_needed call");
+    assert_eq!(read_value(&svm, &pda), Some(1));
+
+    let mut account = svm.get_account(&pda).expect("account exists");
+    account.data.extend_from_slice(&[0u8; 8]);
+    svm.set_account(pda, account).expect("grow maybe account");
+    svm.expire_blockhash();
+
+    let result = call_raw(
+        &mut svm,
+        &payer,
+        12,
+        vec![
+            AccountMeta::new(payer.pubkey(), true),
+            AccountMeta::new(pda, false),
+            AccountMeta::new_readonly(solana_sdk_ids::system_program::ID, false),
+        ],
+        &[],
+    );
+    assert_err_contains(&result, "Custom(2019)");
+    assert_eq!(
+        read_value(&svm, &pda),
+        Some(1),
+        "rejected reuse should not mutate the existing account",
+    );
+}
+
+#[test]
 fn init_if_needed_rejects_wrong_explicit_bump_on_reuse() {
     let (mut svm, payer, _) = setup();
     let pda = maybe_explicit_bump_pda();
