@@ -17,130 +17,228 @@ use {
     proc_macro2::TokenStream as TokenStream2,
     quote::quote,
     serde_json::{json, Value},
-    syn::{visit::Visit, Expr, Lit, Type},
+    syn::{visit::Visit, Expr, GenericParam, Generics, Lit, PathArguments, Type, TypePath},
 };
 
-/// Convert a Rust type to its IDL JSON representation (as a `serde_json`
-/// value ready to splice into a containing `Value`). See [`rust_type_to_idl`]
-/// for the stringified convenience wrapper.
-pub fn rust_type_to_idl_value(ty: &Type) -> Value {
-    type_str_to_idl_value(&quote!(#ty).to_string().replace(' ', ""))
+const DYNAMIC_LEN_KEY: &str = "__anchor_private_const_len";
+
+#[derive(Default)]
+struct TypeLowerer<'a> {
+    generics: Option<&'a Generics>,
+    dynamic_lengths: Vec<Expr>,
 }
 
-/// String-returning convenience wrapper around [`rust_type_to_idl_value`].
-/// Kept for callers that splice the result into runtime `format!()` templates.
-pub fn rust_type_to_idl(ty: &Type) -> String {
-    rust_type_to_idl_value(ty).to_string()
-}
-
-/// Convert a stringified Rust type to an IDL JSON value.
-fn type_str_to_idl_value(s: &str) -> Value {
-    let s = strip_ref_and_lifetime(s);
-    let s = s.as_str();
-    match s {
-        "u8" | "u16" | "u32" | "u64" | "u128" | "i8" | "i16" | "i32" | "i64" | "i128"
-        | "f32" | "f64" | "bool" => Value::String(s.to_owned()),
-        // Pod wrappers drop alignment to 1 for zero-copy accounts but
-        // the byte representation matches the primitive (LE). Report
-        // as primitives so the TS coder's default borsh path decodes
-        // without a `types[]` entry. `PodVec<T, N>` stays defined —
-        // its layout is non-trivial.
-        "PodU16" => Value::String("u16".into()),
-        "PodU32" => Value::String("u32".into()),
-        "PodU64" => Value::String("u64".into()),
-        "PodU128" => Value::String("u128".into()),
-        "PodI16" => Value::String("i16".into()),
-        "PodI32" => Value::String("i32".into()),
-        "PodI64" => Value::String("i64".into()),
-        "PodI128" => Value::String("i128".into()),
-        "PodBool" => Value::String("bool".into()),
-        "String" | "string" | "str" => Value::String("string".into()),
-        "Pubkey" | "Address" | "pubkey" => Value::String("pubkey".into()),
-        "bytes" | "[u8]" => Value::String("bytes".into()),
-        // `&[T]` slice (no `;`) → vec<T>
-        _ if s.starts_with('[') && s.ends_with(']') && !s.contains(';') => {
-            let inner = &s[1..s.len() - 1];
-            json!({ "vec": type_str_to_idl_value(inner) })
+impl<'a> TypeLowerer<'a> {
+    fn with_generics(generics: &'a Generics) -> Self {
+        Self {
+            generics: Some(generics),
+            dynamic_lengths: Vec::new(),
         }
-        // `[T; N]` array
-        _ if s.starts_with('[') && s.ends_with(']') && s.contains(';') => {
-            let inner = &s[1..s.len() - 1];
-            if let Some((ty_part, n_part)) = inner.split_once(';') {
-                let ty_json = type_str_to_idl_value(ty_part);
-                // Const expressions that aren't plain integer literals fall
-                // through to 0 as a placeholder — matches the prior behavior.
-                let size = n_part.trim().parse::<usize>().unwrap_or(0);
-                json!({ "array": [ty_json, size] })
-            } else {
-                json!({ "defined": { "name": s } })
+    }
+
+    fn lower(&mut self, ty: &Type) -> Value {
+        match ty {
+            Type::Reference(reference) => self.lower(&reference.elem),
+            Type::Group(group) => self.lower(&group.elem),
+            Type::Paren(paren) => self.lower(&paren.elem),
+            Type::Slice(slice) if is_u8_path(&slice.elem) => json!("bytes"),
+            Type::Slice(slice) => json!({ "vec": self.lower(&slice.elem) }),
+            Type::Array(array) => {
+                let inner = self.lower(&array.elem);
+                let len = self.lower_array_len(&array.len);
+                json!({ "array": [inner, len] })
+            }
+            Type::Path(path) => self.lower_path(path),
+            _ => json!({
+                "defined": { "name": quote!(#ty).to_string().replace(' ', "") }
+            }),
+        }
+    }
+
+    fn lower_array_len(&mut self, expr: &Expr) -> Value {
+        let expr = peel_expr(expr);
+        if let Expr::Lit(syn::ExprLit {
+            lit: Lit::Int(len), ..
+        }) = expr
+        {
+            if let Ok(len) = len.base10_parse::<usize>() {
+                return json!(len);
             }
         }
-        _ if s.starts_with("Vec<") => {
-            let inner = s
-                .strip_prefix("Vec<")
-                .and_then(|s| s.strip_suffix('>'))
-                .expect("syn-generated type string has balanced angle brackets");
-            json!({ "vec": type_str_to_idl_value(inner) })
+        if let Expr::Path(path) = expr {
+            if let Some(ident) = path.path.get_ident().filter(|_| path.qself.is_none()) {
+                if self
+                    .generics
+                    .is_some_and(|generics| generics.const_params().any(|p| p.ident == *ident))
+                {
+                    return json!({ "generic": ident.to_string() });
+                }
+            }
         }
-        _ if s.starts_with("Option<") => {
-            let inner = s
-                .strip_prefix("Option<")
-                .and_then(|s| s.strip_suffix('>'))
-                .expect("syn-generated type string has balanced angle brackets");
-            json!({ "option": type_str_to_idl_value(inner) })
+
+        let marker = json!({ DYNAMIC_LEN_KEY: self.dynamic_lengths.len() });
+        self.dynamic_lengths.push(expr.clone());
+        marker
+    }
+
+    fn lower_path(&mut self, ty: &TypePath) -> Value {
+        let Some(segment) = ty.path.segments.last() else {
+            return json!({ "defined": { "name": quote!(#ty).to_string().replace(' ', "") } });
+        };
+        let path_name = path_name(ty);
+        let path = normalize_builtin_path(&path_name);
+
+        if let Some(ident) = ty.path.get_ident() {
+            if self
+                .generics
+                .is_some_and(|generics| generics.type_params().any(|p| p.ident == *ident))
+            {
+                return json!({ "generic": ident.to_string() });
+            }
         }
-        _ if s.starts_with("Box<") => {
-            let inner = s
-                .strip_prefix("Box<")
-                .and_then(|s| s.strip_suffix('>'))
-                .expect("syn-generated type string has balanced angle brackets");
-            type_str_to_idl_value(inner)
+
+        match path {
+            "u8" | "u16" | "u32" | "u64" | "u128" | "i8" | "i16" | "i32" | "i64" | "i128"
+            | "f32" | "f64" | "bool" => json!(path),
+            "PodU16" | "PodU32" | "PodU64" | "PodU128" | "PodI16" | "PodI32" | "PodI64"
+            | "PodI128" | "PodBool" => {
+                json!(path.trim_start_matches("Pod").to_ascii_lowercase())
+            }
+            "String" | "string" | "str" => json!("string"),
+            "Pubkey" | "Address" | "pubkey" => json!("pubkey"),
+            "Vec" => {
+                let Some(inner) = first_type_arg(segment) else {
+                    return json!({ "defined": { "name": "Vec" } });
+                };
+                json!({ "vec": self.lower(inner) })
+            }
+            "Option" => {
+                let Some(inner) = first_type_arg(segment) else {
+                    return json!({ "defined": { "name": "Option" } });
+                };
+                json!({ "option": self.lower(inner) })
+            }
+            "Box" => first_type_arg(segment)
+                .map(|inner| self.lower(inner))
+                .unwrap_or_else(|| json!({ "defined": { "name": "Box" } })),
+            _ => json!({ "defined": { "name": segment.ident.to_string() } }),
         }
-        other => json!({ "defined": { "name": strip_type_generics(other) } }),
+    }
+
+    fn finish(self, value: Value) -> TokenStream2 {
+        let mut remaining = value.to_string();
+        if self.dynamic_lengths.is_empty() {
+            return quote! { #remaining };
+        }
+
+        let mut steps = Vec::with_capacity(self.dynamic_lengths.len() * 2 + 1);
+        for (index, expr) in self.dynamic_lengths.iter().enumerate() {
+            let marker = json!({ DYNAMIC_LEN_KEY: index }).to_string();
+            let (before, after) = remaining
+                .split_once(&marker)
+                .expect("dynamic IDL array marker should exist");
+            if !before.is_empty() {
+                steps.push(quote! {
+                    __s.push_str(#before);
+                });
+            }
+            steps.push(quote! {
+                __s.push_str(
+                    &anchor_lang_v2::__alloc::string::ToString::to_string(&((#expr) as usize))
+                );
+            });
+            remaining = after.to_owned();
+        }
+        if !remaining.is_empty() {
+            steps.push(quote! {
+                __s.push_str(#remaining);
+            });
+        }
+        quote! {{
+            let mut __s = anchor_lang_v2::__alloc::string::String::new();
+            #(#steps)*
+            anchor_lang_v2::__alloc::boxed::Box::leak(__s.into_boxed_str()) as &'static str
+        }}
     }
 }
 
-/// Drop the `<...>` suffix on a user-defined type name.
-///
-/// `MixedArgs<'_>` / `MixedArgs<'info>` → `MixedArgs`.
-/// `PodVec<PodU64, 16>` → `PodVec`.
-///
-/// The IDL spec's `IdlType::Defined { name, generics }` models generic
-/// references structurally (spec:284+), but the v2 derive doesn't yet emit
-/// the `generics` payload. Meanwhile, `#[derive(IdlType)]` registers types
-/// under the bare ident (no `<...>`), so leaking the generic suffix into
-/// the reference produces a `{"defined":{"name":"Foo<'_>"}}` that never
-/// resolves against the `types[]` entry named `"Foo"`. Strip here so the
-/// two sides agree — downstream TS clients used to patch this at runtime
-/// (`tests/shared.ts::loadIdl`).
-///
-/// Limitation: multiple instantiations of the same generic type
-/// (`PodVec<PodU64, 16>` + `PodVec<PodU32, 8>`) collapse to the same
-/// `"PodVec"` defined name. Fine for today's single-instantiation
-/// programs; a proper fix needs full generics emission.
-fn strip_type_generics(name: &str) -> &str {
-    match name.find('<') {
-        Some(idx) => &name[..idx],
-        None => name,
-    }
+/// Convert a Rust type to a generated expression containing its IDL JSON.
+pub fn rust_type_to_idl(ty: &Type) -> TokenStream2 {
+    let mut lowerer = TypeLowerer::default();
+    let value = lowerer.lower(ty);
+    lowerer.finish(value)
+}
+fn normalize_builtin_path(ty: &str) -> &str {
+    let ty = ty.trim_start_matches("::");
+    [
+        "core::primitive::",
+        "std::primitive::",
+        "alloc::vec::",
+        "std::vec::",
+        "alloc::string::",
+        "std::string::",
+        "alloc::boxed::",
+        "std::boxed::",
+        "core::option::",
+        "std::option::",
+        "solana_pubkey::",
+        "solana_program::pubkey::",
+        "solana_address::",
+        "pinocchio::address::",
+        "anchor_lang_v2::pod::",
+        "anchor_lang_v2::prelude::",
+    ]
+    .iter()
+    .find_map(|prefix| ty.strip_prefix(prefix))
+    .unwrap_or(ty)
 }
 
-/// Strip a leading `&` reference and any `'lifetime` annotation from a type
-/// string, so `&'a [u64]` → `[u64]`. Leaves nested types alone.
-fn strip_ref_and_lifetime(s: &str) -> String {
-    let s = s.trim();
-    let s = s.strip_prefix('&').unwrap_or(s).trim_start();
-    let s = if let Some(rest) = s.strip_prefix('\'') {
-        match rest.find(|c: char| c.is_whitespace() || c == '[' || c == ',') {
-            Some(pos) => rest[pos..].trim_start().to_owned(),
-            None => String::new(),
-        }
-    } else {
-        s.to_owned()
+fn path_name(ty: &TypePath) -> String {
+    ty.path
+        .segments
+        .iter()
+        .map(|segment| segment.ident.to_string())
+        .collect::<Vec<_>>()
+        .join("::")
+}
+
+fn first_type_arg(segment: &syn::PathSegment) -> Option<&Type> {
+    let PathArguments::AngleBracketed(args) = &segment.arguments else {
+        return None;
     };
-    s.trim_start_matches("mut ").trim().to_owned()
+    args.args.iter().find_map(|arg| match arg {
+        syn::GenericArgument::Type(ty) => Some(ty),
+        _ => None,
+    })
 }
 
+fn is_u8_path(ty: &Type) -> bool {
+    matches!(ty, Type::Path(path) if path.qself.is_none()
+        && normalize_builtin_path(&path_name(path)) == "u8")
+}
+
+fn peel_expr(expr: &Expr) -> &Expr {
+    match expr {
+        Expr::Group(group) => peel_expr(&group.expr),
+        Expr::Paren(paren) => peel_expr(&paren.expr),
+        _ => expr,
+    }
+}
+
+#[cfg(test)]
+fn rust_type_to_idl_value(ty: &Type) -> Value {
+    TypeLowerer::default().lower(ty)
+}
+
+#[cfg(test)]
+fn type_str_to_idl_value(s: &str) -> Value {
+    match s {
+        "f32" | "f64" => Value::String(s.to_owned()),
+        _ => syn::parse_str::<Type>(s)
+            .map(|ty| rust_type_to_idl_value(&ty))
+            .unwrap_or_else(|_| json!({ "defined": { "name": s } })),
+    }
+}
 /// Per-field input to the runtime `__idl_accounts()` emission. See
 /// [`build_accounts_emission`].
 pub struct AccountsJsonField<'a> {
@@ -361,17 +459,18 @@ pub fn build_accounts_emission(fields: &[AccountsJsonField<'_>]) -> TokenStream2
 }
 
 /// Build IDL instruction args JSON from handler parameters.
-pub fn build_args_json(args: &[(&syn::Ident, &Type)]) -> String {
+pub fn build_args_json(args: &[(&syn::Ident, &Type)]) -> TokenStream2 {
+    let mut lowerer = TypeLowerer::default();
     let arr: Vec<Value> = args
         .iter()
         .map(|(name, ty)| {
             json!({
                 "name": name.to_string(),
-                "type": rust_type_to_idl_value(ty),
+                "type": lowerer.lower(ty),
             })
         })
         .collect();
-    Value::Array(arr).to_string()
+    lowerer.finish(Value::Array(arr))
 }
 
 /// Build discriminator JSON array from hash bytes.
@@ -402,6 +501,49 @@ pub enum TypeKind {
     BytemuckRepr,
 }
 
+/// Pre-split IDL type strings emitted by the derive at macro-expansion time.
+///
+/// The runtime print test no longer parses JSON — it concatenates these
+/// strings directly. That lets `lang-v2` avoid a runtime `serde_json`
+/// dependency or local `idl-build` feature; derive output still emits
+/// `feature = "idl-build"` cfgs into user crates.
+pub struct IdlTypeStrings {
+    /// `{"name":"X","discriminator":[…]}` for the program-level
+    /// `accounts[]` array (spec:137-140). `None` when the discriminator
+    /// is empty — i.e. plain `#[derive(IdlType)]` types that only
+    /// contribute to `types[]`.
+    pub account_entry: Option<String>,
+    /// `IdlTypeDef` JSON (spec:176-188) — `name`, optional `docs`, the
+    /// `serialization` / `repr` pair, and the inner `type` object. Never
+    /// carries `discriminator`; that field belongs only on the
+    /// accounts entry.
+    pub type_def: TokenStream2,
+}
+
+pub fn build_type_strings(
+    name: &str,
+    disc: &[u8],
+    docs: &[String],
+    fields: &syn::punctuated::Punctuated<syn::Field, syn::token::Comma>,
+    kind: TypeKind,
+    generics: &Generics,
+) -> IdlTypeStrings {
+    let mut lowerer = TypeLowerer::with_generics(generics);
+    let mut type_def_obj = build_type_def_header(name, docs, kind, generics);
+    let field_values: Vec<Value> = fields
+        .iter()
+        .map(|field| named_field_value(field, &mut lowerer))
+        .collect();
+    type_def_obj.insert(
+        "type".into(),
+        json!({ "kind": "struct", "fields": field_values }),
+    );
+    IdlTypeStrings {
+        account_entry: build_account_entry(name, disc),
+        type_def: lowerer.finish(Value::Object(type_def_obj)),
+    }
+}
+
 pub fn build_account_entry_string(name: &str, disc: &[u8]) -> Option<String> {
     build_account_entry(name, disc)
 }
@@ -411,14 +553,67 @@ pub fn build_struct_type_def_emission(
     docs: &[String],
     fields: &syn::Fields,
     kind: TypeKind,
+    generics: &Generics,
 ) -> TokenStream2 {
-    let header = type_def_header_prefix(name, docs, kind, "struct");
+    let (header, suffix) = type_def_header_parts(name, docs, kind, generics, "struct");
     let field_pushes: Vec<_> = match fields {
-        syn::Fields::Named(named) => named.named.iter().map(field_push_stmt).collect(),
-        syn::Fields::Unnamed(_) => Vec::new(),
-        syn::Fields::Unit => Vec::new(),
+        syn::Fields::Named(named) => named
+            .named
+            .iter()
+            .map(|field| field_push_stmt(field, generics))
+            .collect(),
+        syn::Fields::Unnamed(_) | syn::Fields::Unit => Vec::new(),
     };
-    build_joined_type_def_emission(header, &field_pushes)
+    build_joined_type_def_emission(header, suffix, &field_pushes)
+}
+
+/// Build pre-split IDL type strings from enum variants. Mirrors `build_type_strings`
+/// with `build_enum_type_strings`.
+pub fn build_enum_type_strings(
+    name: &str,
+    disc: &[u8],
+    docs: &[String],
+    variants: &syn::punctuated::Punctuated<syn::Variant, syn::token::Comma>,
+    kind: TypeKind,
+    generics: &Generics,
+) -> IdlTypeStrings {
+    let mut lowerer = TypeLowerer::with_generics(generics);
+    let mut type_def_obj = build_type_def_header(name, docs, kind, generics);
+    let variant_values: Vec<Value> = variants
+        .iter()
+        .map(|v| {
+            let mut obj = serde_json::Map::new();
+            obj.insert("name".into(), Value::String(v.ident.to_string()));
+            match &v.fields {
+                syn::Fields::Unit => {}
+                syn::Fields::Named(named) => {
+                    let fields: Vec<Value> = named
+                        .named
+                        .iter()
+                        .map(|field| named_field_value(field, &mut lowerer))
+                        .collect();
+                    obj.insert("fields".into(), Value::Array(fields));
+                }
+                syn::Fields::Unnamed(unnamed) => {
+                    let tys: Vec<Value> = unnamed
+                        .unnamed
+                        .iter()
+                        .map(|field| lowerer.lower(&field.ty))
+                        .collect();
+                    obj.insert("fields".into(), Value::Array(tys));
+                }
+            }
+            Value::Object(obj)
+        })
+        .collect();
+    type_def_obj.insert(
+        "type".into(),
+        json!({ "kind": "enum", "variants": variant_values }),
+    );
+    IdlTypeStrings {
+        account_entry: build_account_entry(name, disc),
+        type_def: lowerer.finish(Value::Object(type_def_obj)),
+    }
 }
 
 pub fn build_enum_type_def_emission(
@@ -426,10 +621,14 @@ pub fn build_enum_type_def_emission(
     docs: &[String],
     variants: &syn::punctuated::Punctuated<syn::Variant, syn::token::Comma>,
     kind: TypeKind,
+    generics: &Generics,
 ) -> TokenStream2 {
-    let header = type_def_header_prefix(name, docs, kind, "enum");
-    let variant_pushes: Vec<_> = variants.iter().map(variant_push_stmt).collect();
-    build_joined_type_def_emission(header, &variant_pushes)
+    let (header, suffix) = type_def_header_parts(name, docs, kind, generics, "enum");
+    let variant_pushes: Vec<_> = variants
+        .iter()
+        .map(|variant| variant_push_stmt(variant, generics))
+        .collect();
+    build_joined_type_def_emission(header, suffix, &variant_pushes)
 }
 
 /// Compose the program-level `accounts[]` entry. Returns `None` when the
@@ -448,7 +647,11 @@ fn build_account_entry(name: &str, disc: &[u8]) -> Option<String> {
     )
 }
 
-fn build_joined_type_def_emission(header: String, entries: &[TokenStream2]) -> TokenStream2 {
+fn build_joined_type_def_emission(
+    header: String,
+    suffix: String,
+    entries: &[TokenStream2],
+) -> TokenStream2 {
     quote! {
         {
             let mut __entries: anchor_lang_v2::__alloc::vec::Vec<&'static str> =
@@ -463,7 +666,7 @@ fn build_joined_type_def_emission(header: String, entries: &[TokenStream2]) -> T
                 __first = false;
                 __s.push_str(__entry);
             }
-            __s.push_str("]}}");
+            __s.push_str(#suffix);
             ::core::option::Option::Some(
                 anchor_lang_v2::__alloc::boxed::Box::leak(__s.into_boxed_str()) as &'static str
             )
@@ -471,24 +674,54 @@ fn build_joined_type_def_emission(header: String, entries: &[TokenStream2]) -> T
     }
 }
 
-fn type_def_header_prefix(name: &str, docs: &[String], kind: TypeKind, kind_name: &str) -> String {
-    let docs_json = if docs.is_empty() {
-        String::new()
-    } else {
-        format!(",\"docs\":{}", docs_to_json_array(docs))
-    };
-    let kind_json = match kind {
-        TypeKind::Borsh => String::new(),
-        TypeKind::BytemuckRepr => ",\"serialization\":\"bytemuck\",\"repr\":{\"kind\":\"c\"}".into(),
-    };
-    format!(
-        "{{\"name\":\"{}\"{}{},\"type\":{{\"kind\":\"{}\",\"fields\":[",
-        name, docs_json, kind_json, kind_name
-    )
+fn build_joined_entry_emission(
+    header: String,
+    entries: &[TokenStream2],
+    suffix: String,
+) -> TokenStream2 {
+    quote! {
+        {
+            let mut __entries: anchor_lang_v2::__alloc::vec::Vec<&'static str> =
+                anchor_lang_v2::__alloc::vec::Vec::new();
+            #(#entries)*
+            let mut __s = anchor_lang_v2::__alloc::string::String::from(#header);
+            let mut __first = true;
+            for __entry in &__entries {
+                if !__first {
+                    __s.push(',');
+                }
+                __first = false;
+                __s.push_str(__entry);
+            }
+            __s.push_str(#suffix);
+            anchor_lang_v2::__alloc::boxed::Box::leak(__s.into_boxed_str()) as &'static str
+        }
+    }
 }
 
-fn field_push_stmt(field: &syn::Field) -> TokenStream2 {
-    let field_json = named_field_value(field).to_string();
+fn type_def_header_parts(
+    name: &str,
+    docs: &[String],
+    kind: TypeKind,
+    generics: &Generics,
+    kind_name: &str,
+) -> (String, String) {
+    const FIELD_MARKER: &str = "__anchor_private_fields__";
+    let mut type_def_obj = build_type_def_header(name, docs, kind, generics);
+    type_def_obj.insert(
+        "type".into(),
+        json!({ "kind": kind_name, "fields": [FIELD_MARKER] }),
+    );
+    let header = Value::Object(type_def_obj).to_string();
+    let marker = Value::String(FIELD_MARKER.to_owned()).to_string();
+    let (prefix, suffix) = header
+        .split_once(&marker)
+        .expect("type definition header should contain the field marker");
+    (prefix.to_owned(), suffix.to_owned())
+}
+
+fn field_push_stmt(field: &syn::Field, generics: &Generics) -> TokenStream2 {
+    let field_json = named_field_emission(field, generics);
     let cfg_attrs = crate::cfg_attrs(&field.attrs);
     quote! {
         #(#cfg_attrs)*
@@ -496,8 +729,8 @@ fn field_push_stmt(field: &syn::Field) -> TokenStream2 {
     }
 }
 
-fn variant_push_stmt(variant: &syn::Variant) -> TokenStream2 {
-    let variant_json = variant_value(variant).to_string();
+fn variant_push_stmt(variant: &syn::Variant, generics: &Generics) -> TokenStream2 {
+    let variant_json = variant_emission(variant, generics);
     let cfg_attrs = crate::cfg_attrs(&variant.attrs);
     quote! {
         #(#cfg_attrs)*
@@ -505,10 +738,118 @@ fn variant_push_stmt(variant: &syn::Variant) -> TokenStream2 {
     }
 }
 
+fn named_field_emission(field: &syn::Field, generics: &Generics) -> TokenStream2 {
+    let mut lowerer = TypeLowerer::with_generics(generics);
+    let value = named_field_value(field, &mut lowerer);
+    lowerer.finish(value)
+}
+
+fn unnamed_field_emission(field: &syn::Field, generics: &Generics) -> TokenStream2 {
+    let mut lowerer = TypeLowerer::with_generics(generics);
+    let value = lowerer.lower(&field.ty);
+    lowerer.finish(value)
+}
+
+fn variant_emission(variant: &syn::Variant, generics: &Generics) -> TokenStream2 {
+    let name = variant.ident.to_string();
+    match &variant.fields {
+        syn::Fields::Unit => {
+            let variant_json = json!({ "name": name }).to_string();
+            quote! { #variant_json }
+        }
+        syn::Fields::Named(named) => {
+            const FIELD_MARKER: &str = "__anchor_private_variant_fields__";
+            let header = json!({ "name": name, "fields": [FIELD_MARKER] }).to_string();
+            let marker = Value::String(FIELD_MARKER.to_owned()).to_string();
+            let (header, suffix) = header
+                .split_once(&marker)
+                .expect("variant header should contain the field marker");
+            let field_pushes: Vec<_> = named
+                .named
+                .iter()
+                .map(|field| field_push_stmt(field, generics))
+                .collect();
+            build_joined_entry_emission(header.to_owned(), &field_pushes, suffix.to_owned())
+        }
+        syn::Fields::Unnamed(unnamed) => {
+            const FIELD_MARKER: &str = "__anchor_private_variant_fields__";
+            let header = json!({ "name": name, "fields": [FIELD_MARKER] }).to_string();
+            let marker = Value::String(FIELD_MARKER.to_owned()).to_string();
+            let (header, suffix) = header
+                .split_once(&marker)
+                .expect("variant header should contain the field marker");
+            let field_pushes: Vec<_> = unnamed
+                .unnamed
+                .iter()
+                .map(|field| {
+                    let field_json = unnamed_field_emission(field, generics);
+                    let cfg_attrs = crate::cfg_attrs(&field.attrs);
+                    quote! {
+                        #(#cfg_attrs)*
+                        __entries.push(#field_json);
+                    }
+                })
+                .collect();
+            build_joined_entry_emission(header.to_owned(), &field_pushes, suffix.to_owned())
+        }
+    }
+}
+
+/// Shared header construction for the `IdlTypeDef` payload. Emits
+/// `name`, optional `docs`, and the `serialization` / `repr` pair derived
+/// from `kind`. The caller appends the `type` object matching
+/// `IdlTypeDefTy::{Struct, Enum, Type}`. Notably *no* `discriminator` —
+/// that field only belongs on the accounts entry.
+fn build_type_def_header(
+    name: &str,
+    docs: &[String],
+    kind: TypeKind,
+    generics: &Generics,
+) -> serde_json::Map<String, Value> {
+    let mut out = serde_json::Map::new();
+    out.insert("name".into(), Value::String(name.to_owned()));
+    if !docs.is_empty() {
+        out.insert("docs".into(), docs_value(docs));
+    }
+    let generics = generic_definitions(generics);
+    if !generics.is_empty() {
+        out.insert("generics".into(), Value::Array(generics));
+    }
+    match kind {
+        TypeKind::Borsh => {}
+        TypeKind::BytemuckRepr => {
+            out.insert("serialization".into(), Value::String("bytemuck".into()));
+            out.insert("repr".into(), json!({ "kind": "c" }));
+        }
+    }
+    out
+}
+
+fn generic_definitions(generics: &Generics) -> Vec<Value> {
+    generics
+        .params
+        .iter()
+        .filter_map(|param| match param {
+            GenericParam::Type(param) => {
+                Some(json!({ "kind": "type", "name": param.ident.to_string() }))
+            }
+            GenericParam::Const(param) => {
+                let ty = &param.ty;
+                Some(json!({
+                    "kind": "const",
+                    "name": param.ident.to_string(),
+                    "type": quote!(#ty).to_string().replace(' ', ""),
+                }))
+            }
+            GenericParam::Lifetime(_) => None,
+        })
+        .collect()
+}
+
 /// Build a named `IdlField` value — `{name, type, docs?}` — for a single
 /// `syn::Field`. Used by both struct field and enum-variant struct-field
 /// emission.
-fn named_field_value(f: &syn::Field) -> Value {
+fn named_field_value(f: &syn::Field, lowerer: &mut TypeLowerer<'_>) -> Value {
     let fname = f
         .ident
         .as_ref()
@@ -520,28 +861,7 @@ fn named_field_value(f: &syn::Field) -> Value {
     if !field_docs.is_empty() {
         obj.insert("docs".into(), docs_value(&field_docs));
     }
-    obj.insert("type".into(), rust_type_to_idl_value(&f.ty));
-    Value::Object(obj)
-}
-
-fn variant_value(v: &syn::Variant) -> Value {
-    let mut obj = serde_json::Map::new();
-    obj.insert("name".into(), Value::String(v.ident.to_string()));
-    match &v.fields {
-        syn::Fields::Unit => {}
-        syn::Fields::Named(named) => {
-            let fields: Vec<Value> = named.named.iter().map(named_field_value).collect();
-            obj.insert("fields".into(), Value::Array(fields));
-        }
-        syn::Fields::Unnamed(unnamed) => {
-            let tys: Vec<Value> = unnamed
-                .unnamed
-                .iter()
-                .map(|f| rust_type_to_idl_value(&f.ty))
-                .collect();
-            obj.insert("fields".into(), Value::Array(tys));
-        }
-    }
+    obj.insert("type".into(), lowerer.lower(&f.ty));
     Value::Object(obj)
 }
 
@@ -959,6 +1279,51 @@ mod tests {
     }
 
     #[test]
+    fn qualified_builtin_paths_lower_like_builtins() {
+        let vec_ty: Type = syn::parse_quote!(alloc::vec::Vec<alloc::string::String>);
+        assert_eq!(rust_type_to_idl_value(&vec_ty), json!({ "vec": "string" }));
+
+        let address_ty: Type = syn::parse_quote!(anchor_lang_v2::prelude::Address);
+        assert_eq!(rust_type_to_idl_value(&address_ty), json!("pubkey"));
+
+        let user_ty: Type = syn::parse_quote!(crate::models::Inner);
+        assert_eq!(
+            rust_type_to_idl_value(&user_ty),
+            json!({ "defined": { "name": "Inner" } })
+        );
+
+        let primitive_named_user_ty: Type = syn::parse_quote!(models::u8);
+        assert_eq!(
+            rust_type_to_idl_value(&primitive_named_user_ty),
+            json!({ "defined": { "name": "u8" } })
+        );
+    }
+
+    #[test]
+    fn array_lengths_are_lowered_in_their_defining_context() {
+        let generics: Generics = syn::parse_quote!(<const N: usize>);
+        let mut lowerer = TypeLowerer::with_generics(&generics);
+        let generic_len: Type = syn::parse_quote!([u8; N]);
+        assert_eq!(
+            lowerer.lower(&generic_len),
+            json!({ "array": ["u8", { "generic": "N" }] })
+        );
+        assert_eq!(
+            generic_definitions(&generics),
+            vec![json!({ "kind": "const", "name": "N", "type": "usize" })]
+        );
+
+        let mut lowerer = TypeLowerer::default();
+        let path_len: Type = syn::parse_quote!([u8; limits::ITEMS]);
+        let value = lowerer.lower(&path_len);
+        let generated = lowerer.finish(value).to_string();
+        assert!(generated.contains("String :: new"));
+        assert!(generated.contains("Box :: leak"));
+        assert!(generated.contains("limits :: ITEMS"));
+        assert!(!generated.contains("generic"));
+    }
+
+    #[test]
     fn byte_literal_is_static_one_byte_const() {
         let s = expect_static(classify(syn::parse_quote!(b'A'), &[], &[]));
         assert_eq!(s, r#"{"kind":"const","value":[65]}"#);
@@ -1197,7 +1562,13 @@ mod tests {
 
     #[test]
     fn float_primitives_do_not_fall_back_to_defined_types() {
-        assert_ne!(type_str_to_idl_value("f32"), json!({ "defined": { "name": "f32" } }));
-        assert_ne!(type_str_to_idl_value("f64"), json!({ "defined": { "name": "f64" } }));
+        assert_ne!(
+            type_str_to_idl_value("f32"),
+            json!({ "defined": { "name": "f32" } })
+        );
+        assert_ne!(
+            type_str_to_idl_value("f64"),
+            json!({ "defined": { "name": "f64" } })
+        );
     }
 }

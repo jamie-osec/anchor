@@ -9,6 +9,7 @@ license = "Apache-2.0"
 [features]
 default = ["alloc", "guardrails"]
 alloc = ["pinocchio/alloc"]
+idl-build = []
 # Opt-in v1-compat shims for users porting anchor-lang code. Currently
 # exposes v1-style shims such as `debug!`, `error!`, `err!`, and `pubkey!`.
 # Default-off because some shims preserve syntax while keeping v2's cheaper
@@ -64,11 +65,9 @@ sha2 = "0.10"
 [lints.rust.unexpected_cfgs]
 level = "warn"
 # `feature = "idl-build"` is emitted by the derive macros in code that
-# expands inside the *user crate*, where it's a real local feature. It
-# never resolves against lang-v2's own features (lang-v2 has none by
-# this name on purpose — IDL infrastructure is unconditional). Register
-# it here so rustc doesn't warn when compiling lang-v2's integration
-# tests, which apply those derives in a crate without the feature.
+# expands inside the *user crate*, where it's a real local feature. v2
+# also carries a matching hidden feature so user crates can fan their
+# local `idl-build` through `anchor-lang-v2/idl-build`.
 check-cfg = [
     'cfg(target_os, values("solana"))',
     'cfg(feature, values("idl-build"))',

@@ -1969,7 +1969,13 @@ pub fn account(attr: TokenStream, item: TokenStream) -> TokenStream {
         Some(s) => quote! { Some(#s) },
         None => quote! { None },
     };
-    let idl_type_def = idl::build_struct_type_def_emission(&name_str, &struct_docs, fields, type_kind);
+    let idl_type_def = idl::build_struct_type_def_emission(
+        &name_str,
+        &struct_docs,
+        fields,
+        type_kind,
+        &input.generics,
+    );
     let idl_field_dep_walkers = cfg_field_dep_walkers(fields);
 
     // Client-side `AccountDeserialize` impl. Mode-dependent: borsh accounts
@@ -2055,7 +2061,8 @@ pub fn account(attr: TokenStream, item: TokenStream) -> TokenStream {
         // Intentionally avoids recommending `#[account(borsh)]` — borsh is a
         // per-instruction serialization cost, rarely what the user actually
         // wants. The fix is almost always a Pod-compatible alternative.
-        let field_diagnostics: Vec<proc_macro2::TokenStream> = if let Fields::Named(named) = fields {
+        let field_diagnostics: Vec<proc_macro2::TokenStream> = if let Fields::Named(named) = fields
+        {
             named
                 .named
                 .iter()
@@ -2073,7 +2080,8 @@ pub fn account(attr: TokenStream, item: TokenStream) -> TokenStream {
         } else {
             Vec::new()
         };
-        let field_pod_asserts: Vec<proc_macro2::TokenStream> = if let Fields::Named(named) = fields {
+        let field_pod_asserts: Vec<proc_macro2::TokenStream> = if let Fields::Named(named) = fields
+        {
             named
                 .named
                 .iter()
@@ -2255,34 +2263,30 @@ pub fn derive_idl_type(input: TokenStream) -> TokenStream {
     // `IdlType` is layout-agnostic — users opt into Pod separately via
     // their own `bytemuck::Pod` derive if they need zero-copy. Forcing a
     // `"bytemuck"` tag here would lie in the IDL for non-Pod types.
+    let empty_disc: [u8; 0] = [];
     let (idl_type_def, field_dep_walkers, idl_validation_tokens) = match &input.data {
-        Data::Struct(data) => {
-            (
-                idl::build_struct_type_def_emission(
-                    &name_str,
-                    &docs,
-                    &data.fields,
-                    idl::TypeKind::Borsh,
-                ),
-                cfg_field_dep_walkers(&data.fields),
-                wincode_idl_override_tokens_for_fields("`#[derive(IdlType)]`", &data.fields),
-            )
-        }
-        Data::Enum(data) => {
-            (
-                idl::build_enum_type_def_emission(
-                    &name_str,
-                    &docs,
-                    &data.variants,
-                    idl::TypeKind::Borsh,
-                ),
-                cfg_variant_dep_walkers(&data.variants),
-                wincode_idl_override_tokens_for_variants(
-                    "`#[derive(IdlType)]`",
-                    &data.variants,
-                ),
-            )
-        }
+        Data::Struct(data) => (
+            idl::build_struct_type_def_emission(
+                &name_str,
+                &docs,
+                &data.fields,
+                idl::TypeKind::Borsh,
+                &input.generics,
+            ),
+            cfg_field_dep_walkers(&data.fields),
+            wincode_idl_override_tokens_for_fields("`#[derive(IdlType)]`", &data.fields),
+        ),
+        Data::Enum(data) => (
+            idl::build_enum_type_def_emission(
+                &name_str,
+                &docs,
+                &data.variants,
+                idl::TypeKind::Borsh,
+                &input.generics,
+            ),
+            cfg_variant_dep_walkers(&data.variants),
+            wincode_idl_override_tokens_for_variants("`#[derive(IdlType)]`", &data.variants),
+        ),
         Data::Union(_) => {
             return syn::Error::new(
                 name.span(),
@@ -2292,6 +2296,7 @@ pub fn derive_idl_type(input: TokenStream) -> TokenStream {
             .into();
         }
     };
+    let _ = empty_disc;
 
     // Thread any generic / lifetime params from the input type through
     // the impl so `#[derive(IdlType)] struct Foo<'a>` lowers to
@@ -2312,9 +2317,6 @@ pub fn derive_idl_type(input: TokenStream) -> TokenStream {
                 accounts: &mut ::anchor_lang_v2::__alloc::vec::Vec<&'static str>,
                 types: &mut ::anchor_lang_v2::__alloc::vec::Vec<&'static str>,
             ) {
-                // `IdlType` plain types never push to `accounts[]` —
-                // `__IDL_ACCOUNT_ENTRY` defaults to `None`. We only
-                // contribute to `types[]` and recurse for transitive deps.
                 if let Some(t) = <Self as anchor_lang_v2::IdlAccountType>::__idl_type_def() {
                     types.push(t);
                 }
@@ -2874,7 +2876,10 @@ fn declare_account_signature(
     span: proc_macro2::Span,
 ) -> syn::Result<String> {
     let name = json_str(account, "name", span)?;
-    if let Some(nested) = account.get("accounts").and_then(serde_json::Value::as_array) {
+    if let Some(nested) = account
+        .get("accounts")
+        .and_then(serde_json::Value::as_array)
+    {
         return Ok(format!(
             "nested:{name}:{}",
             declare_account_group_signature(nested, span)?
@@ -3772,10 +3777,10 @@ fn gen_declare_program_idl_account_type_impl(
                 accounts: &mut anchor_lang_v2::__alloc::vec::Vec<&'static str>,
                 types: &mut anchor_lang_v2::__alloc::vec::Vec<&'static str>,
             ) {
-                if let Some(a) = <Self as anchor_lang_v2::IdlAccountType>::__idl_account_entry() {
+                if let Some(a) = <Self as anchor_lang_v2::IdlAccountType>::__IDL_ACCOUNT_ENTRY {
                     accounts.push(a);
                 }
-                if let Some(t) = <Self as anchor_lang_v2::IdlAccountType>::__idl_type_def() {
+                if let Some(t) = <Self as anchor_lang_v2::IdlAccountType>::__IDL_TYPE_DEF {
                     types.push(t);
                 }
                 #(
@@ -3941,12 +3946,17 @@ fn declare_idl_array_len_to_tokens(
         let len = len as usize;
         return Ok(quote! { #len });
     }
-    if let Some(generic) = value.get("generic").and_then(serde_json::Value::as_str) {
-        let ident = Ident::new(generic, span);
-        return Ok(quote! { #ident });
-    }
-    if let Some(generic) = value.as_str() {
-        let ident = Ident::new(generic, span);
+    let generic = value
+        .get("generic")
+        .and_then(serde_json::Value::as_str)
+        .or_else(|| value.as_str());
+    if let Some(generic) = generic {
+        let ident: Ident = syn::parse_str(generic).map_err(|err| {
+            syn::Error::new(
+                span,
+                format!("invalid IDL array generic `{generic}`: {err}"),
+            )
+        })?;
         return Ok(quote! { #ident });
     }
     Err(syn::Error::new(
@@ -4075,8 +4085,8 @@ struct HandlerCodegen {
     accounts_type_name: String,
     idl_name: String,
     idl_disc: String,
-    idl_args: String,
-    idl_returns_json: String,
+    idl_args: TokenStream2,
+    idl_returns_json: TokenStream2,
     /// Pre-rendered `,"docs":[...]` fragment (including the leading comma
     /// separator) that gets spliced into the per-instruction IDL JSON
     /// between `"name"` and `"discriminator"`. Empty string when the
@@ -4111,8 +4121,8 @@ impl HandlerCodegen {
             accounts_type_name: String::new(),
             idl_name: fn_name.to_string(),
             idl_disc: "[]".to_string(),
-            idl_args: "[]".to_string(),
-            idl_returns_json: String::new(),
+            idl_args: quote! { "[]" },
+            idl_returns_json: quote! { "" },
             idl_docs_json: String::new(),
             idl_accounts_type: quote! { () },
             arg_types: Vec::new(),
@@ -4197,13 +4207,17 @@ fn unsupported_wincode_idl_attr_error(
         Ok(Some((UnsupportedWincodeAttrKind::Skip, span))) => Some(syn::Error::new(
             span,
             format!(
-                "{surface} does not support `#[wincode(skip)]` fields because generated IDL would not match the serialized wire layout; remove the override or exclude this type from generated IDL"
+                "{surface} does not support `#[wincode(skip)]` fields because generated IDL would \
+                 not match the serialized wire layout; remove the override or exclude this type \
+                 from generated IDL"
             ),
         )),
         Ok(Some((UnsupportedWincodeAttrKind::With, span))) => Some(syn::Error::new(
             span,
             format!(
-                "{surface} does not support `#[wincode(with = ...)]` fields because custom wincode codecs can change the serialized wire layout; remove the override or exclude this type from generated IDL"
+                "{surface} does not support `#[wincode(with = ...)]` fields because custom \
+                 wincode codecs can change the serialized wire layout; remove the override or \
+                 exclude this type from generated IDL"
             ),
         )),
         Ok(None) => None,
@@ -4218,8 +4232,8 @@ fn wincode_idl_override_tokens_for_fields(
     fields
         .iter()
         .filter_map(|field| {
-            let err_tokens = unsupported_wincode_idl_attr_error(surface, &field.attrs)?
-                .to_compile_error();
+            let err_tokens =
+                unsupported_wincode_idl_attr_error(surface, &field.attrs)?.to_compile_error();
             let cfg_attrs = cfg_attrs(&field.attrs);
             Some(quote! {
                 #(#cfg_attrs)*
@@ -4237,19 +4251,16 @@ fn wincode_idl_override_tokens_for_variants(
         .iter()
         .flat_map(|variant| {
             let variant_cfg_attrs = cfg_attrs(&variant.attrs);
-            variant
-                .fields
-                .iter()
-                .filter_map(move |field| {
-                    let err_tokens = unsupported_wincode_idl_attr_error(surface, &field.attrs)?
-                        .to_compile_error();
-                    let field_cfg_attrs = cfg_attrs(&field.attrs);
-                    Some(quote! {
-                        #(#variant_cfg_attrs)*
-                        #(#field_cfg_attrs)*
-                        const _: () = { #err_tokens };
-                    })
+            variant.fields.iter().filter_map(move |field| {
+                let err_tokens =
+                    unsupported_wincode_idl_attr_error(surface, &field.attrs)?.to_compile_error();
+                let field_cfg_attrs = cfg_attrs(&field.attrs);
+                Some(quote! {
+                    #(#variant_cfg_attrs)*
+                    #(#field_cfg_attrs)*
+                    const _: () = { #err_tokens };
                 })
+            })
         })
         .collect()
 }
@@ -4317,8 +4328,17 @@ fn process_handler(
     let returns_value = return_type.is_some();
     let idl_returns_json = return_type
         .as_ref()
-        .map(|return_ty| format!(",\"returns\":{}", idl::rust_type_to_idl(return_ty)))
-        .unwrap_or_default();
+        .map(|return_ty| {
+            let idl_type = idl::rust_type_to_idl(return_ty);
+            quote! {
+                {
+                    let mut __s = anchor_lang_v2::__alloc::string::String::from(",\"returns\":");
+                    __s.push_str(#idl_type);
+                    __s
+                }
+            }
+        })
+        .unwrap_or_else(|| quote! { "" });
     let set_return_data = returns_value.then(|| {
         quote! {
             let mut __return_data = anchor_lang_v2::__alloc::vec::Vec::with_capacity(256);
@@ -4720,8 +4740,8 @@ fn impl_program(module: &ItemMod, config: &ProgramConfig) -> TokenStream2 {
     }
 
     if config.mode == ProgramMode::Executable && has_any_discrim {
-        let mut seen = (!has_cfg_gated_handlers)
-            .then(std::collections::HashMap::<u8, proc_macro2::Span>::new);
+        let mut seen =
+            (!has_cfg_gated_handlers).then(std::collections::HashMap::<u8, proc_macro2::Span>::new);
         for (i, d) in discrim_attrs.iter().enumerate() {
             let Some(d) = d.as_ref() else {
                 continue;
@@ -4762,14 +4782,7 @@ fn impl_program(module: &ItemMod, config: &ProgramConfig) -> TokenStream2 {
     let codegen: Vec<HandlerCodegen> = handlers
         .iter()
         .enumerate()
-        .map(|(i, h)| {
-            process_handler(
-                h,
-                mod_name,
-                discrim_attrs[i].as_deref(),
-                &config.program_id,
-            )
-        })
+        .map(|(i, h)| process_handler(h, mod_name, discrim_attrs[i].as_deref(), &config.program_id))
         .collect();
     let handler_errors: Vec<_> = codegen.iter().filter_map(|c| c.error.as_ref()).collect();
     if !handler_errors.is_empty() {
@@ -5299,7 +5312,13 @@ pub fn event(attr: TokenStream, item: TokenStream) -> TokenStream {
     } else {
         Vec::new()
     };
-    let event_type_def = idl::build_struct_type_def_emission(&name_str, &struct_docs, fields, type_kind);
+    let event_type_def = idl::build_struct_type_def_emission(
+        &name_str,
+        &struct_docs,
+        fields,
+        type_kind,
+        &input.generics,
+    );
     let event_disc_json = idl::disc_json(disc_bytes);
     let event_header_json = format!(
         "{{\"event\":{{\"name\":\"{}\",\"discriminator\":{}}},\"types\":[",
@@ -6172,7 +6191,7 @@ fn to_camel_case(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use {super::*, serde_json::json};
 
     #[test]
     fn instruction_attrs_parse() {
@@ -6371,5 +6390,18 @@ mod tests {
                 .contains("`short` discriminator [1] is a prefix of `long` discriminator [1, 2]"),
             "expected targeted prefix diagnostic: {generated}"
         );
+    }
+
+    #[test]
+    fn declare_program_array_lengths_accept_declared_generics_only() {
+        let span = proc_macro2::Span::call_site();
+
+        let generic_tokens =
+            declare_idl_array_len_to_tokens(&json!({ "generic": "N" }), span).unwrap();
+        assert_eq!(generic_tokens.to_string(), "N");
+
+        let err = declare_idl_array_len_to_tokens(&json!({ "generic": "limits::ITEMS" }), span)
+            .unwrap_err();
+        assert!(err.to_string().contains("invalid IDL array generic"));
     }
 }
