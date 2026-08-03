@@ -106,7 +106,7 @@ None of these carry an `'info` lifetime — pinocchio's account model is static-
 | `Signer` | Transaction signer. Validates `is_signer`. (v1 compat) |
 | `Program<T>` | CPI targets (`Program<System>`, `Program<Token>`, …). Validates executable + program ID via `T: Id`. (v1 compat) |
 | `SystemAccount` | System-owned account. Owner check only. (v1 compat) |
-| `UncheckedAccount` | Escape hatch. No validation. (v1 compat) |
+| `UncheckedAccount` | Escape hatch. No validation. No generic `close` support. (v1 compat) |
 | `Sysvar<T>` | `Sysvar<Clock>`, `Sysvar<Rent>`. Prefer `Clock::get()` / `Rent::get()` syscalls where possible. (v1 compat) |
 
 ## CPI Semantics

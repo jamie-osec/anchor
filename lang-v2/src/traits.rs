@@ -196,18 +196,6 @@ pub trait AnchorAccount: Deref<Target = Self::Data> + Sized {
         *self.account().address()
     }
 
-    fn close(&mut self, mut destination: AccountView) -> ProgramResult {
-        let mut self_view = *self.account();
-        let dest_lamports = destination
-            .lamports()
-            .checked_add(self_view.lamports())
-            .ok_or(ProgramError::ArithmeticOverflow)?;
-        destination.set_lamports(dest_lamports);
-        self_view.set_lamports(0);
-        self_view.close()?;
-        Ok(())
-    }
-
     /// Obtain a read-only CPI handle for this account.
     ///
     /// The handle borrows `self`, preventing mutable typed access while
@@ -260,6 +248,20 @@ pub trait AccountRealloc: AnchorAccount {
         payer: AccountView,
         zero: bool,
     ) -> ProgramResult;
+}
+
+/// Account wrapper capability for `#[account(close = ...)]`.
+///
+/// The derive emits a call to this trait instead of deciding close support
+/// from syntactic type names. That lets rustc resolve aliases and wrapper
+/// forwards normally: unsupported wrappers (notably `UncheckedAccount`)
+/// simply do not implement the trait.
+#[diagnostic::on_unimplemented(
+    message = "`#[account(close = ...)]` is not supported on `UncheckedAccount`",
+    note = "use a typed account wrapper or close the raw account manually"
+)]
+pub trait AccountClose: AnchorAccount {
+    fn close(&mut self, destination: AccountView) -> ProgramResult;
 }
 
 /// Account-like value that can be passed into a CPI account struct.

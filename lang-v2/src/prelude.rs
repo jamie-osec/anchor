@@ -47,6 +47,8 @@ pub use crate::{
     system_program,
     // Core trait
     AccountAddress,
+    // Close trait
+    AccountClose,
     // Constraints
     AccountConstraint,
     // Loader & dispatch

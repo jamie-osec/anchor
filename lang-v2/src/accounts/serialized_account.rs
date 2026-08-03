@@ -279,6 +279,35 @@ where
         Ok(crate::CpiHandleMut::writable(&mut self.view))
     }
 
+    fn exit(&mut self) -> pinocchio::ProgramResult {
+        // Skip serialization only after close() has cleared the account header.
+        // A zero lamport balance can be transient when a later exit refunds this
+        // account, so lamports alone do not prove that write-back is unnecessary.
+        if super::slab::is_closed(&self.view) {
+            return Ok(());
+        }
+        // Belt-and-braces: the derive's `realloc` constraint does
+        // release_borrow + reacquire after resize, but if someone resizes
+        // through a non-derive path the guard's length would be stale.
+        // Detect and fix before serializing.
+        let stale = matches!(&self.borrow, SerializedAccountBorrow::Mutable { guard } if guard.len() != self.view.data_len());
+        if stale {
+            // Drop the stale guard directly rather than via release_borrow:
+            // serializing through a stale-length guard would OOB on shrink.
+            // The serialize below runs through the freshly reacquired guard.
+            self.borrow = SerializedAccountBorrow::Released;
+            self.reacquire_guard_only()?;
+        }
+        Self::serialize_mutable_borrow(&self.data, &mut self.borrow, &mut self.serialized_len)?;
+        Ok(())
+    }
+}
+
+impl<T, S> crate::AccountClose for SerializedAccount<T, S>
+where
+    T: Owner + Discriminator,
+    S: AnchorAccountSerialize<T>,
+{
     fn close(&mut self, mut destination: AccountView) -> pinocchio::ProgramResult {
         let mut self_view = self.view;
         let dest_lamports = destination
@@ -316,29 +345,6 @@ where
         }
 
         self_view.close()?;
-        Ok(())
-    }
-
-    fn exit(&mut self) -> pinocchio::ProgramResult {
-        // Skip serialization only after close() has cleared the account header.
-        // A zero lamport balance can be transient when a later exit refunds this
-        // account, so lamports alone do not prove that write-back is unnecessary.
-        if super::slab::is_closed(&self.view) {
-            return Ok(());
-        }
-        // Belt-and-braces: the derive's `realloc` constraint does
-        // release_borrow + reacquire after resize, but if someone resizes
-        // through a non-derive path the guard's length would be stale.
-        // Detect and fix before serializing.
-        let stale = matches!(&self.borrow, SerializedAccountBorrow::Mutable { guard } if guard.len() != self.view.data_len());
-        if stale {
-            // Drop the stale guard directly rather than via release_borrow:
-            // serializing through a stale-length guard would OOB on shrink.
-            // The serialize below runs through the freshly reacquired guard.
-            self.borrow = SerializedAccountBorrow::Released;
-            self.reacquire_guard_only()?;
-        }
-        Self::serialize_mutable_borrow(&self.data, &mut self.borrow, &mut self.serialized_len)?;
         Ok(())
     }
 }

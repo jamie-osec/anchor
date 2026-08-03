@@ -811,7 +811,12 @@ where
     fn account(&self) -> &AccountView {
         &self.view
     }
+}
 
+impl<H, T> crate::AccountClose for Slab<H, T>
+where
+    H: Pod + Zeroable + SlabSchema,
+{
     fn close(&mut self, mut destination: AccountView) -> pinocchio::ProgramResult {
         self.assert_mutable();
         let mut self_view = self.view;

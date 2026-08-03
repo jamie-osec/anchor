@@ -66,7 +66,7 @@ pub mod custom_constraints {
         Ok(())
     }
 
-    /// Close a boxed counter to exercise `AnchorAccount::close` forwarding.
+    /// Close a boxed counter to exercise `AccountClose::close` forwarding.
     pub fn handle_boxed_close(_ctx: &mut Context<HandleBoxedClose>) -> Result<()> {
         Ok(())
     }

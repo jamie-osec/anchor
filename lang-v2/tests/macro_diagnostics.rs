@@ -800,6 +800,34 @@ pub struct Bad {
     miri,
     ignore = "spawns cargo and writes temporary workspaces; covered by normal cargo test"
 )]
+fn close_on_unchecked_account_is_rejected() {
+    compile_fail_case(
+        "close_on_unchecked_account",
+        r#"
+use anchor_lang_v2::prelude::*;
+
+declare_id!("11111111111111111111111111111111");
+
+#[derive(Accounts)]
+pub struct Bad {
+    #[account(mut, close = receiver)]
+    pub raw: UncheckedAccount,
+    #[account(mut)]
+    pub receiver: SystemAccount,
+}
+"#,
+        &[
+            "`#[account(close = ...)]` is not supported on `UncheckedAccount`",
+            "close the raw account manually",
+        ],
+    );
+}
+
+#[test]
+#[cfg_attr(
+    miri,
+    ignore = "spawns cargo and writes temporary workspaces; covered by normal cargo test"
+)]
 fn init_owner_override_rejects_typed_accounts() {
     fn case(name: &str, account_attr: &str, field_ty: &str) {
         let source = format!(

@@ -39,10 +39,6 @@ impl<T: AnchorAccount> AnchorAccount for Box<T> {
     fn exit(&mut self) -> pinocchio::ProgramResult {
         (**self).exit()
     }
-
-    fn close(&mut self, destination: AccountView) -> pinocchio::ProgramResult {
-        (**self).close(destination)
-    }
 }
 
 impl<T: crate::ToCpiHandle + ?Sized> crate::ToCpiHandle for Box<T> {
@@ -70,6 +66,13 @@ impl<T: crate::AccountRealloc> crate::AccountRealloc for Box<T> {
         zero: bool,
     ) -> pinocchio::ProgramResult {
         self.as_mut().realloc_account(new_space, payer, zero)
+    }
+}
+
+impl<T: crate::AccountClose> crate::AccountClose for Box<T> {
+    #[inline(always)]
+    fn close(&mut self, destination: AccountView) -> pinocchio::ProgramResult {
+        self.as_mut().close(destination)
     }
 }
 

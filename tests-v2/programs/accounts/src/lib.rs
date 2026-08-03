@@ -92,7 +92,7 @@ pub mod accounts_test {
         Ok(())
     }
 
-    /// Closes a boxed counter, forwarding through `AnchorAccount::close`.
+    /// Closes a boxed counter, forwarding through `AccountClose::close`.
     #[discrim = 4]
     pub fn close_boxed(_ctx: &mut Context<CloseBoxed>) -> Result<()> {
         Ok(())

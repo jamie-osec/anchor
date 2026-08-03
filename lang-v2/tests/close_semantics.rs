@@ -51,7 +51,7 @@ use {
         prelude::BorshAccount,
         testing::AccountBuffer,
         wincode::{SchemaRead, SchemaWrite},
-        AccountRealloc, AnchorAccount, Discriminator, Owner,
+        AccountClose, AccountRealloc, AnchorAccount, Discriminator, Owner,
     },
     bytemuck::{Pod, Zeroable},
     pinocchio::{account::RuntimeAccount, address::Address},

@@ -2288,7 +2288,7 @@ pub fn parse_field(
         });
         Some(quote! {
             #(#constraint_exits)*
-            anchor_lang_v2::AnchorAccount::close(
+            anchor_lang_v2::AccountClose::close(
                 &mut self.#field_name,
                 *self.#close_target.account(),
             )?;
@@ -2313,7 +2313,8 @@ pub fn parse_field(
     // unwrapped inner — we wrap it in `if let Some(#field_name) = #field_name`
     // so `#field_name.account()`, `#field_name.authority`, etc. resolve on the
     // inner `T` (via autoderef). The exit/close path regenerates against the
-    // unwrapped `&mut T` so `AnchorAccount::exit/close` get the right type.
+    // unwrapped `&mut T` so `AnchorAccount::exit` / `AccountClose::close`
+    // get the right type.
     //
     // Mutable fields use `ref mut` so constraint bodies that need `&mut self`
     // (e.g. BorshAccount::release_borrow in the realloc path) can work.
@@ -2395,7 +2396,7 @@ pub fn parse_field(
                 quote! {
                     if let Some(__inner) = self.#field_name.as_mut() {
                         #(#inner_constraint_exits)*
-                        anchor_lang_v2::AnchorAccount::close(
+                        anchor_lang_v2::AccountClose::close(
                             __inner,
                             *self.#close_target.account(),
                         )?;
