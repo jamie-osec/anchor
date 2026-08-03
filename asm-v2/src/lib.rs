@@ -56,6 +56,7 @@
 //! }
 //! ```
 
+use anyhow::{Context, Result, anyhow};
 use std::path::{Path, PathBuf};
 
 // ---------------------------------------------------------------------------
@@ -133,6 +134,10 @@ fn preamble_for_build(lib_rs: &Path) -> (String, Vec<PathBuf>) {
 }
 
 fn collect_asm(dir: &Path) -> String {
+    collect_asm_inner(dir).unwrap_or_else(|err| panic!("{err}"))
+}
+
+fn collect_asm_inner(dir: &Path) -> Result<String> {
     let mut files: Vec<PathBuf> = Vec::new();
     walk_dir(dir, &mut files);
     files.sort();
@@ -140,12 +145,13 @@ fn collect_asm(dir: &Path) -> String {
     let root_file = find_root_file(dir, &files);
 
     if let Some(root) = root_file {
-        expand_includes(&root, dir)
+        let mut stack = Vec::new();
+        expand_includes(&root, dir, &mut stack)
     } else {
         let mut out = String::new();
         for file in &files {
             let content = std::fs::read_to_string(file)
-                .unwrap_or_else(|e| panic!("read {}: {e}", file.display()));
+                .with_context(|| format!("read {}", file.display()))?;
             out.push_str(&format!(
                 "# --- {} ---\n",
                 file.strip_prefix(dir).unwrap_or(file).display()
@@ -153,7 +159,7 @@ fn collect_asm(dir: &Path) -> String {
             out.push_str(&content);
             out.push('\n');
         }
-        out
+        Ok(out)
     }
 }
 
@@ -177,9 +183,23 @@ fn find_root_file(dir: &Path, files: &[PathBuf]) -> Option<PathBuf> {
     None
 }
 
-fn expand_includes(path: &Path, base_dir: &Path) -> String {
+fn expand_includes(path: &Path, base_dir: &Path, stack: &mut Vec<PathBuf>) -> Result<String> {
+    let canonical = canonicalize_path(path);
+    if let Some(pos) = stack.iter().position(|seen_path| *seen_path == canonical) {
+        let mut cycle_paths = stack[pos..].to_vec();
+        cycle_paths.push(canonical.clone());
+        let cycle = cycle_paths
+            .iter()
+            .map(|entry| display_path(entry, base_dir))
+            .collect::<Vec<_>>()
+            .join(" -> ");
+        return Err(anyhow!("assembly include cycle detected: {cycle}"));
+    }
+
+    stack.push(canonical);
+
     let content = std::fs::read_to_string(path)
-        .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+        .with_context(|| format!("read {}", path.display()))?;
 
     let mut out = String::new();
     let rel = path.strip_prefix(base_dir).unwrap_or(path);
@@ -191,11 +211,11 @@ fn expand_includes(path: &Path, base_dir: &Path) -> String {
             let file = rest.trim().trim_matches('"');
             let include_path = path.parent().unwrap_or(base_dir).join(file);
             if include_path.exists() {
-                out.push_str(&expand_includes(&include_path, base_dir));
+                out.push_str(&expand_includes(&include_path, base_dir, stack)?);
             } else {
                 let from_base = base_dir.join(file);
                 if from_base.exists() {
-                    out.push_str(&expand_includes(&from_base, base_dir));
+                    out.push_str(&expand_includes(&from_base, base_dir, stack)?);
                 } else {
                     out.push_str(line);
                     out.push('\n');
@@ -206,7 +226,8 @@ fn expand_includes(path: &Path, base_dir: &Path) -> String {
             out.push('\n');
         }
     }
-    out
+    stack.pop();
+    Ok(out)
 }
 
 fn walk_dir(dir: &Path, out: &mut Vec<PathBuf>) {
@@ -224,10 +245,24 @@ fn walk_dir(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
+fn canonicalize_path(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
+fn display_path(path: &Path, base_dir: &Path) -> String {
+    path.strip_prefix(base_dir)
+        .unwrap_or(path)
+        .display()
+        .to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::{
+        panic,
+        time::{SystemTime, UNIX_EPOCH},
+    };
 
     fn temp_test_dir(name: &str) -> PathBuf {
         let unique = SystemTime::now()
@@ -238,6 +273,16 @@ mod tests {
             std::env::temp_dir().join(format!("anchor-asm-v2-lib-{name}-{}-{unique}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    fn panic_message(err: Box<dyn std::any::Any + Send>) -> String {
+        match err.downcast::<String>() {
+            Ok(msg) => *msg,
+            Err(err) => match err.downcast::<&'static str>() {
+                Ok(msg) => (*msg).to_string(),
+                Err(_) => "non-string panic payload".to_string(),
+            },
+        }
     }
 
     #[test]
@@ -277,6 +322,49 @@ mod tests {
         assert!(tracked_files.contains(&canon(&lib_rs)));
         assert!(tracked_files.contains(&canon(&state_rs)));
         assert!(tracked_files.contains(&canon(&custom_rs)));
+
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn test_include_cycle_is_rejected() {
+        let dir = temp_test_dir("cycle");
+        let output = dir.join("combined.s");
+
+        std::fs::write(dir.join("entrypoint.s"), ".include \"a.s\"\n").unwrap();
+        std::fs::write(dir.join("a.s"), ".include \"b.s\"\n").unwrap();
+        std::fs::write(dir.join("b.s"), ".include \"a.s\"\n").unwrap();
+
+        let err = panic::catch_unwind(|| build_to(&dir, &output))
+            .err()
+            .expect("cyclic includes should panic");
+        let message = panic_message(err);
+        assert!(message.contains("assembly include cycle detected"));
+        assert!(message.contains("a.s"));
+        assert!(message.contains("b.s"));
+
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn test_non_cyclic_nested_includes_are_expanded() {
+        let dir = temp_test_dir("acyclic");
+        let output = dir.join("combined.s");
+
+        std::fs::write(dir.join("entrypoint.s"), ".include \"a.s\"\nentry:\n").unwrap();
+        std::fs::write(dir.join("a.s"), ".include \"nested/b.s\"\na:\n").unwrap();
+        std::fs::create_dir_all(dir.join("nested")).unwrap();
+        std::fs::write(dir.join("nested").join("b.s"), "b:\n").unwrap();
+
+        build_to(&dir, &output);
+
+        let combined = std::fs::read_to_string(&output).unwrap();
+        assert!(combined.contains("# --- entrypoint.s ---"));
+        assert!(combined.contains("# --- a.s ---"));
+        assert!(combined.contains("# --- nested/b.s ---"));
+        assert!(combined.contains("entry:"));
+        assert!(combined.contains("a:"));
+        assert!(combined.contains("b:"));
 
         std::fs::remove_dir_all(dir).ok();
     }

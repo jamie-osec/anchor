@@ -10,6 +10,7 @@ publish = false
 members = ["macros", "runtime"]
 
 [dependencies]
+anyhow = "1"
 syn = { version = "2", features = ["full", "parsing", "visit"] }
 quote = "1"
 anchor-asm-v2-macros = { path = "macros" }
