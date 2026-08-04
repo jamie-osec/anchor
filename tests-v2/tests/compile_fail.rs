@@ -854,6 +854,105 @@ pub fn use_return<'a>(program: &'a Address, data: CpiHandle<'a>) {
 }
 
 #[test]
+fn declare_program_object_tuple_fields_compile() {
+    CompileCase::new(
+        "declare_program_object_tuple_fields",
+        r#"
+use anchor_lang_v2::prelude::*;
+
+declare_program!(bad);
+
+pub fn use_declared_types(
+    value: bad::ObjectTuple,
+    variant: bad::ObjectEnum,
+) -> anchor_lang_v2::__alloc::vec::Vec<u8> {
+    let bad::ObjectTuple(bytes, maybe) = value;
+    let _ = maybe;
+    match variant {
+        bad::ObjectEnum::Wrapped(inner, flag) => {
+            let _ = flag;
+            inner
+        }
+    }
+    .clone()
+}
+"#,
+    )
+    .file(
+        "idls/bad.json",
+        r#"{
+  "address": "11111111111111111111111111111111",
+  "metadata": { "name": "bad", "version": "0.1.0", "spec": "0.1.0" },
+  "instructions": [],
+  "types": [
+    {
+      "name": "ObjectTuple",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "vec": "u8" },
+          { "option": "bool" }
+        ]
+      }
+    },
+    {
+      "name": "ObjectEnum",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Wrapped",
+            "fields": [
+              { "vec": "u8" },
+              { "option": "bool" }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}"#,
+    )
+    .expect_pass();
+}
+
+#[test]
+fn declare_program_mixed_object_field_shapes_fail_cleanly() {
+    CompileCase::new(
+        "declare_program_mixed_object_field_shapes",
+        r#"
+use anchor_lang_v2::prelude::*;
+
+declare_program!(bad);
+"#,
+    )
+    .file(
+        "idls/bad.json",
+        r#"{
+  "address": "11111111111111111111111111111111",
+  "metadata": { "name": "bad", "version": "0.1.0", "spec": "0.1.0" },
+  "instructions": [],
+  "types": [
+    {
+      "name": "MixedFields",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bytes",
+            "type": { "vec": "u8" }
+          },
+          { "option": "bool" }
+        ]
+      }
+    }
+  ]
+}"#,
+    )
+    .expect_fail(&["failed to parse IDL", "IdlDefinedFields"]);
+}
+
+#[test]
 fn declare_program_non_returning_cpi_has_no_return_wrapper() {
     CompileCase::new(
         "declare_program_non_return_wrapper",

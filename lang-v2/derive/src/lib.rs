@@ -3856,35 +3856,52 @@ fn gen_declare_program_type_fields(
     public: bool,
 ) -> syn::Result<DeclareTypeFields> {
     let visibility = public.then(|| quote! { pub });
-    if fields.iter().all(serde_json::Value::is_object) {
-        let mut field_tokens = Vec::new();
-        let mut field_tys = Vec::new();
-        for field in fields {
-            let field_name = json_str(field, "name", span)?;
-            let field_ident = Ident::new(&to_snake_case(field_name), span);
-            let ty_value = field.get("type").ok_or_else(|| {
-                syn::Error::new(span, format!("field `{field_name}` is missing type"))
-            })?;
-            let ty = declare_idl_type_to_tokens(ty_value, span)?;
-            field_tokens.push(quote! { #visibility #field_ident: #ty, });
-            field_tys.push(ty);
+    let field_shape = serde_json::from_value::<anchor_lang_idl::types::IdlDefinedFields>(
+        serde_json::Value::Array(fields.to_vec()),
+    )
+    .map_err(|err| syn::Error::new(span, format!("invalid IDL field list: {err}")))?;
+
+    match field_shape {
+        anchor_lang_idl::types::IdlDefinedFields::Named(fields) => {
+            let mut field_tokens = Vec::new();
+            let mut field_tys = Vec::new();
+            for field in fields {
+                let field_name = &field.name;
+                let ty_value = serde_json::to_value(&field.ty).map_err(|err| {
+                    syn::Error::new(
+                        span,
+                        format!("failed to normalize IDL field `{field_name}` type: {err}"),
+                    )
+                })?;
+                let ty = declare_idl_type_to_tokens(&ty_value, span)?;
+                let field_ident = Ident::new(&to_snake_case(field_name), span);
+                field_tokens.push(quote! { #visibility #field_ident: #ty, });
+                field_tys.push(ty);
+            }
+            Ok(DeclareTypeFields::Named {
+                fields: field_tokens,
+                tys: field_tys,
+            })
         }
-        Ok(DeclareTypeFields::Named {
-            fields: field_tokens,
-            tys: field_tys,
-        })
-    } else {
-        let mut field_tokens = Vec::new();
-        let mut field_tys = Vec::new();
-        for field in fields {
-            let ty = declare_idl_type_to_tokens(field, span)?;
-            field_tokens.push(quote! { #visibility #ty });
-            field_tys.push(ty);
+        anchor_lang_idl::types::IdlDefinedFields::Tuple(fields) => {
+            let mut field_tokens = Vec::new();
+            let mut field_tys = Vec::new();
+            for field in fields {
+                let ty_value = serde_json::to_value(&field).map_err(|err| {
+                    syn::Error::new(
+                        span,
+                        format!("failed to normalize tuple field type for declare_program!: {err}"),
+                    )
+                })?;
+                let ty = declare_idl_type_to_tokens(&ty_value, span)?;
+                field_tokens.push(quote! { #visibility #ty });
+                field_tys.push(ty);
+            }
+            Ok(DeclareTypeFields::Tuple {
+                fields: field_tokens,
+                tys: field_tys,
+            })
         }
-        Ok(DeclareTypeFields::Tuple {
-            fields: field_tokens,
-            tys: field_tys,
-        })
     }
 }
 
