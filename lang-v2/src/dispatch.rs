@@ -57,7 +57,7 @@ pub trait TryAccounts: Bumps + Sized {
         ix_data: &'ix [u8],
     ) -> Result<(Self, Self::Bumps, Self::IxArgs<'ix>), ProgramError>;
 
-    fn exit_accounts(&mut self) -> Result<(), ProgramError>;
+    fn exit_accounts<'ix>(&mut self, ix_data: &'ix [u8]) -> Result<(), ProgramError>;
 }
 
 /// Run a handler inside a fully-constructed [`Context`].
@@ -110,6 +110,6 @@ pub fn run_handler<'a, T: TryAccounts, R>(
         mut_mask,
     );
     let result = handler(&mut ctx, ix_args)?;
-    ctx.accounts.exit_accounts()?;
+    ctx.accounts.exit_accounts(ix_data)?;
     Ok(result)
 }

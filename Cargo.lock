@@ -1769,6 +1769,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d52eff69cd5e647efe296129160853a42795992097e8af39800e1060caeea9b"
 
 [[package]]
+name = "constraint-values"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang-v2",
+ "anchor-spl-v2",
+ "bytemuck",
+ "pinocchio",
+ "pinocchio-system",
+ "solana-program-error 3.0.0",
+ "wincode 0.5.4",
+]
+
+[[package]]
 name = "constraints"
 version = "0.1.0"
 dependencies = [
@@ -9275,6 +9288,7 @@ dependencies = [
  "callee",
  "caller",
  "client-builders",
+ "constraint-values",
  "constraints",
  "custom-constraints",
  "declare-program-constants",

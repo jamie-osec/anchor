@@ -36,6 +36,7 @@ fn all_labeled_variants() -> Vec<(&'static str, ErrorCode)> {
             | ErrorCode::ConstraintSeeds
             | ErrorCode::ConstraintHasOne
             | ErrorCode::ConstraintAddress
+            | ErrorCode::ConstraintAccountIsNone
             | ErrorCode::ConstraintClose
             | ErrorCode::ConstraintOwner
             | ErrorCode::ConstraintSpace
@@ -64,6 +65,10 @@ fn all_labeled_variants() -> Vec<(&'static str, ErrorCode)> {
         ("ConstraintSeeds", ErrorCode::ConstraintSeeds),
         ("ConstraintHasOne", ErrorCode::ConstraintHasOne),
         ("ConstraintAddress", ErrorCode::ConstraintAddress),
+        (
+            "ConstraintAccountIsNone",
+            ErrorCode::ConstraintAccountIsNone,
+        ),
         ("ConstraintClose", ErrorCode::ConstraintClose),
         ("ConstraintOwner", ErrorCode::ConstraintOwner),
         ("ConstraintSpace", ErrorCode::ConstraintSpace),
@@ -116,7 +121,7 @@ fn no_two_variants_share_a_custom_code() {
     }
     // Snapshot — adding a new Custom variant forces a review of this number.
     assert_eq!(
-        custom_count, 16,
+        custom_count, 17,
         "Number of Custom error codes changed; update this snapshot after review"
     );
 }
@@ -172,6 +177,11 @@ fn builtin_groupings_are_stable() {
         "ConstraintSeeds",
         ErrorCode::ConstraintSeeds.into(),
         InvalidSeeds,
+    );
+    check(
+        "ConstraintAccountIsNone",
+        ErrorCode::ConstraintAccountIsNone.into(),
+        Custom(2020),
     );
     check(
         "ConstraintOwner",

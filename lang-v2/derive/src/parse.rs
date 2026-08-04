@@ -39,9 +39,6 @@ pub struct NamespacedConstraint {
     pub raw_key: String,
     /// The RHS expression.
     pub value: Expr,
-    /// True if the RHS is a simple ident (field reference → call .account()).
-    /// False if it's a literal or complex expression (pass directly).
-    pub is_field_ref: bool,
     /// True if parsed from inside an `update(...)` wrapper. Update
     /// entries dispatch through `AccountConstraint::update` instead of
     /// `check`, and skip the init-param thread-through.
@@ -206,7 +203,6 @@ pub fn parse_account_attrs(attrs: &[Attribute]) -> syn::Result<AccountAttrs> {
                             content.parse::<Token![::]>()?;
                             let key_ident: Ident = Ident::parse_any(&content)?;
                             content.parse::<Token![=]>()?;
-                            let is_field_ref = content.peek(syn::Ident);
                             let value: Expr = content.parse()?;
                             let raw_key = key_ident.to_string();
                             let key = constraint_key_ident(&raw_key);
@@ -215,7 +211,6 @@ pub fn parse_account_attrs(attrs: &[Attribute]) -> syn::Result<AccountAttrs> {
                                 key,
                                 raw_key,
                                 value,
-                                is_field_ref,
                                 is_update: true,
                             });
                             if !content.is_empty() {
@@ -345,9 +340,6 @@ pub fn parse_account_attrs(attrs: &[Attribute]) -> syn::Result<AccountAttrs> {
                                 continue;
                             }
                             input.parse::<Token![=]>()?;
-                            // Peek to determine if RHS is a simple ident (field ref)
-                            // or a literal/expression (value).
-                            let is_field_ref = input.peek(syn::Ident);
                             let value: Expr = input.parse()?;
                             let raw_key = key_ident.to_string();
                             let key = constraint_key_ident(&raw_key);
@@ -356,7 +348,6 @@ pub fn parse_account_attrs(attrs: &[Attribute]) -> syn::Result<AccountAttrs> {
                                 key,
                                 raw_key,
                                 value,
-                                is_field_ref,
                                 is_update: false,
                             });
                         } else {
@@ -488,6 +479,204 @@ fn expr_as_field_ident(expr: &Expr) -> Option<Ident> {
         return None;
     }
     Some(path.path.segments[0].ident.clone())
+}
+
+fn expr_as_known_field_ident(expr: &Expr, field_names: &[String]) -> Option<Ident> {
+    let ident = expr_as_field_ident(expr)?;
+    field_names
+        .iter()
+        .any(|field_name| field_name == &ident.to_string())
+        .then_some(ident)
+}
+
+fn expr_root_ident(expr: &Expr) -> Option<Ident> {
+    match expr {
+        Expr::Path(path) => {
+            if path.qself.is_some() || path.path.segments.is_empty() {
+                return None;
+            }
+            Some(path.path.segments[0].ident.clone())
+        }
+        Expr::Field(field) => expr_root_ident(&field.base),
+        Expr::MethodCall(call) => expr_root_ident(&call.receiver),
+        Expr::Paren(paren) => expr_root_ident(&paren.expr),
+        Expr::Reference(reference) => expr_root_ident(&reference.expr),
+        Expr::Unary(unary) => expr_root_ident(&unary.expr),
+        _ => None,
+    }
+}
+
+fn expr_root_known_field_ident(expr: &Expr, field_names: &[String]) -> Option<Ident> {
+    let ident = expr_root_ident(expr)?;
+    field_names
+        .iter()
+        .any(|field_name| field_name == &ident.to_string())
+        .then_some(ident)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BuiltinConstraintValueKind {
+    Address,
+    Direct,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BuiltinInitParamValueKind {
+    AccountView,
+    Direct,
+}
+
+fn builtin_constraint_value_kind(
+    namespace: &str,
+    raw_key: &str,
+) -> Option<BuiltinConstraintValueKind> {
+    match (namespace, raw_key) {
+        ("mint", "authority" | "freeze_authority" | "token_program")
+        | ("token", "mint" | "authority" | "token_program")
+        | ("associated_token", "mint" | "authority" | "token_program") => {
+            Some(BuiltinConstraintValueKind::Address)
+        }
+        ("mint", "decimals") => Some(BuiltinConstraintValueKind::Direct),
+        _ => None,
+    }
+}
+
+fn builtin_init_param_value_kind(
+    namespace: &str,
+    raw_key: &str,
+) -> Option<BuiltinInitParamValueKind> {
+    match (namespace, raw_key) {
+        ("mint", "decimals") => Some(BuiltinInitParamValueKind::Direct),
+        ("mint", "authority" | "freeze_authority" | "token_program")
+        | ("token", "mint" | "authority" | "token_program") => {
+            Some(BuiltinInitParamValueKind::AccountView)
+        }
+        _ => None,
+    }
+}
+
+fn render_constraint_value_expr(
+    expr: &Expr,
+    field_names: &[String],
+    exit_context: bool,
+) -> TokenStream2 {
+    if exit_context && expr_root_known_field_ident(expr, field_names).is_some() {
+        quote! { self.#expr }
+    } else {
+        quote! { #expr }
+    }
+}
+
+fn field_is_optional(field_summaries: &[FieldSummary], ident: &Ident) -> bool {
+    field_summaries
+        .iter()
+        .find(|summary| summary.name == *ident)
+        .and_then(|summary| extract_option_inner(&summary.ty))
+        .is_some()
+}
+
+fn emit_constraint_expected_binding(
+    _namespace: &Ident,
+    _key: &Ident,
+    nc: &NamespacedConstraint,
+    field_names: &[String],
+    field_summaries: &[FieldSummary],
+    exit_context: bool,
+) -> (TokenStream2, TokenStream2) {
+    let value = &nc.value;
+    let value_expr = render_constraint_value_expr(value, field_names, exit_context);
+
+    match builtin_constraint_value_kind(&nc.namespace, &nc.raw_key) {
+        Some(BuiltinConstraintValueKind::Address) => {
+            let expected_value =
+                if let Some(field_ident) = expr_as_known_field_ident(value, field_names) {
+                    if field_is_optional(field_summaries, &field_ident) {
+                        quote! {
+                            match (#value_expr).as_ref() {
+                                Some(__anchor_account) => *__anchor_account.account().address(),
+                                None => {
+                                    return Err(
+                                        anchor_lang_v2::ErrorCode::ConstraintAccountIsNone.into()
+                                    );
+                                }
+                            }
+                        }
+                    } else {
+                        quote! { *anchor_lang_v2::AccountAddress::account_address(&(#value_expr)) }
+                    }
+                } else {
+                    quote! { core::convert::Into::<anchor_lang_v2::Address>::into(#value_expr) }
+                };
+            (
+                quote! {
+                    let __anchor_expected = #expected_value;
+                },
+                quote! { &__anchor_expected },
+            )
+        }
+        Some(BuiltinConstraintValueKind::Direct) => (
+            quote! { let __anchor_expected = &(#value_expr); },
+            quote! { __anchor_expected },
+        ),
+        None if expr_as_known_field_ident(value, field_names).is_some() => (
+            quote! { let __anchor_expected = AsRef::as_ref(&(#value_expr)); },
+            quote! { __anchor_expected },
+        ),
+        None => (
+            quote! { let __anchor_expected = &(#value_expr); },
+            quote! { __anchor_expected },
+        ),
+    }
+}
+
+fn validate_init_constraint_refs(
+    field_name: &Ident,
+    attrs: &AccountAttrs,
+    field_summaries: &[FieldSummary],
+) -> syn::Result<()> {
+    if !(attrs.is_init || attrs.is_init_if_needed) {
+        return Ok(());
+    }
+
+    let current_index = field_summaries
+        .iter()
+        .position(|summary| summary.name == *field_name)
+        .expect("current field should exist in summaries");
+
+    for nc in &attrs.namespaced {
+        let Some(root) = expr_root_ident(&nc.value) else {
+            continue;
+        };
+        let Some(root_index) = field_summaries
+            .iter()
+            .position(|summary| summary.name == root)
+        else {
+            continue;
+        };
+
+        if root == *field_name {
+            return Err(syn::Error::new(
+                nc.value.span(),
+                format!(
+                    "`{}::{}` cannot reference `{}` while that account is still being initialized",
+                    nc.namespace, nc.raw_key, root
+                ),
+            ));
+        }
+
+        let root_attrs = &field_summaries[root_index].attrs;
+        if root_index > current_index && (root_attrs.is_init || root_attrs.is_init_if_needed) {
+            return Err(syn::Error::new(
+                nc.value.span(),
+                format!(
+                    "`{}::{}` cannot reference later init field `{}` before it is initialized",
+                    nc.namespace, nc.raw_key, root
+                ),
+            ));
+        }
+    }
+
+    Ok(())
 }
 
 fn field_offset_expr(
@@ -641,6 +830,7 @@ fn parse_associated_token_init(
 fn wrap_init_body_with_constraints(
     field_ty: &Type,
     attrs: &AccountAttrs,
+    field_names: &[String],
     init_body: &TokenStream2,
 ) -> TokenStream2 {
     let init_calls: Vec<TokenStream2> = attrs
@@ -651,10 +841,7 @@ fn wrap_init_body_with_constraints(
             let ns = syn::Ident::new(&nc.namespace, proc_macro2::Span::call_site());
             let key = syn::Ident::new(&nc.key, proc_macro2::Span::call_site());
             let value = &nc.value;
-            let expected = if nc.is_field_ref && (nc.namespace == "mint" || nc.namespace == "token")
-            {
-                quote! { anchor_lang_v2::AccountAddress::account_address(&#value) }
-            } else if nc.is_field_ref {
+            let expected = if expr_as_known_field_ident(value, field_names).is_some() {
                 quote! { AsRef::as_ref(&#value) }
             } else {
                 quote! { &#value }
@@ -1305,14 +1492,39 @@ fn emit_init_body(
     let param_assignments: Vec<_> = attrs
         .namespaced
         .iter()
-        .filter(|nc| !is_runtime_only_constraint_ns(&nc.namespace))
+        .filter(|nc| !nc.is_update && !is_runtime_only_constraint_ns(&nc.namespace))
         .map(|nc| {
             let key = Ident::new(&nc.raw_key, proc_macro2::Span::call_site());
             let value = &nc.value;
-            if nc.is_field_ref {
-                quote! { __p.#key = Some(#value.account()); }
-            } else {
-                quote! { __p.#key = Some(#value); }
+            match builtin_init_param_value_kind(&nc.namespace, &nc.raw_key) {
+                Some(BuiltinInitParamValueKind::AccountView) => {
+                    if let Some(field_ident) = expr_as_known_field_ident(value, field_names) {
+                        if field_is_optional(field_summaries, &field_ident) {
+                            quote! {
+                                __p.#key = Some(match (#value).as_ref() {
+                                    Some(__anchor_account) => __anchor_account.account(),
+                                    None => {
+                                        return Err(
+                                            anchor_lang_v2::ErrorCode::ConstraintAccountIsNone
+                                                .into(),
+                                        );
+                                    }
+                                });
+                            }
+                        } else {
+                            quote! {
+                                __p.#key = Some(#value.account());
+                            }
+                        }
+                    } else {
+                        quote! {
+                            __p.#key = Some(#value.account());
+                        }
+                    }
+                }
+                Some(BuiltinInitParamValueKind::Direct) | None => {
+                    quote! { __p.#key = Some(#value); }
+                }
             }
         })
         .collect();
@@ -1554,6 +1766,7 @@ pub fn parse_field(
             ));
         }
     }
+    validate_init_constraint_refs(field_name, &attrs, field_summaries)?;
     if attrs.close.is_some() && !attrs.is_mut {
         return Err(syn::Error::new(
             field_name.span(),
@@ -1687,7 +1900,7 @@ pub fn parse_field(
             let #field_name = anchor_lang_v2::Nested(__nested_inner);
         };
         let exit = Some(quote! {
-            self.#field_name.0.exit_accounts()?;
+            self.#field_name.0.exit_accounts(__ix_data)?;
         });
         return Ok(AccountField {
             name: field_name.clone(),
@@ -1749,7 +1962,7 @@ pub fn parse_field(
                 )?
             };
             let init_body_with_constraints =
-                wrap_init_body_with_constraints(inner_ty, &attrs, &init_body);
+                wrap_init_body_with_constraints(inner_ty, &attrs, field_names, &init_body);
             quote! { Some({ #init_body_with_constraints }) }
         } else if attrs.is_init_if_needed {
             let init_if_needed_space_check =
@@ -1775,7 +1988,7 @@ pub fn parse_field(
                 )?
             };
             let init_body_with_constraints =
-                wrap_init_body_with_constraints(inner_ty, &attrs, &init_body);
+                wrap_init_body_with_constraints(inner_ty, &attrs, field_names, &init_body);
             quote! {
                 if __target.data_len() > 0
                     && !__target.owned_by(&anchor_lang_v2::programs::System::id())
@@ -1891,7 +2104,7 @@ pub fn parse_field(
             )?
         };
         let init_body_with_constraints =
-            wrap_init_body_with_constraints(field_ty, &attrs, &init_body);
+            wrap_init_body_with_constraints(field_ty, &attrs, field_names, &init_body);
         deferred_load = Some(quote! {
             let mut #field_name: #field_ty = {
                 let __target = __views[#offset_expr];
@@ -1923,7 +2136,7 @@ pub fn parse_field(
             )?
         };
         let init_body_with_constraints =
-            wrap_init_body_with_constraints(field_ty, &attrs, &init_body);
+            wrap_init_body_with_constraints(field_ty, &attrs, field_names, &init_body);
         let existed = init_if_needed_existed.as_ref().unwrap();
         deferred_load = Some(quote! {
             let #existed = {
@@ -2212,36 +2425,75 @@ pub fn parse_field(
             let mint = &at.mint;
             let authority = &at.authority;
             let token_program = &at.token_program;
+            let mint_addr = if field_is_optional(field_summaries, mint) {
+                quote! {
+                    match (#mint).as_ref() {
+                        Some(__anchor_account) => *__anchor_account.account().address(),
+                        None => {
+                            return Err(
+                                anchor_lang_v2::ErrorCode::ConstraintAccountIsNone.into()
+                            );
+                        }
+                    }
+                }
+            } else {
+                quote! { *anchor_lang_v2::AccountAddress::account_address(&(#mint)) }
+            };
+            let authority_addr = if field_is_optional(field_summaries, authority) {
+                quote! {
+                    match (#authority).as_ref() {
+                        Some(__anchor_account) => *__anchor_account.account().address(),
+                        None => {
+                            return Err(
+                                anchor_lang_v2::ErrorCode::ConstraintAccountIsNone.into()
+                            );
+                        }
+                    }
+                }
+            } else {
+                quote! { *anchor_lang_v2::AccountAddress::account_address(&(#authority)) }
+            };
+            let token_program_addr = if field_is_optional(field_summaries, token_program) {
+                quote! {
+                    match (#token_program).as_ref() {
+                        Some(__anchor_account) => *__anchor_account.account().address(),
+                        None => {
+                            return Err(
+                                anchor_lang_v2::ErrorCode::ConstraintAccountIsNone.into()
+                            );
+                        }
+                    }
+                }
+            } else {
+                quote! { *anchor_lang_v2::AccountAddress::account_address(&(#token_program)) }
+            };
             constraints.push(quote! {
                 {
-                    let __associated_token_mint =
-                        anchor_lang_v2::AccountAddress::account_address(&#mint);
-                    let __associated_token_authority =
-                        anchor_lang_v2::AccountAddress::account_address(&#authority);
-                    let __associated_token_token_program =
-                        anchor_lang_v2::AccountAddress::account_address(&#token_program);
+                    let __associated_token_mint = #mint_addr;
+                    let __associated_token_authority = #authority_addr;
+                    let __associated_token_token_program = #token_program_addr;
 
                     if !anchor_lang_v2::address_eq(
                         #field_name.mint(),
-                        __associated_token_mint,
+                        &__associated_token_mint,
                     ) {
                         return Err(anchor_lang_v2::ErrorCode::ConstraintAddress.into());
                     }
                     if !anchor_lang_v2::address_eq(
                         #field_name.owner(),
-                        __associated_token_authority,
+                        &__associated_token_authority,
                     ) {
                         return Err(anchor_lang_v2::ErrorCode::ConstraintAddress.into());
                     }
-                    if !#field_name.account().owned_by(__associated_token_token_program) {
+                    if !#field_name.account().owned_by(&__associated_token_token_program) {
                         return Err(anchor_lang_v2::ErrorCode::ConstraintOwner.into());
                     }
 
                     let __expected_associated_token =
                         anchor_spl_v2::associated_token::get_associated_token_address_with_program_id(
-                            __associated_token_authority,
-                            __associated_token_mint,
-                            __associated_token_token_program,
+                            &__associated_token_authority,
+                            &__associated_token_mint,
+                            &__associated_token_token_program,
                         );
                     if !anchor_lang_v2::address_eq(
                         #field_name.account().address(),
@@ -2286,14 +2538,8 @@ pub fn parse_field(
         // specific marker module.
         let ns = syn::Ident::new(&nc.namespace, proc_macro2::Span::call_site());
         let key = syn::Ident::new(&nc.key, proc_macro2::Span::call_site());
-        let value = &nc.value;
-        let expected = if nc.is_field_ref && (nc.namespace == "mint" || nc.namespace == "token") {
-            quote! { anchor_lang_v2::AccountAddress::account_address(&#value) }
-        } else if nc.is_field_ref {
-            quote! { AsRef::as_ref(&#value) }
-        } else {
-            quote! { &#value }
-        };
+        let (expected_binding, expected_arg) =
+            emit_constraint_expected_binding(&ns, &key, nc, field_names, field_summaries, false);
 
         if nc.is_update {
             let update_target = if is_optional {
@@ -2304,9 +2550,12 @@ pub fn parse_field(
             // `update(...)` — fires regardless of init state, but only after
             // all account validations have completed.
             updates.push(quote! {
-                <#ns::#key as anchor_lang_v2::AccountConstraint<_>>::update(
-                    #update_target, #expected,
-                )?;
+                {
+                    #expected_binding
+                    <#ns::#key as anchor_lang_v2::AccountConstraint<_>>::update(
+                        #update_target, #expected_arg,
+                    )?;
+                }
             });
             continue;
         }
@@ -2329,9 +2578,12 @@ pub fn parse_field(
                 quote! { &#field_name }
             };
             constraints.push(quote! {
-                <#ns::#key as anchor_lang_v2::AccountConstraint<_>>::check(
-                    #check_target, #expected,
-                )?;
+                {
+                    #expected_binding
+                    <#ns::#key as anchor_lang_v2::AccountConstraint<_>>::check(
+                        #check_target, #expected_arg,
+                    )?;
+                }
             });
         }
     }
@@ -2378,19 +2630,15 @@ pub fn parse_field(
         .map(|nc| {
             let ns = syn::Ident::new(&nc.namespace, proc_macro2::Span::call_site());
             let key = syn::Ident::new(&nc.key, proc_macro2::Span::call_site());
-            let value = &nc.value;
-            let expected = if nc.is_field_ref && (nc.namespace == "mint" || nc.namespace == "token")
-            {
-                quote! { anchor_lang_v2::AccountAddress::account_address(&self.#value) }
-            } else if nc.is_field_ref {
-                quote! { AsRef::as_ref(&self.#value) }
-            } else {
-                quote! { &#value }
-            };
+            let (expected_binding, expected_arg) =
+                emit_constraint_expected_binding(&ns, &key, nc, field_names, field_summaries, true);
             quote! {
-                <#ns::#key as anchor_lang_v2::AccountConstraint<_>>::exit(
-                    &mut self.#field_name, #expected,
-                )?;
+                {
+                    #expected_binding
+                    <#ns::#key as anchor_lang_v2::AccountConstraint<_>>::exit(
+                        &mut self.#field_name, #expected_arg,
+                    )?;
+                }
             }
         })
         .collect();
@@ -2495,19 +2743,21 @@ pub fn parse_field(
                 .map(|nc| {
                     let ns = syn::Ident::new(&nc.namespace, proc_macro2::Span::call_site());
                     let key = syn::Ident::new(&nc.key, proc_macro2::Span::call_site());
-                    let value = &nc.value;
-                    let expected =
-                        if nc.is_field_ref && (nc.namespace == "mint" || nc.namespace == "token") {
-                            quote! { anchor_lang_v2::AccountAddress::account_address(&self.#value) }
-                        } else if nc.is_field_ref {
-                            quote! { AsRef::as_ref(&self.#value) }
-                        } else {
-                            quote! { &#value }
-                        };
+                    let (expected_binding, expected_arg) = emit_constraint_expected_binding(
+                        &ns,
+                        &key,
+                        nc,
+                        field_names,
+                        field_summaries,
+                        true,
+                    );
                     quote! {
-                        <#ns::#key as anchor_lang_v2::AccountConstraint<_>>::exit(
-                            __inner, #expected,
-                        )?;
+                        {
+                            #expected_binding
+                            <#ns::#key as anchor_lang_v2::AccountConstraint<_>>::exit(
+                                __inner, #expected_arg,
+                            )?;
+                        }
                     }
                 })
                 .collect();

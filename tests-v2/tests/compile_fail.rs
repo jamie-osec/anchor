@@ -14,6 +14,7 @@ struct CompileCase<'a> {
     name: &'a str,
     source: &'a str,
     files: Vec<(&'a str, &'a str)>,
+    deps: Vec<String>,
     features: Vec<&'a str>,
     mode: CargoMode,
 }
@@ -24,6 +25,7 @@ impl<'a> CompileCase<'a> {
             name,
             source,
             files: Vec::new(),
+            deps: Vec::new(),
             features: Vec::new(),
             mode: CargoMode::Check,
         }
@@ -31,6 +33,11 @@ impl<'a> CompileCase<'a> {
 
     fn file(mut self, relative_path: &'a str, contents: &'a str) -> Self {
         self.files.push((relative_path, contents));
+        self
+    }
+
+    fn dep(mut self, dep: impl Into<String>) -> Self {
+        self.deps.push(dep.into());
         self
     }
 
@@ -84,6 +91,7 @@ publish = false
 [dependencies]
 anchor-lang-v2 = {{ path = "{}" }}
 wincode = {{ version = "0.5", features = ["derive"] }}
+{}
 
 [features]
 cpi = []
@@ -92,7 +100,8 @@ idl-build = []
 [workspace]
 "#,
                 self.name,
-                anchor_lang_v2.display()
+                anchor_lang_v2.display(),
+                self.deps.join("\n")
             ),
         )
         .unwrap();
@@ -439,6 +448,216 @@ pub mod program_interface_prefix_overlap {
 "#,
     )
     .expect_fail(&["Ambiguous discriminators for instructions"]);
+}
+
+#[test]
+fn namespaced_constraints_accept_qualified_constants_as_values() {
+    CompileCase::new(
+        "namespaced_constraint_qualified_constant",
+        r#"
+use anchor_lang_v2::prelude::*;
+
+#[derive(Default, wincode::SchemaRead, wincode::SchemaWrite)]
+pub struct Counter {
+    pub value: u64,
+}
+
+impl Owner for Counter {
+    const OWNER: Address = Address::from_str_const("11111111111111111111111111111111");
+}
+
+impl Discriminator for Counter {
+    const DISCRIMINATOR: &'static [u8] = &[1, 2, 3, 4, 5, 6, 7, 8];
+}
+
+pub mod counter_ns {
+    use super::*;
+
+    pub struct MinValueConstraint;
+
+    impl AccountConstraint<BorshAccount<Counter>> for MinValueConstraint {
+        type Value = u64;
+
+        fn check(_: &BorshAccount<Counter>, _: &u64) -> anchor_lang_v2::Result<()> {
+            Ok(())
+        }
+    }
+}
+
+mod limits {
+    pub const MIN: u64 = 7;
+}
+
+#[derive(Accounts)]
+pub struct Good {
+    #[account(counter_ns::min_value = limits::MIN)]
+    pub counter: BorshAccount<Counter>,
+}
+"#,
+    )
+    .expect_pass();
+}
+
+#[test]
+fn namespaced_constraints_accept_instruction_args_in_exit_hooks() {
+    let spl = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("spl-v2");
+
+    CompileCase::new(
+        "namespaced_constraint_instruction_arg_exit",
+        r#"
+use anchor_lang_v2::prelude::*;
+use anchor_spl_v2::{
+    mint::{self, Mint},
+    token::Token,
+};
+
+declare_id!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
+
+#[account]
+pub struct AuthorityData {
+    pub value: u64,
+}
+
+#[derive(Accounts)]
+#[instruction(decimals: u8)]
+pub struct Good {
+    #[account(mut)]
+    pub payer: Signer,
+    pub authority: Account<AuthorityData>,
+    #[account(
+        init,
+        payer = payer,
+        mint::decimals = decimals,
+        mint::authority = authority,
+    )]
+    pub mint: Account<Mint>,
+    pub token_program: Program<Token>,
+    pub system_program: Program<System>,
+}
+"#,
+    )
+    .dep(format!(
+        "anchor-spl-v2 = {{ path = \"{}\", features = [\"guardrails\"] }}",
+        spl.display()
+    ))
+    .expect_pass();
+}
+
+#[test]
+fn namespaced_constraints_accept_sibling_field_paths_in_exit_and_update_hooks() {
+    let spl = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("spl-v2");
+
+    CompileCase::new(
+        "namespaced_constraint_sibling_field_paths",
+        r#"
+use anchor_lang_v2::prelude::*;
+use anchor_spl_v2::mint::{self, Mint};
+
+declare_id!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
+
+#[account]
+pub struct Config {
+    pub authority: Address,
+    pub decimals: u8,
+}
+
+#[derive(Accounts)]
+pub struct Good {
+    pub config: Account<Config>,
+    #[account(
+        mut,
+        mint::authority = config.authority,
+        mint::decimals = config.decimals,
+        update(mint::authority = config.authority, mint::decimals = config.decimals),
+    )]
+    pub mint: Account<Mint>,
+}
+"#,
+    )
+    .dep(format!(
+        "anchor-spl-v2 = {{ path = \"{}\", features = [\"guardrails\"] }}",
+        spl.display()
+    ))
+    .expect_pass();
+}
+
+#[test]
+fn namespaced_constraints_reject_self_refs_during_init() {
+    let spl = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("spl-v2");
+
+    CompileCase::new(
+        "namespaced_constraint_init_self_ref",
+        r#"
+use anchor_lang_v2::prelude::*;
+use anchor_spl_v2::token::{Token, TokenAccount};
+
+declare_id!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
+
+#[derive(Accounts)]
+pub struct Bad {
+    #[account(mut)]
+    pub payer: Signer,
+    #[account(init, payer = payer, token::authority = token_account)]
+    pub token_account: Account<TokenAccount>,
+    pub token_program: Program<Token>,
+    pub system_program: Program<System>,
+}
+"#,
+    )
+    .dep(format!(
+        "anchor-spl-v2 = {{ path = \"{}\", features = [\"guardrails\"] }}",
+        spl.display()
+    ))
+    .expect_fail(&[
+        "cannot reference `token_account` while that account is still being initialized",
+    ]);
+}
+
+#[test]
+fn namespaced_constraints_reject_later_init_refs() {
+    let spl = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("spl-v2");
+
+    CompileCase::new(
+        "namespaced_constraint_later_init_ref",
+        r#"
+use anchor_lang_v2::prelude::*;
+use anchor_spl_v2::{
+    mint::Mint,
+    token::{Token, TokenAccount},
+};
+
+declare_id!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
+
+#[derive(Accounts)]
+pub struct Bad {
+    #[account(mut)]
+    pub payer: Signer,
+    #[account(init, payer = payer, token::mint = mint, token::authority = payer)]
+    pub token_account: Account<TokenAccount>,
+    #[account(init, payer = payer, mint::decimals = 6, mint::authority = payer)]
+    pub mint: Account<Mint>,
+    pub token_program: Program<Token>,
+    pub system_program: Program<System>,
+}
+"#,
+    )
+    .dep(format!(
+        "anchor-spl-v2 = {{ path = \"{}\", features = [\"guardrails\"] }}",
+        spl.display()
+    ))
+    .expect_fail(&["cannot reference later init field `mint` before it is initialized"]);
 }
 
 #[test]

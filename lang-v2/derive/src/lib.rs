@@ -1887,7 +1887,8 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
 
             //
             #[inline(always)]
-            fn exit_accounts(&mut self) -> anchor_lang_v2::Result<()> {
+            fn exit_accounts<'ix>(&mut self, __ix_data: &'ix [u8]) -> anchor_lang_v2::Result<()> {
+                #ix_deser
                 #(#exits)*
                 Ok(())
             }

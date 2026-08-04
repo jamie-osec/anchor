@@ -28,6 +28,7 @@ callee = { path = "programs/callee", features = ["cpi"] }
 caller = { path = "programs/caller", features = ["cpi"] }
 client-builders = { path = "programs/client-builders" }
 constraints = { path = "programs/constraints" }
+constraint-values = { path = "programs/constraint-values" }
 custom-constraints = { path = "programs/custom-constraints", features = ["cpi"] }
 declare-program-constants = { path = "programs/declare-program/constants" }
 declare-program-cpi = { path = "programs/declare-program/cpi", features = ["cpi"] }
