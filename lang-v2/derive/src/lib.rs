@@ -5578,15 +5578,13 @@ pub fn event(attr: TokenStream, item: TokenStream) -> TokenStream {
                 // `Pod` trait propagates through nested types).
                 #(#field_pod_asserts)*
 
-                // `repr(C)` padding is target-dependent: on SBF `u128` is
-                // align-8, so a `{Address (align 1), u64, u128}` struct has
-                // no padding; on x86_64 hosts `u128` is align-16, inserting
-                // a phantom 8-byte gap before the `u128`. Gating on the
-                // Solana target means `cargo check` accepts the struct
-                // based on BPF layout (the only layout that actually
-                // ships) and `cargo build-sbf` still enforces the no-
-                // padding invariant.
-                #[cfg(target_os = "solana")]
+                // `repr(C)` padding is target-dependent: a layout that is
+                // tightly packed on SBF can still gain a host-only padding
+                // hole (for example, before a `u128`). The bytemuck event
+                // surface is also available to host-side consumers, so the
+                // no-padding assertion must run everywhere we emit the
+                // `Pod` impl; otherwise the host type could drift from the
+                // bytes the program logs on-chain.
                 const _: () = {
                     let mut __size = 0usize;
                     #(#field_size_steps)*
@@ -5612,29 +5610,23 @@ pub fn event(attr: TokenStream, item: TokenStream) -> TokenStream {
                 //       uninit-byte types (`bool`, enums, `Option`), and
                 //       any user struct that itself isn't `Pod`.
                 //   (3) No interior padding bytes        — enforced by the
-                //       `size_of::<Self>() == Σ size_of::<Field>()` assert
-                //       under `cfg(target_os = "solana")`. Padding bytes
-                //       are `MaybeUninit`, which would be read by
+                //       `size_of::<Self>() == Σ size_of::<Field>()` assert.
+                //       Padding bytes are `MaybeUninit`, which would be read by
                 //       `bytemuck::bytes_of` / `bytemuck::from_bytes` and
                 //       constitute UB — the assert precludes the case.
                 //   (4) `Copy` + `'static`               — `Copy` is
                 //       derived above; `'static` is required by
                 //       `assert_pod::<T: 'static>` transitively.
                 //
-                // The cfg-gated padding assert deliberately only evaluates
-                // on the Solana target. `repr(C)` padding is target-
-                // dependent: on SBF `u128` is align-8, so `{Address (align
-                // 1), u64, u128}` is perfectly packed; on x86_64 hosts
-                // `u128` is align-16, so that same layout has a phantom
-                // 8-byte gap during `cargo check`. This is not a soundness
-                // hole — the event bytes only get memcpy'd into
-                // `sol_log_data` on the actual deployment target, where
-                // the assert does run.
+                // The padding assert deliberately runs on every target.
+                // `#[event(bytemuck)]` also emits `Pod` on every target, so
+                // letting host-only padding through would make off-chain
+                // `bytemuck::from_bytes` consumers accept a shape that does
+                // not match the bytes emitted by the deployed program.
                 //
-                // Not using `#[derive(Pod)]` because bytemuck's own
-                // padding check is unconditional (not target-gated) and
-                // would reject `u128`-carrying events on host compile even
-                // though their on-chain layout is sound.
+                // Not using `#[derive(Pod)]` so we can keep the targeted
+                // field diagnostics above instead of falling straight into
+                // bytemuck's generic trait errors.
                 unsafe impl anchor_lang_v2::bytemuck::Pod for #name {}
                 unsafe impl anchor_lang_v2::bytemuck::Zeroable for #name {}
 

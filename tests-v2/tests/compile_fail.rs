@@ -582,6 +582,43 @@ fn declare_program_account_group_variants_do_not_collide_with_existing_types() {
 }
 
 #[test]
+fn event_bytemuck_rejects_host_padding_layouts() {
+    CompileCase::new(
+        "event_bytemuck_rejects_host_padding_layouts",
+        r#"
+use anchor_lang_v2::prelude::*;
+
+#[event(bytemuck)]
+pub struct BadLayout {
+    pub authority: Address,
+    pub count: u64,
+    pub amount: u128,
+}
+"#,
+    )
+    .expect_fail(&["struct has `repr(C)` alignment padding"]);
+}
+
+#[test]
+fn event_bytemuck_accepts_explicit_padding() {
+    CompileCase::new(
+        "event_bytemuck_accepts_explicit_padding",
+        r#"
+use anchor_lang_v2::prelude::*;
+
+#[event(bytemuck)]
+pub struct GoodLayout {
+    pub authority: Address,
+    pub count: u64,
+    pub _pad: [u8; 8],
+    pub amount: u128,
+}
+"#,
+    )
+    .expect_pass();
+}
+
+#[test]
 fn declare_program_missing_accounts_array_fails_clearly() {
     declare_program_compile_fail_case(
         "declare_program_missing_accounts_array",

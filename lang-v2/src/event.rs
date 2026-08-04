@@ -14,9 +14,9 @@ pub const EVENT_IX_TAG_LE: &[u8] = &EVENT_IX_TAG.to_le_bytes();
 ///   `Vec`/`String`/`Option`/enums and is materially cheaper than borsh on
 ///   SBF (3–10× fewer CUs).
 /// - opt-in (`#[event(bytemuck)]`) — zero-copy `copy_nonoverlapping` of a
-///   `repr(C)` struct with a compile-time padding assertion. Cheapest on
-///   fixed-size shapes, but the struct must contain only fixed-size,
-///   non-fat-pointer fields.
+///   `repr(C)` struct with a compile-time no-padding assertion on every
+///   target. Cheapest on fixed-size shapes, but the struct must contain
+///   only fixed-size, non-fat-pointer fields.
 pub trait Event: Discriminator {
     /// Serialize the event: discriminator bytes followed by event data.
     fn data(&self) -> Vec<u8>;
