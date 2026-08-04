@@ -360,6 +360,29 @@ pub struct Noop {}
     miri,
     ignore = "spawns cargo and writes temporary workspaces; covered by normal cargo test"
 )]
+fn unknown_error_code_argument_is_rejected() {
+    compile_fail_case(
+        "unknown_error_code_argument",
+        r#"
+use anchor_lang_v2::prelude::*;
+
+#[error_code(unknown = 7000)]
+pub enum MyError {
+    Problem,
+}
+"#,
+        &[
+            "unknown `#[error_code]` argument `unknown`",
+            "expected `offset = N`",
+        ],
+    );
+}
+
+#[test]
+#[cfg_attr(
+    miri,
+    ignore = "spawns cargo and writes temporary workspaces; covered by normal cargo test"
+)]
 fn instruction_args_must_match_zero_arg_handler() {
     compile_fail_case(
         "instruction_args_without_handler_args",

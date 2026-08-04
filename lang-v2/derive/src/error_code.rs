@@ -8,7 +8,8 @@
 
 use {
     proc_macro::TokenStream,
-    quote::quote,
+    proc_macro2::TokenStream as TokenStream2,
+    quote::{quote, ToTokens},
     syn::{
         parse_macro_input, Attribute, Expr, ItemEnum, Lit, Meta, MetaNameValue,
     },
@@ -18,7 +19,11 @@ use {
 const DEFAULT_OFFSET: u32 = 6000;
 
 pub fn expand(args: TokenStream, input: TokenStream) -> TokenStream {
-    let offset = parse_offset(args).unwrap_or(DEFAULT_OFFSET);
+    let offset = match parse_offset(args.into()) {
+        Ok(Some(offset)) => offset,
+        Ok(None) => DEFAULT_OFFSET,
+        Err(err) => return err.to_compile_error().into(),
+    };
     let mut item = parse_macro_input!(input as ItemEnum);
     let name = item.ident.clone();
 
@@ -127,19 +132,31 @@ pub fn expand(args: TokenStream, input: TokenStream) -> TokenStream {
     })
 }
 
-fn parse_offset(args: TokenStream) -> Option<u32> {
+fn parse_offset(args: TokenStream2) -> syn::Result<Option<u32>> {
     if args.is_empty() {
-        return None;
+        return Ok(None);
     }
-    let meta: MetaNameValue = syn::parse(args).ok()?;
+    let meta: MetaNameValue = syn::parse2(args)?;
     if !meta.path.is_ident("offset") {
-        return None;
+        return Err(syn::Error::new_spanned(
+            &meta.path,
+            format!(
+                "unknown `#[error_code]` argument `{}`; expected `offset = N`",
+                meta.path.to_token_stream()
+            ),
+        ));
     }
-    match meta.value {
+    match &meta.value {
         Expr::Lit(syn::ExprLit {
             lit: Lit::Int(i), ..
-        }) => i.base10_parse::<u32>().ok(),
-        _ => None,
+        }) => i
+            .base10_parse::<u32>()
+            .map(Some)
+            .map_err(|_| syn::Error::new_spanned(i, "`offset` must be a u32 integer literal")),
+        _ => Err(syn::Error::new_spanned(
+            &meta.value,
+            "`offset` must be a u32 integer literal",
+        )),
     }
 }
 
@@ -174,4 +191,38 @@ fn extract_msg(attrs: &[Attribute]) -> Option<String> {
 
 fn escape_json(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_offset_accepts_offset_assignment() {
+        let offset = parse_offset(quote!(offset = 7000)).expect("offset arg should parse");
+
+        assert_eq!(offset, Some(7000));
+    }
+
+    #[test]
+    fn parse_offset_rejects_unknown_argument() {
+        let err = parse_offset(quote!(unknown = 7000)).unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("unknown `#[error_code]` argument `unknown`"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_offset_rejects_non_integer_literal() {
+        let err = parse_offset(quote!(offset = "oops")).unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("`offset` must be a u32 integer literal"),
+            "unexpected error: {err}"
+        );
+    }
 }
