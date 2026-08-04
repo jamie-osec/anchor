@@ -4577,18 +4577,12 @@ fn process_handler(
                     fn __coerce(self, __ix_data: &'ix [u8]) -> anchor_lang_v2::Result<#tuple_ty>;
                 }
 
-                impl<'ix> __AnchorIxArgCoerce<'ix> for () {
+                impl<'ix, __AnchorIxArgs> __AnchorIxArgCoerce<'ix> for __AnchorIxArgs {
                     #[inline(always)]
                     fn __coerce(self, __ix_data: &'ix [u8]) -> anchor_lang_v2::Result<#tuple_ty> {
+                        let _ = self;
                         #deser_args
                         Ok((#(#extra_arg_names,)*))
-                    }
-                }
-
-                impl<'ix> __AnchorIxArgCoerce<'ix> for #tuple_ty {
-                    #[inline(always)]
-                    fn __coerce(self, _ix_data: &'ix [u8]) -> anchor_lang_v2::Result<#tuple_ty> {
-                        Ok(self)
                     }
                 }
 
@@ -6311,8 +6305,8 @@ mod tests {
             "expected fallback coercion trait in wrapper: {wrapper}"
         );
         assert!(
-            wrapper.contains("impl < 'ix > __AnchorIxArgCoerce < 'ix > for ()"),
-            "expected missing-#[instruction] fallback impl in wrapper: {wrapper}"
+            wrapper.contains("impl < 'ix , __AnchorIxArgs > __AnchorIxArgCoerce < 'ix > for __AnchorIxArgs"),
+            "expected generic instruction-arg coercion impl in wrapper: {wrapper}"
         );
     }
 

@@ -2,6 +2,20 @@
 
 use anchor_lang_v2::{prelude::*, TryAccounts};
 
+declare_id!("11111111111111111111111111111111");
+
+#[program]
+pub mod prefix_only_instruction_args {
+    use super::*;
+
+    pub fn ix(ctx: &mut Context<PrefixOnly>, amount: u64, step: i32) -> Result<()> {
+        let _ = ctx;
+        let _ = amount;
+        let _ = step;
+        Ok(())
+    }
+}
+
 #[derive(Accounts)]
 pub struct NoArgs {
     pub account: UncheckedAccount,
@@ -10,6 +24,12 @@ pub struct NoArgs {
 #[derive(Accounts)]
 #[instruction(amount: u64, step: i32)]
 pub struct WithArgs {
+    pub account: UncheckedAccount,
+}
+
+#[derive(Accounts)]
+#[instruction(amount: u64)]
+pub struct PrefixOnly {
     pub account: UncheckedAccount,
 }
 
@@ -26,7 +46,18 @@ fn _instruction_args_are_tuple<'a>(args: <WithArgs as TryAccounts>::IxArgs<'a>) 
     args
 }
 
+fn _instruction_args_keep_declared_prefix<'a>(
+    args: <PrefixOnly as TryAccounts>::IxArgs<'a>,
+) -> (u64,) {
+    args
+}
+
 #[test]
 fn instruction_args_map_to_tuple() {
     let _: fn(_) -> _ = _instruction_args_are_tuple;
+}
+
+#[test]
+fn instruction_attr_keeps_prefix_tuple() {
+    let _: fn(_) -> _ = _instruction_args_keep_declared_prefix;
 }
