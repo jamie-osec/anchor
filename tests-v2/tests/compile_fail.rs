@@ -227,6 +227,54 @@ pub fn build_cpi<'a>(
 }
 
 #[test]
+fn qualified_context_accounts_path_compiles_client_and_cpi_surface() {
+    CompileCase::new(
+        "qualified_context_accounts_path",
+        r#"
+use anchor_lang_v2::prelude::*;
+
+declare_id!("11111111111111111111111111111111");
+
+pub mod state {
+    use super::*;
+
+    #[derive(Accounts)]
+    pub struct DoThing {
+        pub system_program: Program<System>,
+    }
+}
+
+#[program]
+pub mod qualified_context_accounts_path {
+    use super::*;
+
+    #[discrim = [1]]
+    pub fn do_thing(_ctx: &mut Context<crate::state::DoThing>) -> Result<()> {
+        Ok(())
+    }
+}
+
+pub fn build_ix(system_program: Address) -> anchor_lang_v2::solana_program::instruction::Instruction {
+    let accounts = crate::accounts::DoThing { system_program };
+    crate::instruction::DoThing {}.to_instruction(accounts)
+}
+
+#[cfg(feature = "cpi")]
+pub fn build_cpi<'a>(
+    program: &'a Address,
+    system_program: CpiHandle<'a>,
+) {
+    let accounts = crate::cpi::accounts::DoThing { system_program };
+    let ctx = CpiContext::new(program, accounts);
+    crate::cpi::do_thing(ctx);
+}
+"#,
+    )
+    .features(&["cpi"])
+    .expect_pass();
+}
+
+#[test]
 fn program_interface_cpi_optional_accounts_compile() {
     CompileCase::new(
         "program_interface_optional_cpi",
