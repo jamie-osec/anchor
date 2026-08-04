@@ -2406,6 +2406,40 @@ struct ProgramConfig {
     program_id: Expr,
 }
 
+fn event_authority_dispatch_check(precomputed_event_authority: Option<[u8; 32]>) -> TokenStream2 {
+    if let Some(address) = precomputed_event_authority {
+        let address_bytes = address.iter().map(|byte| quote! { #byte });
+        quote! {
+            const __EXPECTED_EVENT_AUTHORITY: anchor_lang_v2::Address =
+                anchor_lang_v2::Address::new_from_array([#(#address_bytes),*]);
+            if !anchor_lang_v2::address_eq(
+                __event_authority.address(),
+                &__EXPECTED_EVENT_AUTHORITY,
+            ) {
+                return anchor_lang_v2::Error::from(
+                    anchor_lang_v2::ErrorCode::ConstraintSeeds,
+                ).into();
+            }
+        }
+    } else {
+        quote! {
+            let (__expected_event_authority, _) =
+                anchor_lang_v2::find_program_address(
+                    &[b"__event_authority"],
+                    __program_id,
+                );
+            if !anchor_lang_v2::address_eq(
+                __event_authority.address(),
+                &__expected_event_authority,
+            ) {
+                return anchor_lang_v2::Error::from(
+                    anchor_lang_v2::ErrorCode::ConstraintSeeds,
+                ).into();
+            }
+        }
+    }
+}
+
 #[derive(Clone)]
 struct DiscrimAttr {
     bytes: Vec<u8>,
@@ -4893,6 +4927,11 @@ fn impl_program(module: &ItemMod, config: &ProgramConfig) -> TokenStream2 {
         })
         .collect();
 
+    let precomputed_event_authority = crate::pda::discover_program_id().and_then(|program_id| {
+        crate::pda::precompute_pda(&[b"__event_authority"], &program_id).map(|(_, address)| address)
+    });
+    let event_authority_check = event_authority_dispatch_check(precomputed_event_authority);
+
     let event_cpi_dispatch = quote! {
         // Reserve the full event-CPI tag before user dispatch. A custom
         // 1-byte discriminator can overlap the first tag byte, but it
@@ -4914,19 +4953,7 @@ fn impl_program(module: &ItemMod, config: &ProgramConfig) -> TokenStream2 {
                         anchor_lang_v2::ErrorCode::ConstraintSigner,
                     ).into();
                 }
-                let (__expected_event_authority, _) =
-                    anchor_lang_v2::find_program_address(
-                        &[b"__event_authority"],
-                        __program_id,
-                    );
-                if !anchor_lang_v2::address_eq(
-                    __event_authority.address(),
-                    &__expected_event_authority,
-                ) {
-                    return anchor_lang_v2::Error::from(
-                        anchor_lang_v2::ErrorCode::ConstraintSeeds,
-                    ).into();
-                }
+                #event_authority_check
                 return 0;
             }
         }
@@ -6392,6 +6419,38 @@ mod tests {
             generated
                 .contains("`short` discriminator [1] is a prefix of `long` discriminator [1, 2]"),
             "expected targeted prefix diagnostic: {generated}"
+        );
+    }
+
+    #[test]
+    fn event_authority_dispatch_uses_precomputed_const_when_available() {
+        let generated = event_authority_dispatch_check(Some([7; 32])).to_string();
+
+        assert!(
+            generated.contains("const __EXPECTED_EVENT_AUTHORITY"),
+            "expected precomputed const path: {generated}"
+        );
+        assert!(
+            generated.contains("Address :: new_from_array"),
+            "expected embedded address bytes: {generated}"
+        );
+        assert!(
+            !generated.contains("find_program_address"),
+            "precomputed path should not call find_program_address: {generated}"
+        );
+    }
+
+    #[test]
+    fn event_authority_dispatch_falls_back_to_runtime_find() {
+        let generated = event_authority_dispatch_check(None).to_string();
+
+        assert!(
+            generated.contains("find_program_address"),
+            "fallback path should still derive the event authority at runtime: {generated}"
+        );
+        assert!(
+            !generated.contains("const __EXPECTED_EVENT_AUTHORITY"),
+            "fallback path should not emit the precomputed constant: {generated}"
         );
     }
 

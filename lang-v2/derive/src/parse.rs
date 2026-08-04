@@ -1,4 +1,5 @@
 use {
+    crate::pda::{discover_program_id, precompute_pda, seeds_as_byte_literals},
     proc_macro2::TokenStream as TokenStream2,
     quote::{quote, quote_spanned},
     syn::{
@@ -1036,12 +1037,10 @@ fn emit_seeds_check(
     };
     // Try to precompute the bump and PDA at expansion time.
     if using_our_program_id {
-        if let Some(literal_seeds) = crate::pda::seeds_as_byte_literals(seeds) {
-            if let Some(program_id) = crate::pda::discover_program_id() {
+        if let Some(literal_seeds) = seeds_as_byte_literals(seeds) {
+            if let Some(program_id) = discover_program_id() {
                 let seed_slices: Vec<&[u8]> = literal_seeds.iter().map(|s| s.as_slice()).collect();
-                if let Some((bump, pda_bytes)) =
-                    crate::pda::precompute_pda(&seed_slices, &program_id)
-                {
+                if let Some((bump, pda_bytes)) = precompute_pda(&seed_slices, &program_id) {
                     // Field-scoped const names keep multiple fields'
                     // bumps + PDAs from colliding, even when two
                     // constraints share an outer scope.
