@@ -57,6 +57,8 @@ pub struct AccountAttrs {
     pub is_zeroed: bool,
     pub is_executable: bool,
     pub is_dup: bool,
+    pub init_span: Option<proc_macro2::Span>,
+    pub init_if_needed_span: Option<proc_macro2::Span>,
     /// None = no bump attr, Some(None) = `bump` without value, Some(Some(expr)) = `bump = expr`
     pub bump: Option<Option<Expr>>,
     pub payer: Option<Ident>,
@@ -80,6 +82,7 @@ pub struct AccountAttrs {
     /// they are emitted as checks in the order written.
     pub raw_constraints: Vec<(Expr, Option<Expr>)>,
     pub realloc: Option<Expr>,
+    pub realloc_span: Option<proc_macro2::Span>,
     pub realloc_payer: Option<Ident>,
     pub realloc_zero: bool,
     /// Namespaced constraints: token::mint, mint::authority, etc.
@@ -111,6 +114,8 @@ pub fn parse_account_attrs(attrs: &[Attribute]) -> syn::Result<AccountAttrs> {
         is_zeroed: false,
         is_executable: false,
         is_dup: false,
+        init_span: None,
+        init_if_needed_span: None,
         bump: None,
         payer: None,
         space: None,
@@ -124,6 +129,7 @@ pub fn parse_account_attrs(attrs: &[Attribute]) -> syn::Result<AccountAttrs> {
         close: None,
         raw_constraints: Vec::new(),
         realloc: None,
+        realloc_span: None,
         realloc_payer: None,
         realloc_zero: false,
         namespaced: Vec::new(),
@@ -141,10 +147,12 @@ pub fn parse_account_attrs(attrs: &[Attribute]) -> syn::Result<AccountAttrs> {
                     "init" => {
                         result.is_init = true;
                         result.is_mut = true;
+                        result.init_span = Some(ident.span());
                     }
                     "init_if_needed" => {
                         result.is_init_if_needed = true;
                         result.is_mut = true;
+                        result.init_if_needed_span = Some(ident.span());
                     }
                     "zeroed" => {
                         result.is_zeroed = true;
@@ -262,6 +270,7 @@ pub fn parse_account_attrs(attrs: &[Attribute]) -> syn::Result<AccountAttrs> {
                     "realloc" => {
                         input.parse::<Token![=]>()?;
                         result.realloc = Some(input.parse()?);
+                        result.realloc_span = Some(ident.span());
                         result.is_mut = true;
                     }
                     "realloc_payer" => {
@@ -399,6 +408,30 @@ pub fn parse_account_attrs(attrs: &[Attribute]) -> syn::Result<AccountAttrs> {
         return Err(syn::Error::new(
             result.seeds_program.as_ref().unwrap().span(),
             "`seeds::program` requires `seeds`",
+        ));
+    }
+
+    if result.payer.is_none() {
+        if let Some(init_span) = result.init_span {
+            return Err(syn::Error::new(
+                init_span,
+                "`init` requires `payer = <target>`",
+            ));
+        }
+        if let Some(init_if_needed_span) = result.init_if_needed_span {
+            return Err(syn::Error::new(
+                init_if_needed_span,
+                "`init_if_needed` requires `payer = <target>`",
+            ));
+        }
+    }
+
+    if result.realloc.is_some() && result.realloc_payer.is_none() {
+        return Err(syn::Error::new(
+            result
+                .realloc_span
+                .unwrap_or_else(proc_macro2::Span::call_site),
+            "`realloc` requires `realloc_payer = <target>`",
         ));
     }
 
@@ -1237,7 +1270,19 @@ fn emit_init_body(
     field_summaries: &[FieldSummary],
     is_optional: bool,
 ) -> syn::Result<TokenStream2> {
-    let payer = attrs.payer.as_ref().expect("init requires payer");
+    let payer = attrs.payer.as_ref().ok_or_else(|| {
+        syn::Error::new(
+            attrs
+                .init_span
+                .or(attrs.init_if_needed_span)
+                .unwrap_or_else(|| field_name.span()),
+            if attrs.is_init {
+                "`init` requires `payer = <target>`"
+            } else {
+                "`init_if_needed` requires `payer = <target>`"
+            },
+        )
+    })?;
     let space = init_space_expr(field_ty, attrs);
     let owner = match attrs.owner.as_ref() {
         Some(expr) => quote! { #expr },
@@ -2293,10 +2338,12 @@ pub fn parse_field(
 
     // realloc
     if let Some(ref new_space) = attrs.realloc {
-        let realloc_payer = attrs
-            .realloc_payer
-            .as_ref()
-            .expect("realloc requires realloc_payer");
+        let realloc_payer = attrs.realloc_payer.as_ref().ok_or_else(|| {
+            syn::Error::new(
+                attrs.realloc_span.unwrap_or_else(|| field_name.span()),
+                "`realloc` requires `realloc_payer = <target>`",
+            )
+        })?;
         let zero_fill = attrs.realloc_zero;
         let realloc_target = if is_optional {
             quote! { #field_name }
@@ -2661,6 +2708,54 @@ mod tests {
         let parsed = parse_account_attrs(&attrs).expect("init_if_needed + bump=<expr>");
         assert!(parsed.is_init_if_needed);
         assert!(matches!(parsed.bump, Some(Some(_))));
+    }
+
+    #[test]
+    fn init_without_payer_is_rejected() {
+        let attrs: Vec<Attribute> = vec![syn::parse_quote!(
+            #[account(init, space = 8)]
+        )];
+        let err = match parse_account_attrs(&attrs) {
+            Ok(_) => panic!("init without payer must be rejected"),
+            Err(err) => err,
+        };
+        assert!(
+            err.to_string()
+                .contains("`init` requires `payer = <target>`"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn init_if_needed_without_payer_is_rejected() {
+        let attrs: Vec<Attribute> = vec![syn::parse_quote!(
+            #[account(init_if_needed, space = 8)]
+        )];
+        let err = match parse_account_attrs(&attrs) {
+            Ok(_) => panic!("init_if_needed without payer must be rejected"),
+            Err(err) => err,
+        };
+        assert!(
+            err.to_string()
+                .contains("`init_if_needed` requires `payer = <target>`"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn realloc_without_realloc_payer_is_rejected() {
+        let attrs: Vec<Attribute> = vec![syn::parse_quote!(
+            #[account(mut, realloc = 16, realloc_zero = false)]
+        )];
+        let err = match parse_account_attrs(&attrs) {
+            Ok(_) => panic!("realloc without realloc_payer must be rejected"),
+            Err(err) => err,
+        };
+        assert!(
+            err.to_string()
+                .contains("`realloc` requires `realloc_payer = <target>`"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]

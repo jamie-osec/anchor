@@ -47,6 +47,15 @@ live = []
 }
 
 fn compile_fail_case(name: &str, source: &str, snippets: &[&str]) {
+    compile_fail_case_with_forbidden(name, source, snippets, &[]);
+}
+
+fn compile_fail_case_with_forbidden(
+    name: &str,
+    source: &str,
+    snippets: &[&str],
+    forbidden_snippets: &[&str],
+) {
     let output = cargo_case(name, source, "check", &[]);
 
     assert!(
@@ -58,6 +67,12 @@ fn compile_fail_case(name: &str, source: &str, snippets: &[&str]) {
         assert!(
             stderr.contains(snippet),
             "{name} stderr did not contain {snippet:?}\n\nstderr:\n{stderr}"
+        );
+    }
+    for forbidden in forbidden_snippets {
+        assert!(
+            !stderr.contains(forbidden),
+            "{name} stderr unexpectedly contained {forbidden:?}\n\nstderr:\n{stderr}"
         );
     }
 }
@@ -630,6 +645,61 @@ pub struct Bad {
 }
 "#,
         &["the payer specified for an init constraint must be mutable"],
+    );
+}
+
+#[test]
+#[cfg_attr(
+    miri,
+    ignore = "spawns cargo and writes temporary workspaces; covered by normal cargo test"
+)]
+fn missing_init_and_realloc_payers_are_diagnosed() {
+    compile_fail_case_with_forbidden(
+        "missing_init_payer",
+        r#"
+use anchor_lang_v2::prelude::*;
+
+declare_id!("11111111111111111111111111111111");
+
+#[account]
+pub struct Data {
+    pub value: u64,
+}
+
+#[derive(Accounts)]
+pub struct MissingInitPayer {
+    #[account(init, space = 8 + core::mem::size_of::<Data>())]
+    pub data: Account<Data>,
+    pub system_program: Program<System>,
+}
+"#,
+        &["`init` requires `payer = <target>`"],
+        &["proc-macro derive panicked"],
+    );
+
+    compile_fail_case_with_forbidden(
+        "missing_realloc_payer",
+        r#"
+use anchor_lang_v2::prelude::*;
+
+declare_id!("11111111111111111111111111111111");
+
+#[account]
+pub struct Data {
+    pub value: u64,
+}
+
+#[derive(Accounts)]
+pub struct MissingReallocPayer {
+    #[account(mut)]
+    pub payer: Signer,
+    #[account(mut, realloc = 16, realloc_zero = false)]
+    pub data: Account<Data>,
+    pub system_program: Program<System>,
+}
+"#,
+        &["`realloc` requires `realloc_payer = <target>`"],
+        &["proc-macro derive panicked"],
     );
 }
 
