@@ -2501,11 +2501,11 @@ fn parse_program_config_tokens(attr: TokenStream2) -> syn::Result<ProgramConfig>
 }
 
 fn impl_declare_program(name: &Ident) -> syn::Result<TokenStream2> {
-    let idl = read_declare_program_idl(name)?;
-    gen_declared_program(name, &idl)
+    let (idl, idl_path) = read_declare_program_idl(name)?;
+    gen_declared_program(name, &idl, &idl_path)
 }
 
-fn read_declare_program_idl(name: &Ident) -> syn::Result<serde_json::Value> {
+fn read_declare_program_idl(name: &Ident) -> syn::Result<(serde_json::Value, std::path::PathBuf)> {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").map_err(|err| {
         syn::Error::new(
             name.span(),
@@ -2527,30 +2527,46 @@ fn read_declare_program_idl(name: &Ident) -> syn::Result<serde_json::Value> {
             format!("failed to read IDL `{}`: {err}", idl_path.display()),
         )
     })?;
+    let tracked_idl_path = idl_path.canonicalize().map_err(|err| {
+        syn::Error::new(
+            name.span(),
+            format!(
+                "failed to canonicalize IDL path `{}` for dependency tracking: {err}",
+                idl_path.display()
+            ),
+        )
+    })?;
     let idl = anchor_lang_idl::convert::convert_idl(&idl).map_err(|err| {
         syn::Error::new(
             name.span(),
             format!("failed to parse IDL `{}`: {err}", idl_path.display()),
         )
     })?;
-    serde_json::to_value(idl).map_err(|err| {
-        syn::Error::new(
-            name.span(),
-            format!(
-                "failed to normalize IDL `{}` after parsing: {err}",
-                idl_path.display()
-            ),
-        )
-    })
+    serde_json::to_value(idl)
+        .map(|idl| (idl, tracked_idl_path))
+        .map_err(|err| {
+            syn::Error::new(
+                name.span(),
+                format!(
+                    "failed to normalize IDL `{}` after parsing: {err}",
+                    idl_path.display()
+                ),
+            )
+        })
 }
 
-fn gen_declared_program(name: &Ident, idl: &serde_json::Value) -> syn::Result<TokenStream2> {
+fn gen_declared_program(
+    name: &Ident,
+    idl: &serde_json::Value,
+    idl_path: &std::path::Path,
+) -> syn::Result<TokenStream2> {
     let address = idl
         .get("address")
         .or_else(|| idl.pointer("/metadata/address"))
         .and_then(serde_json::Value::as_str)
         .ok_or_else(|| syn::Error::new(name.span(), "IDL is missing program address"))?;
     let address_lit = syn::LitStr::new(address, name.span());
+    let idl_path_lit = syn::LitStr::new(&idl_path.display().to_string(), name.span());
     let instructions = idl
         .get("instructions")
         .and_then(serde_json::Value::as_array)
@@ -2658,6 +2674,9 @@ fn gen_declared_program(name: &Ident, idl: &serde_json::Value) -> syn::Result<To
     Ok(quote! {
         pub mod #name {
             use super::*;
+
+            #[allow(dead_code)]
+            const __ANCHOR_DECLARE_PROGRAM_IDL_BYTES: &[u8] = include_bytes!(#idl_path_lit);
 
             pub const ID: anchor_lang_v2::Address =
                 anchor_lang_v2::address!(#address_lit);
