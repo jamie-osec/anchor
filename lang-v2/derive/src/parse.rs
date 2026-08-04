@@ -368,6 +368,13 @@ pub fn parse_account_attrs(attrs: &[Attribute]) -> syn::Result<AccountAttrs> {
         })?;
     }
 
+    if result.seeds_program.is_some() && result.seeds.is_none() {
+        return Err(syn::Error::new(
+            result.seeds_program.as_ref().unwrap().span(),
+            "seeds must be provided before seeds::program",
+        ));
+    }
+
     // Reject `init` + `bump = <expr>` (mirroring Anchor v1). Account
     // creation requires an off-curve address, which is only guaranteed by
     // the canonical bump returned by `find_program_address`. A caller-
@@ -2534,6 +2541,35 @@ mod tests {
         assert!(parsed_attrs.seeds.is_some());
         assert!(parsed_attrs.bump.is_some());
         assert!(parsed_attrs.is_signer);
+    }
+
+    #[test]
+    fn seeds_program_without_seeds_is_rejected() {
+        let attrs: Vec<Attribute> = vec![syn::parse_quote!(
+            #[account(seeds::program = other_program.key())]
+        )];
+        let err = match parse_account_attrs(&attrs) {
+            Ok(_) => panic!("seeds::program without seeds must be rejected"),
+            Err(err) => err,
+        };
+        assert!(
+            err.to_string()
+                .contains("seeds must be provided before seeds::program"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn empty_seed_array_with_seeds_program_is_accepted() {
+        let attrs: Vec<Attribute> = vec![syn::parse_quote!(
+            #[account(seeds = [], seeds::program = other_program.key())]
+        )];
+        let parsed = parse_account_attrs(&attrs).expect("empty seeds array remains valid");
+        let Expr::Array(arr) = parsed.seeds.expect("seed array should be preserved") else {
+            panic!("expected parsed seeds to stay as an array expression");
+        };
+        assert!(arr.elems.is_empty());
+        assert!(parsed.seeds_program.is_some());
     }
 
     #[test]
