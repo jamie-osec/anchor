@@ -107,15 +107,13 @@ pub use wincode;
 ///
 /// Programs that don't use these types are unaffected.
 ///
-/// # `ZERO_COPY_ALIGN_CHECK = false`
+/// # Borrowed zero-copy caveat
 ///
-/// Borsh's u32 length prefix puts payload data 4 bytes off natural alignment,
-/// so handler args like `amounts: &[u64]` would otherwise fail wincode's
-/// runtime alignment guard. The guard exists to prevent Rust-level UB on
-/// hosts where misaligned wide loads are undefined; SBPF's `ldxdw` has no
-/// alignment-specialized variants and the Solana program ecosystem already
-/// reads u64 from arbitrary `&[u8]` offsets, so disabling the check on SBPF
-/// is safe.
+/// Borsh's u32 length prefix means borrowed wide slices like `&[u64]` start
+/// four bytes into the buffer and therefore fail wincode's zero-copy
+/// alignment guard. `BORSH_CONFIG` keeps that guard enabled so safe
+/// deserialization cannot form a misaligned Rust reference; use owned
+/// arguments (`Vec<u64>`) or align-1 borrowed data (`&[u8]`, `&str`) instead.
 pub const BORSH_CONFIG: BorshConfig = wincode::config::Configuration::new();
 
 /// Solana allows at most 16 seeds when deriving a PDA.
@@ -126,7 +124,7 @@ pub const MAX_PAYER_SEEDS_WITH_BUMP: usize = MAX_PAYER_SEEDS + 1;
 /// Concrete type of [`BORSH_CONFIG`]. Spelled out so downstream callers can
 /// name it in trait bounds (e.g. `T: wincode::SchemaRead<'de, BorshConfig>`).
 pub type BorshConfig = wincode::config::Configuration<
-    false,
+    true,
     { wincode::config::DEFAULT_PREALLOCATION_SIZE_LIMIT },
     wincode::len::FixIntLen<u32>,
     wincode::int_encoding::LittleEndian,
