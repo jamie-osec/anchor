@@ -829,7 +829,7 @@ pub struct Bad {
     pub data: UncheckedAccount,
 }
 "#,
-        &["`seeds::program` requires `seeds`"],
+        &["seeds must be provided before seeds::program"],
     );
 
     compile_fail_case(
