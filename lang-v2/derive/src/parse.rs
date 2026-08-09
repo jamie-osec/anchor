@@ -1604,27 +1604,6 @@ fn init_space_expr(field_ty: &Type, attrs: &AccountAttrs) -> TokenStream2 {
     }
 }
 
-fn init_if_needed_space_check(
-    field_ty: &Type,
-    attrs: &AccountAttrs,
-    associated_token: Option<&AssociatedTokenInit>,
-) -> TokenStream2 {
-    // Exact-length reuse validation is meant for Anchor-managed account
-    // layouts. SPL-style init flows validate their own account shape and
-    // may legitimately reuse variable-sized accounts such as Token-2022
-    // ATAs or extension-bearing token accounts.
-    if associated_token.is_some() || !attrs.namespaced.is_empty() {
-        quote! {}
-    } else {
-        let expected_space = init_space_expr(field_ty, attrs);
-        quote! {
-            if __target.data_len() != #expected_space {
-                return Err(anchor_lang_v2::ErrorCode::ConstraintSpace.into());
-            }
-        }
-    }
-}
-
 fn emit_associated_token_init_body(
     field_ty: &Type,
     attrs: &AccountAttrs,
@@ -1741,6 +1720,68 @@ fn emit_associated_token_init_body(
     })
 }
 
+fn has_namespaced_constraint(attrs: &AccountAttrs, namespace: &str, key: Option<&str>) -> bool {
+    attrs.namespaced.iter().any(|nc| {
+        nc.namespace == namespace && key.is_none_or(|expected_key| nc.raw_key == expected_key)
+    })
+}
+
+fn emit_init_if_needed_signer_check(
+    attrs: &AccountAttrs,
+    associated_token: Option<&AssociatedTokenInit>,
+) -> TokenStream2 {
+    if attrs.seeds.is_none() && !attrs.is_signer && associated_token.is_none() {
+        quote! {
+            if !__target.is_signer() {
+                return Err(anchor_lang_v2::ErrorCode::ConstraintSigner.into());
+            }
+        }
+    } else {
+        quote! {}
+    }
+}
+
+fn emit_init_if_needed_reuse_validation(
+    field_ty: &Type,
+    attrs: &AccountAttrs,
+    associated_token: Option<&AssociatedTokenInit>,
+) -> syn::Result<TokenStream2> {
+    let has_mint_constraints = has_namespaced_constraint(attrs, "mint", None);
+    let has_token_constraints = has_namespaced_constraint(attrs, "token", None);
+    let needs_generic_reuse_validation =
+        associated_token.is_none() && !has_mint_constraints && !has_token_constraints;
+    let signer_check = emit_init_if_needed_signer_check(attrs, associated_token);
+    if !needs_generic_reuse_validation {
+        return Ok(signer_check);
+    }
+
+    let space = match attrs.space.as_ref() {
+        Some(expr) => quote! { #expr },
+        None => quote! { <#field_ty as anchor_lang_v2::Space>::INIT_SPACE },
+    };
+    let owner = if let Some(expr) = attrs.owner.as_ref() {
+        quote! { #expr }
+    } else {
+        quote! { *__program_id }
+    };
+
+    Ok(quote! {
+        let __expected_space = #space;
+        #signer_check
+        if __target.data_len() != __expected_space {
+            return Err(anchor_lang_v2::ErrorCode::ConstraintSpace.into());
+        }
+        let __expected_owner = #owner;
+        if !__target.owned_by(&__expected_owner) {
+            return Err(anchor_lang_v2::ErrorCode::ConstraintOwner.into());
+        }
+        let __required_lamports = anchor_lang_v2::cpi::rent_exempt_lamports(__expected_space)?;
+        if __target.lamports() < __required_lamports {
+            return Err(anchor_lang_v2::ErrorCode::ConstraintRentExempt.into());
+        }
+    })
+}
+
 pub fn parse_field(
     field: &syn::Field,
     field_names: &[String],
@@ -1773,9 +1814,17 @@ pub fn parse_field(
             "mut must be provided when using close",
         ));
     }
-    let associated_token = parse_associated_token_init(&attrs, field_names)?;
-
     let option_inner = extract_option_inner(field_ty);
+    let associated_token = parse_associated_token_init(&attrs, field_names)?;
+    let init_if_needed_reuse_validation = if attrs.is_init_if_needed {
+        Some(emit_init_if_needed_reuse_validation(
+            option_inner.unwrap_or(field_ty),
+            &attrs,
+            associated_token.as_ref(),
+        )?)
+    } else {
+        None
+    };
     let is_optional = option_inner.is_some();
     // Explicit signer constraint or fresh-keypair init (no seeds) — caller
     // signs the tx. Distinct from `Signer`-type fields, which the IDL picks
@@ -1965,8 +2014,6 @@ pub fn parse_field(
                 wrap_init_body_with_constraints(inner_ty, &attrs, field_names, &init_body);
             quote! { Some({ #init_body_with_constraints }) }
         } else if attrs.is_init_if_needed {
-            let init_if_needed_space_check =
-                init_if_needed_space_check(inner_ty, &attrs, associated_token.as_ref());
             let init_body = if let Some(ref at) = associated_token {
                 emit_associated_token_init_body(
                     inner_ty,
@@ -1990,10 +2037,8 @@ pub fn parse_field(
             let init_body_with_constraints =
                 wrap_init_body_with_constraints(inner_ty, &attrs, field_names, &init_body);
             quote! {
-                if __target.data_len() > 0
-                    && !__target.owned_by(&anchor_lang_v2::programs::System::id())
-                {
-                    #init_if_needed_space_check
+                if !__target.owned_by(&anchor_lang_v2::programs::System::id()) {
+                        #init_if_needed_reuse_validation
                     // SAFETY: the bitvec duplicate-account check below ensures
                     // no other mutable reference to this account's data exists.
                     Some(unsafe {
@@ -2045,7 +2090,6 @@ pub fn parse_field(
                 let #existed = {
                     let __target = __views[#offset_expr];
                     !anchor_lang_v2::address_eq(__target.address(), __program_id)
-                        && __target.data_len() > 0
                         && !__target.owned_by(&anchor_lang_v2::programs::System::id())
                 };
             }
@@ -2113,8 +2157,6 @@ pub fn parse_field(
         });
         quote! {}
     } else if attrs.is_init_if_needed {
-        let init_if_needed_space_check =
-            init_if_needed_space_check(field_ty, &attrs, associated_token.as_ref());
         let init_body = if let Some(ref at) = associated_token {
             emit_associated_token_init_body(
                 field_ty,
@@ -2141,13 +2183,12 @@ pub fn parse_field(
         deferred_load = Some(quote! {
             let #existed = {
                 let __target = __views[#offset_expr];
-                __target.data_len() > 0
-                    && !__target.owned_by(&anchor_lang_v2::programs::System::id())
+                !__target.owned_by(&anchor_lang_v2::programs::System::id())
             };
             let mut #field_name: #field_ty = {
                 let __target = __views[#offset_expr];
                 if #existed {
-                    #init_if_needed_space_check
+                    #init_if_needed_reuse_validation
                     // SAFETY: the bitvec duplicate-account check below ensures
                     // no other mutable reference to this account's data exists.
                     unsafe { <#field_ty as anchor_lang_v2::AnchorAccount>::load_mut(__target)? }
@@ -2215,6 +2256,27 @@ pub fn parse_field(
                 return Err(anchor_lang_v2::ErrorCode::ConstraintSigner.into());
             }
         });
+    }
+
+    if attrs.is_init_if_needed
+        && has_namespaced_constraint(&attrs, "mint", None)
+        && !has_namespaced_constraint(&attrs, "mint", Some("freeze_authority"))
+    {
+        if is_optional {
+            constraints.push(quote! {
+                if let Some(__mint) = &#field_name {
+                    if __mint.freeze_authority().is_some() {
+                        return Err(anchor_lang_v2::Error::InvalidAccountData);
+                    }
+                }
+            });
+        } else {
+            constraints.push(quote! {
+                if #field_name.freeze_authority().is_some() {
+                    return Err(anchor_lang_v2::Error::InvalidAccountData);
+                }
+            });
+        }
     }
 
     // executable check

@@ -169,3 +169,7 @@ required-features = ["testing"]
 [[test]]
 name = "slab_min_data_len_realloc"
 required-features = ["testing"]
+
+[[test]]
+name = "init_if_needed_reuse_validation"
+required-features = ["testing"]
