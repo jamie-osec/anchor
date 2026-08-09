@@ -1185,6 +1185,7 @@ mod tests {
         );
         assert_eq!(acct.value, 99);
     }
+
 }
 
 // Kani proofs for the `capacity_for` helper, which backs `Slab::capacity`

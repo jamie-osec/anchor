@@ -422,6 +422,36 @@ fn slab_close_scrubs_discriminator_to_closed_sentinel() {
 
 #[test]
 #[should_panic(expected = "Tried to mutate `Slab<H, T>` through a read-only load")]
+fn slab_close_panics_when_loaded_read_only() {
+    let mut buf = AccountBuffer::<256>::new();
+    setup_counter_buf(&mut buf);
+
+    let mut dest_buf = AccountBuffer::<256>::new();
+    dest_buf.init([0xDD; 32], PROGRAM_ID, 0, false, true, false);
+
+    let view = unsafe { buf.view() };
+    let dest_view = unsafe { dest_buf.view() };
+    let mut counter = Slab::<CounterHeader>::load(view).unwrap();
+    counter.close(dest_view).unwrap();
+}
+
+#[test]
+#[should_panic(expected = "SerializedAccount mutated through a read-only load")]
+fn borsh_close_panics_when_loaded_read_only() {
+    let mut buf = AccountBuffer::<256>::new();
+    setup_vault_buf(&mut buf);
+
+    let dest_buf = AccountBuffer::<256>::new();
+    dest_buf.init([0xDD; 32], PROGRAM_ID, 0, false, true, false);
+
+    let view = unsafe { buf.view() };
+    let dest_view = unsafe { dest_buf.view() };
+    let mut vault = BorshAccount::<Vault>::load(view).unwrap();
+    vault.close(dest_view).unwrap();
+}
+
+#[test]
+#[should_panic(expected = "Tried to mutate `Slab<H, T>` through a read-only load")]
 fn slab_close_flips_is_mutable_so_deref_mut_panics() {
     let mut buf = AccountBuffer::<256>::new();
     setup_counter_buf(&mut buf);

@@ -53,6 +53,7 @@ where
 {
     view: AccountView,
     data: T,
+    is_mutable: bool,
     borrow: SerializedAccountBorrow,
     serialized_len: usize,
     _serializer: PhantomData<S>,
@@ -81,6 +82,16 @@ where
     T: Owner + Discriminator,
     S: AnchorAccountSerialize<T>,
 {
+    #[inline(always)]
+    fn assert_mutable_loaded(&self) {
+        if !self.is_mutable {
+            panic!(
+                "SerializedAccount mutated through a read-only load. Add #[account(mut)] to your \
+                 accounts struct."
+            );
+        }
+    }
+
     /// Returns the account's on-chain address. Inherent method so
     /// `.address()` works uniformly on all wrapper types — `Signer`,
     /// `Account<T>`, `BorshAccount<T>`, `UncheckedAccount`, etc. — without
@@ -142,6 +153,7 @@ where
     /// Returns `IllegalOwner` / `AccountDataTooSmall` /
     /// `InvalidAccountData` if the account no longer validates as `T`.
     pub fn reacquire_borrow_mut(&mut self) -> Result<(), ProgramError> {
+        self.assert_mutable_loaded();
         // Re-run the load-time invariants. A CPI in the release window
         // could have mutated owner, discriminator, or payload in any
         // combination — without re-checking, we'd accept an account that
@@ -178,6 +190,7 @@ where
     /// For post-CPI use (where CPI may have mutated owner, disc, or
     /// payload), use [`reacquire_borrow_mut`] instead.
     pub fn reacquire_guard_only(&mut self) -> Result<(), ProgramError> {
+        self.assert_mutable_loaded();
         let mut view_mut = self.view;
         let data_ref = view_mut.try_borrow_mut()?;
         // A resize that left the buffer shorter than the discriminator
@@ -240,6 +253,7 @@ where
         Ok(Self {
             view,
             data,
+            is_mutable: false,
             borrow: SerializedAccountBorrow::Immutable { _guard: guard },
             serialized_len,
             _serializer: PhantomData,
@@ -268,6 +282,7 @@ where
         Ok(Self {
             view,
             data,
+            is_mutable: true,
             borrow: SerializedAccountBorrow::Mutable { guard },
             serialized_len,
             _serializer: PhantomData,
@@ -315,6 +330,7 @@ where
     S: AnchorAccountSerialize<T>,
 {
     fn close(&mut self, mut destination: AccountView) -> pinocchio::ProgramResult {
+        self.assert_mutable_loaded();
         let mut self_view = self.view;
         let dest_lamports = destination
             .lamports()
@@ -370,6 +386,7 @@ where
         payer: AccountView,
         zero: bool,
     ) -> pinocchio::ProgramResult {
+        self.assert_mutable_loaded();
         let mut view = *self.account();
         if new_space != view.data_len() {
             self.release_borrow()?;
@@ -533,6 +550,7 @@ where
         Ok(Self {
             view: *account,
             data,
+            is_mutable: true,
             borrow: SerializedAccountBorrow::Mutable { guard },
             serialized_len,
             _serializer: PhantomData,

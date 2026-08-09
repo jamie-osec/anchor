@@ -191,6 +191,21 @@ fn le_codec_reacquire_refreshes_from_buffer() {
     assert_eq!(acct.flags, 0x1111_2222);
 }
 
+#[test]
+#[should_panic(
+    expected = "SerializedAccount mutated through a read-only load. Add #[account(mut)] to your \
+                accounts struct."
+)]
+fn le_codec_reacquire_mut_panics_when_loaded_read_only() {
+    let mut buf = AccountBuffer::<256>::new();
+    setup_stats_buf(&mut buf, 1, 0);
+
+    let view = unsafe { buf.view() };
+    let mut acct = StatsAccount::load(view).unwrap();
+    acct.release_borrow().unwrap();
+    acct.reacquire_borrow_mut().unwrap();
+}
+
 // -- 1.5 load fails on wrong discriminator -------------------------------
 
 #[test]
