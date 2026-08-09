@@ -926,7 +926,7 @@ pub struct AccountField {
     pub load: TokenStream2,
     pub deferred_load: Option<TokenStream2>,
     pub constraints: Vec<TokenStream2>,
-    pub updates: Vec<TokenStream2>,
+    pub update: Option<TokenStream2>,
     pub exit: Option<TokenStream2>,
     pub has_bump: bool,
     /// True when the field type is `Option<T>` (optional account).
@@ -1906,13 +1906,15 @@ pub fn parse_field(
 
         let inner_ty = extract_nested_inner_type(field_ty)
             .expect("is_nested_type was true but extract_nested_inner_type returned None");
-        // Nested<Inner> — delegate to Inner::try_accounts, which advances the
-        // shared cursor by Inner::HEADER_SIZE. The outer walk_n covers only
-        // direct (non-nested) fields; the nested try_accounts picks up where
-        // the outer left off.
+        // Nested<Inner> — delegate to Inner::validate_accounts, which advances
+        // the shared cursor by Inner::HEADER_SIZE without firing inner
+        // update-hooks yet. The outer walk_n covers only direct
+        // (non-nested) fields; the nested validate_accounts picks up where
+        // the outer left off, and the outer update phase later calls
+        // Inner::update_accounts exactly once.
         //
         // Constraint processing and exit are handled by the inner struct's own
-        // try_accounts / exit_accounts — the outer derives don't need to
+        // validate_accounts / exit_accounts — the outer derives don't need to
         // re-check them.
         // TODO: passing `__base_offset + #offset_expr` means the nested
         // struct's bitvec lookups hit the correct global indices. This is
@@ -1921,7 +1923,7 @@ pub fn parse_field(
         // or use a wrapper that offsets transparently.
         let load = quote! {
             let (__nested_inner, _, _) =
-                <#inner_ty as anchor_lang_v2::TryAccounts>::try_accounts(
+                <#inner_ty as anchor_lang_v2::TryAccounts>::validate_accounts(
                     __program_id,
                     &__views[#offset_expr .. #offset_expr + <#inner_ty as anchor_lang_v2::TryAccounts>::HEADER_SIZE],
                     __duplicates,
@@ -1939,7 +1941,9 @@ pub fn parse_field(
             load,
             deferred_load: None,
             constraints: vec![],
-            updates: vec![],
+            update: Some(quote! {
+                self.#field_name.0.update_accounts()?;
+            }),
             exit,
             has_bump: false,
             is_optional: false,
@@ -2564,9 +2568,8 @@ pub fn parse_field(
     //
     // The `init` dispatch is embedded inline into the init body by
     // `wrap_init_body_with_constraints` above so the hook only fires on
-    // actual creation. `check` emits into the validation phase here;
-    // `update` is deferred into a later post-validation phase so sibling
-    // field constraints still observe the pre-update state.
+    // actual creation. Only `check` and `update` emit out here in the
+    // constraint phase.
     //
     // Field refs thread through `AsRef::as_ref` so the call-site's
     // `V` is inferred from the `AccountConstraint::Value` associated
@@ -2589,15 +2592,22 @@ pub fn parse_field(
             let update_target = if is_optional {
                 quote! { #field_name }
             } else {
-                quote! { &mut #field_name }
+                quote! { &mut self.#field_name }
             };
-            // `update(...)` — fires regardless of init state, but only after
-            // all account validations have completed.
+            let (update_expected_binding, update_expected_arg) = emit_constraint_expected_binding(
+                &ns,
+                &key,
+                nc,
+                field_names,
+                field_summaries,
+                true,
+            );
+            // `update(...)` runs after validation + access-control.
             updates.push(quote! {
                 {
-                    #expected_binding
+                    #update_expected_binding
                     <#ns::#key as anchor_lang_v2::AccountConstraint<_>>::update(
-                        #update_target, #expected_arg,
+                        #update_target, #update_expected_arg,
                     )?;
                 }
             });
@@ -2731,7 +2741,7 @@ pub fn parse_field(
     // Mutable fields use `ref mut` so constraint bodies that need `&mut self`
     // (e.g. BorshAccount::release_borrow in the realloc path) can work.
     // Read-only methods still resolve via auto-deref from `&mut T` to `&T`.
-    let (constraints, updates, exit) = if is_optional {
+    let (constraints, update, exit) = if is_optional {
         let constraints = constraints
             .into_iter()
             .map(|c| {
@@ -2760,17 +2770,16 @@ pub fn parse_field(
                 }
             })
             .collect();
-        let updates = updates
-            .into_iter()
-            .map(|u| {
-                quote! {
-                    if let Some(ref mut #field_name) = #field_name {
-                        let _ = &#field_name;
-                        #u
-                    }
+        let update = if updates.is_empty() {
+            None
+        } else {
+            Some(quote! {
+                if let Some(ref mut #field_name) = self.#field_name {
+                    let _ = &#field_name;
+                    #(#updates)*
                 }
             })
-            .collect();
+        };
         let exit = exit.map(|e| {
             // `e` was built against `self.#field_name` (e.g.
             // `AnchorAccount::exit(&mut self.#field_name)`). For optional
@@ -2831,9 +2840,14 @@ pub fn parse_field(
                 }
             }
         });
-        (constraints, updates, exit)
+        (constraints, update, exit)
     } else {
-        (constraints, updates, exit)
+        let update = if updates.is_empty() {
+            None
+        } else {
+            Some(quote! { #(#updates)* })
+        };
+        (constraints, update, exit)
     };
 
     let contributes_mut_bit = attrs.is_mut && !attrs.is_dup && !is_optional;
@@ -2848,7 +2862,7 @@ pub fn parse_field(
         load,
         deferred_load,
         constraints,
-        updates,
+        update,
         exit,
         has_bump,
         is_optional,
