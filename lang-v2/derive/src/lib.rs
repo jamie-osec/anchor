@@ -1981,9 +1981,11 @@ pub fn account(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Client-side `AccountDeserialize` impl. Mode-dependent: borsh accounts
     // run wincode (with `BORSH_CONFIG`, borsh-wire-compatible) over the
-    // post-disc tail; pod accounts do a `bytemuck::pod_read_unaligned` on a
-    // sized slice. Both share the disc-check shape so a wrong-type fetch
-    // surfaces as `InvalidAccountData`.
+    // payload after the reserved discriminator region; pod accounts do a
+    // `bytemuck::pod_read_unaligned` on that same post-disc payload slice.
+    // `try_deserialize_unchecked` intentionally skips the discriminator bytes
+    // without validating them, matching Anchor v1 and the trait docs'
+    // "unchecked" contract for full account buffers.
     let account_deserialize_impl = if is_borsh {
         quote! {
             impl anchor_lang_v2::AccountDeserialize for #name {
@@ -1994,27 +1996,35 @@ pub fn account(attr: TokenStream, item: TokenStream) -> TokenStream {
                     if buf.len() < <Self as anchor_lang_v2::Discriminator>::DISCRIMINATOR.len() {
                         return Err(anchor_lang_v2::Error::AccountDataTooSmall);
                     }
-                    let (disc, rest) = buf.split_at(<Self as anchor_lang_v2::Discriminator>::DISCRIMINATOR.len());
+                    let disc = &buf[..<Self as anchor_lang_v2::Discriminator>::DISCRIMINATOR.len()];
                     if disc != <Self as anchor_lang_v2::Discriminator>::DISCRIMINATOR {
                         return Err(anchor_lang_v2::Error::InvalidAccountData);
                     }
-                    *buf = rest;
                     Self::try_deserialize_unchecked(buf)
                 }
                 fn try_deserialize_unchecked(
                     buf: &mut &[u8],
                 ) -> ::core::result::Result<Self, anchor_lang_v2::Error> {
+                    use anchor_lang_v2::Discriminator as _;
+                    let disc_len = <Self as anchor_lang_v2::Discriminator>::DISCRIMINATOR.len();
+                    if buf.len() < disc_len {
+                        return Err(anchor_lang_v2::Error::AccountDataTooSmall);
+                    }
+                    let original = *buf;
                     // Use `SchemaRead::get` (reads from a `&mut &[u8]` Reader
                     // and advances it) rather than `config::deserialize`,
                     // which takes the input by value and would leave `*buf`
                     // unchanged — `AccountDeserialize`'s cursor contract
-                    // requires the post-disc slice to advance through the
-                    // payload so chained deserializations stay aligned.
-                    <Self as anchor_lang_v2::wincode::SchemaRead<
+                    // requires the full slice to advance through the
+                    // discriminator region and payload together.
+                    let mut data = &original[disc_len..];
+                    let value = <Self as anchor_lang_v2::wincode::SchemaRead<
                         '_,
                         anchor_lang_v2::BorshConfig,
-                    >>::get(buf)
-                        .map_err(|_| anchor_lang_v2::Error::InvalidAccountData)
+                    >>::get(&mut data)
+                        .map_err(|_| anchor_lang_v2::Error::InvalidAccountData)?;
+                    *buf = data;
+                    Ok(value)
                 }
             }
         }
@@ -2028,22 +2038,28 @@ pub fn account(attr: TokenStream, item: TokenStream) -> TokenStream {
                     if buf.len() < <Self as anchor_lang_v2::Discriminator>::DISCRIMINATOR.len() {
                         return Err(anchor_lang_v2::Error::AccountDataTooSmall);
                     }
-                    let (disc, rest) = buf.split_at(<Self as anchor_lang_v2::Discriminator>::DISCRIMINATOR.len());
+                    let disc = &buf[..<Self as anchor_lang_v2::Discriminator>::DISCRIMINATOR.len()];
                     if disc != <Self as anchor_lang_v2::Discriminator>::DISCRIMINATOR {
                         return Err(anchor_lang_v2::Error::InvalidAccountData);
                     }
-                    *buf = rest;
                     Self::try_deserialize_unchecked(buf)
                 }
                 fn try_deserialize_unchecked(
                     buf: &mut &[u8],
                 ) -> ::core::result::Result<Self, anchor_lang_v2::Error> {
-                    let n = ::core::mem::size_of::<Self>();
-                    if buf.len() < n {
+                    use anchor_lang_v2::Discriminator as _;
+                    let disc_len = <Self as anchor_lang_v2::Discriminator>::DISCRIMINATOR.len();
+                    if buf.len() < disc_len {
                         return Err(anchor_lang_v2::Error::AccountDataTooSmall);
                     }
-                    let value: Self = anchor_lang_v2::bytemuck::pod_read_unaligned(&buf[..n]);
-                    *buf = &buf[n..];
+                    let original = *buf;
+                    let data = &original[disc_len..];
+                    let n = ::core::mem::size_of::<Self>();
+                    if data.len() < n {
+                        return Err(anchor_lang_v2::Error::AccountDataTooSmall);
+                    }
+                    let value: Self = anchor_lang_v2::bytemuck::pod_read_unaligned(&data[..n]);
+                    *buf = &data[n..];
                     Ok(value)
                 }
             }
@@ -3161,6 +3177,16 @@ fn gen_declare_program_types(idl: &serde_json::Value) -> syn::Result<Vec<TokenSt
                     &idl_type_def,
                     idl_field_tys,
                 );
+                let account_deserialize_impl = account_entry
+                    .as_ref()
+                    .map(|_| {
+                        gen_declare_program_account_deserialize_impl(
+                            &ident,
+                            &generics,
+                            serialization,
+                        )
+                    })
+                    .unwrap_or_default();
                 let pod_impls = serialization
                     .is_bytemuck()
                     .then(|| gen_declare_program_pod_impls(&ident, &generics, &fields))
@@ -3176,6 +3202,7 @@ fn gen_declare_program_types(idl: &serde_json::Value) -> syn::Result<Vec<TokenSt
                         }
                         #pod_impls
                         #discriminator_impl
+                        #account_deserialize_impl
                         #idl_impl
                     },
                     DeclareTypeFields::Named { fields, .. } => quote! {
@@ -3186,6 +3213,7 @@ fn gen_declare_program_types(idl: &serde_json::Value) -> syn::Result<Vec<TokenSt
                             #(#fields)*
                         }
                         #discriminator_impl
+                        #account_deserialize_impl
                         #idl_impl
                     },
                     DeclareTypeFields::Tuple { fields, .. } if serialization.is_bytemuck() => quote! {
@@ -3195,6 +3223,7 @@ fn gen_declare_program_types(idl: &serde_json::Value) -> syn::Result<Vec<TokenSt
                         pub struct #ident #impl_generics(#(#fields),*);
                         #pod_impls
                         #discriminator_impl
+                        #account_deserialize_impl
                         #idl_impl
                     },
                     DeclareTypeFields::Tuple { fields, .. } => quote! {
@@ -3203,6 +3232,7 @@ fn gen_declare_program_types(idl: &serde_json::Value) -> syn::Result<Vec<TokenSt
                         #[derive(Clone, anchor_lang_v2::wincode::SchemaRead, anchor_lang_v2::wincode::SchemaWrite)]
                         pub struct #ident #impl_generics(#(#fields),*);
                         #discriminator_impl
+                        #account_deserialize_impl
                         #idl_impl
                     },
                     DeclareTypeFields::Unit if serialization.is_bytemuck() => quote! {
@@ -3212,6 +3242,7 @@ fn gen_declare_program_types(idl: &serde_json::Value) -> syn::Result<Vec<TokenSt
                         pub struct #ident #impl_generics;
                         #pod_impls
                         #discriminator_impl
+                        #account_deserialize_impl
                         #idl_impl
                     },
                     DeclareTypeFields::Unit => quote! {
@@ -3220,6 +3251,7 @@ fn gen_declare_program_types(idl: &serde_json::Value) -> syn::Result<Vec<TokenSt
                         #[derive(Clone, anchor_lang_v2::wincode::SchemaRead, anchor_lang_v2::wincode::SchemaWrite)]
                         pub struct #ident #impl_generics;
                         #discriminator_impl
+                        #account_deserialize_impl
                         #idl_impl
                     },
                 });
@@ -3842,6 +3874,88 @@ fn gen_declare_program_idl_account_type_impl(
                 )*
             }
         }
+    }
+}
+
+fn gen_declare_program_account_deserialize_impl(
+    ident: &Ident,
+    generics: &DeclareTypeGenerics,
+    serialization: DeclareTypeSerialization,
+) -> TokenStream2 {
+    let impl_generics = &generics.impl_generics;
+    let ty_generics = &generics.ty_generics;
+    let try_deserialize = quote! {
+        fn try_deserialize(
+            buf: &mut &[u8],
+        ) -> ::core::result::Result<Self, anchor_lang_v2::Error> {
+            use anchor_lang_v2::Discriminator as _;
+            if buf.len() < <Self as anchor_lang_v2::Discriminator>::DISCRIMINATOR.len() {
+                return Err(anchor_lang_v2::Error::AccountDataTooSmall);
+            }
+            let given_disc = &buf[..<Self as anchor_lang_v2::Discriminator>::DISCRIMINATOR.len()];
+            if given_disc != <Self as anchor_lang_v2::Discriminator>::DISCRIMINATOR {
+                return Err(anchor_lang_v2::Error::InvalidAccountData);
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+    };
+
+    match serialization {
+        DeclareTypeSerialization::Borsh => quote! {
+            impl #impl_generics anchor_lang_v2::AccountDeserialize for #ident #ty_generics
+            where
+                for<'__de> Self:
+                    anchor_lang_v2::wincode::SchemaRead<'__de, anchor_lang_v2::BorshConfig, Dst = Self>,
+            {
+                #try_deserialize
+
+                fn try_deserialize_unchecked(
+                    buf: &mut &[u8],
+                ) -> ::core::result::Result<Self, anchor_lang_v2::Error> {
+                    use anchor_lang_v2::Discriminator as _;
+                    let disc_len = <Self as anchor_lang_v2::Discriminator>::DISCRIMINATOR.len();
+                    if buf.len() < disc_len {
+                        return Err(anchor_lang_v2::Error::AccountDataTooSmall);
+                    }
+                    let original = *buf;
+                    let mut data = &original[disc_len..];
+                    let value = <Self as anchor_lang_v2::wincode::SchemaRead<
+                        '_,
+                        anchor_lang_v2::BorshConfig,
+                    >>::get(&mut data)
+                        .map_err(|_| anchor_lang_v2::Error::InvalidAccountData)?;
+                    *buf = data;
+                    Ok(value)
+                }
+            }
+        },
+        DeclareTypeSerialization::Bytemuck | DeclareTypeSerialization::BytemuckUnsafe => quote! {
+            impl #impl_generics anchor_lang_v2::AccountDeserialize for #ident #ty_generics
+            where
+                Self: anchor_lang_v2::bytemuck::Pod,
+            {
+                #try_deserialize
+
+                fn try_deserialize_unchecked(
+                    buf: &mut &[u8],
+                ) -> ::core::result::Result<Self, anchor_lang_v2::Error> {
+                    use anchor_lang_v2::Discriminator as _;
+                    let disc_len = <Self as anchor_lang_v2::Discriminator>::DISCRIMINATOR.len();
+                    if buf.len() < disc_len {
+                        return Err(anchor_lang_v2::Error::AccountDataTooSmall);
+                    }
+                    let original = *buf;
+                    let data = &original[disc_len..];
+                    let size = ::core::mem::size_of::<Self>();
+                    if data.len() < size {
+                        return Err(anchor_lang_v2::Error::AccountDataTooSmall);
+                    }
+                    let value = anchor_lang_v2::bytemuck::pod_read_unaligned(&data[..size]);
+                    *buf = &data[size..];
+                    Ok(value)
+                }
+            }
+        },
     }
 }
 

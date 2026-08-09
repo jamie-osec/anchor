@@ -159,6 +159,10 @@ name = "to_cpi_accounts_derive"
 required-features = ["testing"]
 
 [[test]]
+name = "account_deserialize_surface"
+required-features = ["testing"]
+
+[[test]]
 name = "address_idl_surface"
 required-features = ["testing"]
 
