@@ -3009,6 +3009,49 @@ mod tests {
     }
 
     #[test]
+    fn built_in_init_namespaces_skip_runtime_init_hooks() {
+        let attrs: Vec<Attribute> = vec![syn::parse_quote!(
+            #[account(init, payer = payer, mint::authority = mint_authority)]
+        )];
+        let parsed = parse_account_attrs(&attrs).expect("built-in init namespace should parse");
+        let init_body = quote::quote! { __init_body()? };
+        let field_names = vec!["mint_authority".to_string()];
+        let wrapped = wrap_init_body_with_constraints(
+            &syn::parse_quote!(Account<Data>),
+            &parsed,
+            &field_names,
+            &init_body,
+        );
+
+        assert_eq!(wrapped.to_string(), init_body.to_string());
+    }
+
+    #[test]
+    fn runtime_only_init_namespaces_use_as_ref_for_field_refs() {
+        let attrs: Vec<Attribute> = vec![syn::parse_quote!(
+            #[account(init, payer = payer, custom::foo = authority)]
+        )];
+        let parsed = parse_account_attrs(&attrs).expect("runtime-only init namespace should parse");
+        let field_names = vec!["authority".to_string()];
+        let wrapped = wrap_init_body_with_constraints(
+            &syn::parse_quote!(Account<Data>),
+            &parsed,
+            &field_names,
+            &quote::quote! { __init_body()? },
+        )
+        .to_string();
+
+        assert!(
+            wrapped.contains("AsRef :: as_ref (& authority)"),
+            "expected field-ref coercion via AsRef, got: {wrapped}"
+        );
+        assert!(
+            !wrapped.contains("AccountAddress :: account_address"),
+            "unexpected account-address coercion in runtime-only init hook: {wrapped}"
+        );
+    }
+
+    #[test]
     fn multiple_constraints_collected_in_source_order() {
         // Mixed `=` and parenthesized spellings, repeated. Each entry
         // must land in `raw_constraints` at the index it appears, so
