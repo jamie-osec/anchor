@@ -1178,16 +1178,6 @@ fn rewrite_seed_value_expr(expr: &Expr, field_names: &[String]) -> proc_macro2::
             }
         }
     }
-    if let Expr::MethodCall(method_call) = expr {
-        if method_call.method == "as_ref"
-            && method_call.args.is_empty()
-            && method_call.turbofish.is_none()
-            && !matches!(method_call.receiver.as_ref(), Expr::Path(_))
-        {
-            let receiver = &method_call.receiver;
-            return quote! { #receiver };
-        }
-    }
     quote! { #expr }
 }
 
@@ -1564,10 +1554,11 @@ fn emit_init_body(
                         __seed_ref, #pda_program, &__target.address(),
                     ).map_err(|_| anchor_lang_v2::ErrorCode::ConstraintSeeds)?;
                 __bumps.#field_name = #bump_assign;
+                let __bump_bytes = [__bump];
                 let mut __seed_buf: [&[u8]; 17] = [&[]; 17];
                 let __n = __seed_ref.len();
                 __seed_buf[..__n].copy_from_slice(__seed_ref);
-                __seed_buf[__n] = &[__bump];
+                __seed_buf[__n] = &__bump_bytes;
                 let __seeds: Option<&[&[u8]]> = Some(&__seed_buf[..__n + 1]);
             }
         }
@@ -2991,6 +2982,16 @@ mod tests {
             joined.contains("ConstraintSeeds"),
             "expected ConstraintSeeds error path in generated constraints, got: {joined}"
         );
+    }
+
+    #[test]
+    fn rewrite_seed_value_expr_preserves_nontrivial_as_ref_receivers() {
+        let expr: Expr = syn::parse_quote!(config.seed.as_ref());
+        let fields = vec!["config".to_string()];
+
+        let rewritten = rewrite_seed_value_expr(&expr, &fields);
+
+        assert_eq!(rewritten.to_string(), "config . seed . as_ref ()");
     }
 
     #[test]
