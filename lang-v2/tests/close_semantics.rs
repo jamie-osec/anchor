@@ -256,13 +256,13 @@ fn load_after_close_rejects_with_data_too_small() {
     }
 
     // Even though data bytes retain the disc, the framework rejects
-    // because `data_len = 0` (< DISC_LEN=8 → AccountDataTooSmall).
+    // because `data_len = 0` (< discriminator length → AccountDataTooSmall).
     let view = unsafe { buf.view() };
     let result = BorshAccount::<Vault>::load(view);
     assert!(
         result.is_err(),
         "BorshAccount::load must reject a closed account (owner is [0;32] != program_id, AND \
-         data_len=0 < DISC_LEN)"
+         data_len=0 < discriminator length)"
     );
 }
 
