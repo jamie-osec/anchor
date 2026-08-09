@@ -98,7 +98,7 @@ struct AssociatedTokenInit {
 /// mirrors the optional `seeds::program = expr` override.
 #[derive(Clone)]
 pub struct IdlPdaMeta {
-    pub seeds: Vec<crate::idl::SeedJson>,
+    pub seeds: crate::idl::SeedListJson,
     pub program: Option<crate::idl::SeedJson>,
 }
 
@@ -1861,26 +1861,17 @@ pub fn parse_field(
         None => (None, None, None),
     };
     let idl_docs = crate::idl::extract_doc_lines(&field.attrs);
-    let idl_pda = attrs.seeds.as_ref().map(|seeds_expr| {
-        let seed_entries: Vec<crate::idl::SeedJson> = if let Expr::Array(arr) = seeds_expr {
-            arr.elems
-                .iter()
-                .map(|s| crate::idl::classify_seed(s, field_names, ix_arg_names))
-                .collect()
-        } else {
-            // Non-array seed expr — surface as the placeholder `{"kind":"expr"}`
-            // shape. Static because it doesn't depend on the user's expr value.
-            vec![crate::idl::SeedJson::Static(
-                r#"{"kind":"expr"}"#.to_string(),
-            )]
+    let idl_pda = attrs.seeds.as_ref().and_then(|seeds_expr| {
+        let seeds = crate::idl::classify_seed_list(seeds_expr, field_names, ix_arg_names)?;
+        let program = match attrs.seeds_program.as_ref() {
+            Some(program_expr) => Some(crate::idl::classify_program_seed(
+                program_expr,
+                field_names,
+                ix_arg_names,
+            )?),
+            None => None,
         };
-        IdlPdaMeta {
-            seeds: seed_entries,
-            program: attrs
-                .seeds_program
-                .as_ref()
-                .map(|p| crate::idl::classify_program_seed(p, field_names, ix_arg_names)),
-        }
+        Some(IdlPdaMeta { seeds, program })
     });
     let idl_field_ty: Option<syn::Type> = {
         let base_ty = option_inner.unwrap_or(field_ty);
