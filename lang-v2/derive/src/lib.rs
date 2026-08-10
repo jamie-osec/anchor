@@ -1016,14 +1016,19 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         Ok(fields) => fields,
         Err(err) => return err.to_compile_error(),
     };
+    if let Err(err) = parse::validate_account_fields(&field_summaries) {
+        return err.to_compile_error();
+    }
 
     let fields: Vec<parse::AccountField> = match named_fields
         .named
         .iter()
         .zip(offset_exprs)
-        .map(|(f, offset)| {
+        .zip(&field_summaries)
+        .map(|((f, offset), summary)| {
             parse::parse_field(
                 f,
+                &summary.attrs,
                 &raw_field_names,
                 &field_offsets,
                 offset,
@@ -1036,30 +1041,6 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         Ok(fields) => fields,
         Err(err) => return err.to_compile_error(),
     };
-
-    for field in fields.iter().filter(|f| f.init_payer.is_some()) {
-        let payer = field.init_payer.as_ref().unwrap();
-        match fields
-            .iter()
-            .find(|candidate| candidate.name == payer.as_str())
-        {
-            Some(payer_field) if payer_field.idl_writable => {}
-            Some(_) => {
-                return syn::Error::new(
-                    field.name.span(),
-                    "the payer specified for an init constraint must be mutable",
-                )
-                .to_compile_error();
-            }
-            None => {
-                return syn::Error::new(
-                    field.name.span(),
-                    "the payer specified for an init constraint does not exist",
-                )
-                .to_compile_error();
-            }
-        }
-    }
 
     let field_names: Vec<_> = fields.iter().map(|f| &f.name).collect();
     let loads: Vec<_> = fields.iter().map(|f| &f.load).collect();

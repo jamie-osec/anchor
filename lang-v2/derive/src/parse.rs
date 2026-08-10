@@ -103,6 +103,8 @@ pub struct IdlPdaMeta {
 }
 
 pub fn parse_account_attrs(attrs: &[Attribute]) -> syn::Result<AccountAttrs> {
+    let mut explicit_mut = None;
+    let mut realloc_zero_seen = false;
     let mut result = AccountAttrs {
         is_mut: false,
         is_signer: false,
@@ -132,6 +134,10 @@ pub fn parse_account_attrs(attrs: &[Attribute]) -> syn::Result<AccountAttrs> {
         namespaced: Vec::new(),
     };
 
+    let duplicate_singleton = |span: proc_macro2::Span, name: &str| -> syn::Error {
+        syn::Error::new(span, format!("`{name}` already provided"))
+    };
+
     for attr in attrs {
         if !attr.path().is_ident("account") {
             continue;
@@ -140,22 +146,58 @@ pub fn parse_account_attrs(attrs: &[Attribute]) -> syn::Result<AccountAttrs> {
             while !input.is_empty() {
                 let ident = Ident::parse_any(input)?;
                 match ident.to_string().as_str() {
-                    "mut" => result.is_mut = true,
+                    "mut" => {
+                        if explicit_mut.is_some() {
+                            return Err(duplicate_singleton(ident.span(), "mut"));
+                        }
+                        explicit_mut = Some(ident.span());
+                        result.is_mut = true;
+                    }
                     "init" => {
+                        if result.is_init {
+                            return Err(duplicate_singleton(ident.span(), "init"));
+                        }
+                        if result.is_init_if_needed || result.is_zeroed {
+                            return Err(syn::Error::new(
+                                ident.span(),
+                                "only one of `init`, `init_if_needed`, and `zeroed` may be used",
+                            ));
+                        }
                         result.is_init = true;
                         result.is_mut = true;
                         result.init_span = Some(ident.span());
                     }
                     "init_if_needed" => {
+                        if result.is_init_if_needed {
+                            return Err(duplicate_singleton(ident.span(), "init_if_needed"));
+                        }
+                        if result.is_init || result.is_zeroed {
+                            return Err(syn::Error::new(
+                                ident.span(),
+                                "only one of `init`, `init_if_needed`, and `zeroed` may be used",
+                            ));
+                        }
                         result.is_init_if_needed = true;
                         result.is_mut = true;
                         result.init_if_needed_span = Some(ident.span());
                     }
                     "zeroed" => {
+                        if result.is_zeroed {
+                            return Err(duplicate_singleton(ident.span(), "zeroed"));
+                        }
+                        if result.is_init || result.is_init_if_needed {
+                            return Err(syn::Error::new(
+                                ident.span(),
+                                "only one of `init`, `init_if_needed`, and `zeroed` may be used",
+                            ));
+                        }
                         result.is_zeroed = true;
                         result.is_mut = true;
                     }
                     "bump" => {
+                        if result.bump.is_some() {
+                            return Err(duplicate_singleton(ident.span(), "bump"));
+                        }
                         if input.peek(Token![=]) {
                             input.parse::<Token![=]>()?;
                             result.bump = Some(Some(input.parse()?));
@@ -163,8 +205,18 @@ pub fn parse_account_attrs(attrs: &[Attribute]) -> syn::Result<AccountAttrs> {
                             result.bump = Some(None);
                         }
                     }
-                    "signer" => result.is_signer = true,
-                    "executable" => result.is_executable = true,
+                    "signer" => {
+                        if result.is_signer {
+                            return Err(duplicate_singleton(ident.span(), "signer"));
+                        }
+                        result.is_signer = true;
+                    }
+                    "executable" => {
+                        if result.is_executable {
+                            return Err(duplicate_singleton(ident.span(), "executable"));
+                        }
+                        result.is_executable = true;
+                    }
                     "dup" => {
                         return Err(syn::Error::new(
                             ident.span(),
@@ -178,6 +230,9 @@ pub fn parse_account_attrs(attrs: &[Attribute]) -> syn::Result<AccountAttrs> {
                         let inner: Ident = content.parse()?;
                         match inner.to_string().as_str() {
                             "dup" => {
+                                if result.is_dup {
+                                    return Err(duplicate_singleton(inner.span(), "unsafe(dup)"));
+                                }
                                 result.is_dup = true;
                                 result.is_mut = true;
                             }
@@ -204,10 +259,19 @@ pub fn parse_account_attrs(attrs: &[Attribute]) -> syn::Result<AccountAttrs> {
                             let key_ident: Ident = Ident::parse_any(&content)?;
                             content.parse::<Token![=]>()?;
                             let value: Expr = content.parse()?;
+                            let namespace = ns_ident.to_string();
                             let raw_key = key_ident.to_string();
+                            if result.namespaced.iter().any(|nc| {
+                                nc.is_update && nc.namespace == namespace && nc.raw_key == raw_key
+                            }) {
+                                return Err(syn::Error::new(
+                                    key_ident.span(),
+                                    format!("duplicate `{namespace}::{raw_key}` constraint"),
+                                ));
+                            }
                             let key = constraint_key_ident(&raw_key);
                             result.namespaced.push(NamespacedConstraint {
-                                namespace: ns_ident.to_string(),
+                                namespace,
                                 key,
                                 raw_key,
                                 value,
@@ -220,14 +284,23 @@ pub fn parse_account_attrs(attrs: &[Attribute]) -> syn::Result<AccountAttrs> {
                     }
                     "payer" => {
                         input.parse::<Token![=]>()?;
+                        if result.payer.is_some() {
+                            return Err(duplicate_singleton(ident.span(), "payer"));
+                        }
                         result.payer = Some(input.parse()?);
                     }
                     "space" => {
                         input.parse::<Token![=]>()?;
+                        if result.space.is_some() {
+                            return Err(duplicate_singleton(ident.span(), "space"));
+                        }
                         result.space = Some(input.parse()?);
                     }
                     "seeds" if input.peek(Token![=]) => {
                         input.parse::<Token![=]>()?;
+                        if result.seeds.is_some() {
+                            return Err(duplicate_singleton(ident.span(), "seeds"));
+                        }
                         result.seeds = Some(input.parse()?);
                     }
                     // `seeds::program = expr` falls through to the
@@ -238,6 +311,16 @@ pub fn parse_account_attrs(attrs: &[Attribute]) -> syn::Result<AccountAttrs> {
                         let keyword_span = ident.span();
                         input.parse::<Token![=]>()?;
                         let target: Ident = input.parse()?;
+                        if result
+                            .has_one
+                            .iter()
+                            .any(|(_, existing, _)| *existing == target)
+                        {
+                            return Err(syn::Error::new(
+                                target.span(),
+                                format!("duplicate `has_one = {target}` constraint"),
+                            ));
+                        }
                         let err = if input.peek(Token![@]) {
                             input.parse::<Token![@]>()?;
                             Some(input.parse()?)
@@ -248,6 +331,9 @@ pub fn parse_account_attrs(attrs: &[Attribute]) -> syn::Result<AccountAttrs> {
                     }
                     "address" => {
                         input.parse::<Token![=]>()?;
+                        if result.address.is_some() {
+                            return Err(duplicate_singleton(ident.span(), "address"));
+                        }
                         result.address = Some(input.parse()?);
                         if input.peek(Token![@]) {
                             input.parse::<Token![@]>()?;
@@ -256,6 +342,9 @@ pub fn parse_account_attrs(attrs: &[Attribute]) -> syn::Result<AccountAttrs> {
                     }
                     "owner" => {
                         input.parse::<Token![=]>()?;
+                        if result.owner.is_some() {
+                            return Err(duplicate_singleton(ident.span(), "owner"));
+                        }
                         result.owner = Some(input.parse()?);
                         if input.peek(Token![@]) {
                             input.parse::<Token![@]>()?;
@@ -264,21 +353,34 @@ pub fn parse_account_attrs(attrs: &[Attribute]) -> syn::Result<AccountAttrs> {
                     }
                     "realloc" => {
                         input.parse::<Token![=]>()?;
+                        if result.realloc.is_some() {
+                            return Err(duplicate_singleton(ident.span(), "realloc"));
+                        }
                         result.realloc = Some(input.parse()?);
                         result.realloc_span = Some(ident.span());
                         result.is_mut = true;
                     }
                     "realloc_payer" => {
                         input.parse::<Token![=]>()?;
+                        if result.realloc_payer.is_some() {
+                            return Err(duplicate_singleton(ident.span(), "realloc_payer"));
+                        }
                         result.realloc_payer = Some(input.parse()?);
                     }
                     "realloc_zero" => {
                         input.parse::<Token![=]>()?;
+                        if realloc_zero_seen {
+                            return Err(duplicate_singleton(ident.span(), "realloc_zero"));
+                        }
+                        realloc_zero_seen = true;
                         let val: syn::LitBool = input.parse()?;
                         result.realloc_zero = val.value;
                     }
                     "close" => {
                         input.parse::<Token![=]>()?;
+                        if result.close.is_some() {
+                            return Err(duplicate_singleton(ident.span(), "close"));
+                        }
                         result.close = Some(input.parse()?);
                     }
                     "constraint" => {
@@ -341,10 +443,19 @@ pub fn parse_account_attrs(attrs: &[Attribute]) -> syn::Result<AccountAttrs> {
                             }
                             input.parse::<Token![=]>()?;
                             let value: Expr = input.parse()?;
+                            let namespace = ident.to_string();
                             let raw_key = key_ident.to_string();
+                            if result.namespaced.iter().any(|nc| {
+                                !nc.is_update && nc.namespace == namespace && nc.raw_key == raw_key
+                            }) {
+                                return Err(syn::Error::new(
+                                    key_ident.span(),
+                                    format!("duplicate `{namespace}::{raw_key}` constraint"),
+                                ));
+                            }
                             let key = constraint_key_ident(&raw_key);
                             result.namespaced.push(NamespacedConstraint {
-                                namespace: ident.to_string(),
+                                namespace,
                                 key,
                                 raw_key,
                                 value,
@@ -395,37 +506,139 @@ pub fn parse_account_attrs(attrs: &[Attribute]) -> syn::Result<AccountAttrs> {
         }
     }
 
-    if result.seeds_program.is_some() && result.seeds.is_none() {
+    if let Some(span) = explicit_mut {
+        if result.is_init || result.is_init_if_needed {
+            return Err(syn::Error::new(span, "mut cannot be provided with init"));
+        }
+        if result.is_zeroed {
+            return Err(syn::Error::new(span, "mut cannot be provided with zeroed"));
+        }
+    }
+
+    if result.close.is_some() && (result.is_init || result.is_init_if_needed || result.is_zeroed) {
         return Err(syn::Error::new(
-            result.seeds_program.as_ref().unwrap().span(),
-            "`seeds::program` requires `seeds`",
+            result.close.as_ref().unwrap().span(),
+            "`close` cannot be used with `init`, `init_if_needed`, or `zeroed`",
         ));
     }
 
-    if result.payer.is_none() {
-        if let Some(init_span) = result.init_span {
+    if result.realloc.is_some() && (result.is_init || result.is_init_if_needed || result.is_zeroed)
+    {
+        return Err(syn::Error::new(
+            result.realloc.as_ref().unwrap().span(),
+            "`realloc` cannot be used with `init`, `init_if_needed`, or `zeroed`",
+        ));
+    }
+
+    if result.payer.is_some() && !(result.is_init || result.is_init_if_needed) {
+        return Err(syn::Error::new(
+            result.payer.as_ref().unwrap().span(),
+            "`payer` requires `init` or `init_if_needed`",
+        ));
+    }
+
+    if (result.is_init || result.is_init_if_needed) && result.payer.is_none() {
+        return Err(syn::Error::new(
+            proc_macro2::Span::call_site(),
+            "`init` and `init_if_needed` require `payer`",
+        ));
+    }
+
+    if result.space.is_some() && !(result.is_init || result.is_init_if_needed) {
+        return Err(syn::Error::new(
+            result.space.as_ref().unwrap().span(),
+            "`space` requires `init` or `init_if_needed`",
+        ));
+    }
+
+    if result.bump.is_some() && result.seeds.is_none() {
+        let span = match result.bump.as_ref().unwrap() {
+            Some(expr) => syn::spanned::Spanned::span(expr),
+            None => proc_macro2::Span::call_site(),
+        };
+        return Err(syn::Error::new(span, "`bump` requires `seeds`"));
+    }
+
+    if result.seeds.is_some() && result.bump.is_none() {
+        return Err(syn::Error::new(
+            result.seeds.as_ref().unwrap().span(),
+            "`seeds` requires `bump`",
+        ));
+    }
+    if let Some(program) = result.seeds_program.as_ref() {
+        if result.is_init_if_needed {
             return Err(syn::Error::new(
-                init_span,
-                "`init` requires `payer = <target>`",
+                syn::spanned::Spanned::span(program),
+                "`seeds::program` cannot be used with `init_if_needed`",
             ));
         }
-        if let Some(init_if_needed_span) = result.init_if_needed_span {
+        if result.is_init {
             return Err(syn::Error::new(
-                init_if_needed_span,
-                "`init_if_needed` requires `payer = <target>`",
+                syn::spanned::Spanned::span(program),
+                "`seeds::program` cannot be used with `init`",
             ));
         }
+    }
+    if result.realloc_payer.is_some() && result.realloc.is_none() {
+        return Err(syn::Error::new(
+            result.realloc_payer.as_ref().unwrap().span(),
+            "`realloc_payer` requires `realloc`",
+        ));
     }
 
     if result.realloc.is_some() && result.realloc_payer.is_none() {
         return Err(syn::Error::new(
-            result
-                .realloc_span
-                .unwrap_or_else(proc_macro2::Span::call_site),
-            "`realloc` requires `realloc_payer = <target>`",
+            result.realloc.as_ref().unwrap().span(),
+            "`realloc` requires `realloc_payer`",
         ));
     }
 
+    if result.realloc.is_some() && !realloc_zero_seen {
+        return Err(syn::Error::new(
+            result.realloc.as_ref().unwrap().span(),
+            "`realloc` requires `realloc_zero`",
+        ));
+    }
+
+    if realloc_zero_seen && result.realloc.is_none() {
+        return Err(syn::Error::new(
+            proc_macro2::Span::call_site(),
+            "`realloc_zero` requires `realloc`",
+        ));
+    }
+
+    let has_namespaced = |ns: &str, key: &str, allow_update: bool| {
+        result
+            .namespaced
+            .iter()
+            .any(|nc| (allow_update || !nc.is_update) && nc.namespace == ns && nc.raw_key == key)
+    };
+    if result.is_init || result.is_init_if_needed {
+        for (namespace, left, right, allow_update) in [
+            ("token", "mint", "authority", false),
+            // `update(mint::...)` constraints should still compile on init
+            // accounts; they are applied later and must not leak into the
+            // init params that `Mint::create_and_initialize` consumes.
+            ("mint", "decimals", "authority", true),
+        ] {
+            let has_left = has_namespaced(namespace, left, allow_update);
+            let has_right = has_namespaced(namespace, right, allow_update);
+            if has_left != has_right {
+                let (missing, present) = if has_left {
+                    (right, left)
+                } else {
+                    (left, right)
+                };
+                return Err(syn::Error::new(
+                    proc_macro2::Span::call_site(),
+                    format!(
+                        "when initializing, `{namespace}::{missing}` must be provided if \
+                         `{namespace}::{present}` is"
+                    ),
+                ));
+            }
+        }
+    }
     Ok(result)
 }
 
@@ -947,9 +1160,6 @@ pub struct AccountField {
     /// `true` iff this optional field contributes to the runtime active
     /// mutable mask when it loads as `Some`.
     pub contributes_active_mut_bit: bool,
-    /// The local payer field named by this field's `init`/`init_if_needed`
-    /// constraint, if present.
-    pub init_payer: Option<String>,
     // IDL metadata
     pub idl_writable: bool,
     /// True when this is a fresh-keypair init site (attrs: `init` or
@@ -1112,6 +1322,157 @@ fn dotted_address_hint(
     } else {
         None
     }
+}
+
+fn require_summary_field<'a>(
+    fields: &'a [FieldSummary],
+    name: &Ident,
+    target: &FieldSummary,
+    purpose: &str,
+    required: bool,
+) -> syn::Result<&'a FieldSummary> {
+    let field = fields
+        .iter()
+        .find(|field| field.name == *name)
+        .ok_or_else(|| {
+            syn::Error::new(
+                name.span(),
+                format!("the {purpose} account `{name}` does not exist"),
+            )
+        })?;
+    if required && extract_option_inner(&field.ty).is_some() {
+        return Err(syn::Error::new(
+            target.name.span(),
+            format!("the {purpose} account `{name}` must be non-optional"),
+        ));
+    }
+    Ok(field)
+}
+
+pub fn validate_account_fields(fields: &[FieldSummary]) -> syn::Result<()> {
+    for target in fields {
+        let attrs = &target.attrs;
+        let required = extract_option_inner(&target.ty).is_none();
+
+        if attrs.is_init || attrs.is_init_if_needed {
+            let payer = attrs
+                .payer
+                .as_ref()
+                .expect("init payer is validated while parsing account attributes");
+            let payer_field = require_summary_field(fields, payer, target, "init payer", false)?;
+            if extract_option_inner(&payer_field.ty).is_some() {
+                return Err(syn::Error::new(
+                    payer_field.name.span(),
+                    "optional accounts cannot be used as init payers",
+                ));
+            }
+            if !payer_field.attrs.is_mut {
+                return Err(syn::Error::new(
+                    target.name.span(),
+                    "the payer specified for an init constraint must be mutable",
+                ));
+            }
+
+            let system_program = Ident::new("system_program", proc_macro2::Span::call_site());
+            require_summary_field(fields, &system_program, target, "init program", required)?;
+
+            let spl_constraints: Vec<_> = attrs
+                .namespaced
+                .iter()
+                .filter(|constraint| {
+                    !constraint.is_update
+                        && matches!(
+                            constraint.namespace.as_str(),
+                            "token" | "mint" | "associated_token"
+                        )
+                })
+                .collect();
+            if !spl_constraints.is_empty() {
+                let mut token_program_constraints = spl_constraints
+                    .iter()
+                    .filter(|constraint| constraint.raw_key == "token_program")
+                    .peekable();
+                if token_program_constraints.peek().is_none() {
+                    let token_program = Ident::new("token_program", proc_macro2::Span::call_site());
+                    require_summary_field(
+                        fields,
+                        &token_program,
+                        target,
+                        "SPL token program",
+                        required,
+                    )?;
+                } else {
+                    for constraint in token_program_constraints {
+                        let token_program =
+                            expr_as_field_ident(&constraint.value).ok_or_else(|| {
+                                syn::Error::new(
+                                    constraint.value.span(),
+                                    "SPL token program constraints must reference an account field",
+                                )
+                            })?;
+                        require_summary_field(
+                            fields,
+                            &token_program,
+                            target,
+                            "SPL token program",
+                            required,
+                        )?;
+                    }
+                }
+            }
+
+            for constraint in spl_constraints.iter().filter(|constraint| {
+                constraint.raw_key == "mint"
+                    && matches!(constraint.namespace.as_str(), "token" | "associated_token")
+            }) {
+                let mint = expr_as_field_ident(&constraint.value).ok_or_else(|| {
+                    syn::Error::new(
+                        constraint.value.span(),
+                        "the mint constraint must reference an account field for token \
+                         initialization",
+                    )
+                })?;
+                require_summary_field(fields, &mint, target, "token mint", false)?;
+            }
+
+            if spl_constraints
+                .iter()
+                .any(|constraint| constraint.namespace == "associated_token")
+            {
+                let associated_token_program =
+                    Ident::new("associated_token_program", proc_macro2::Span::call_site());
+                require_summary_field(
+                    fields,
+                    &associated_token_program,
+                    target,
+                    "associated token program",
+                    required,
+                )?;
+            }
+        }
+
+        if attrs.realloc.is_some() {
+            let payer = attrs
+                .realloc_payer
+                .as_ref()
+                .expect("realloc payer is validated while parsing account attributes");
+            let payer_field = require_summary_field(fields, payer, target, "realloc payer", false)?;
+            if extract_option_inner(&payer_field.ty).is_some() {
+                return Err(syn::Error::new(
+                    payer_field.name.span(),
+                    "optional accounts cannot be used as realloc payers",
+                ));
+            }
+            if !payer_field.attrs.is_mut {
+                return Err(syn::Error::new(
+                    target.name.span(),
+                    "the payer specified for a realloc constraint must be mutable",
+                ));
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// If `expr` is the v1-encodable shape `<sibling>.<field>` where both:
@@ -1775,6 +2136,7 @@ fn emit_init_if_needed_reuse_validation(
 
 pub fn parse_field(
     field: &syn::Field,
+    attrs: &AccountAttrs,
     field_names: &[String],
     field_offsets: &[(String, TokenStream2)],
     offset_expr: proc_macro2::TokenStream,
@@ -1783,22 +2145,7 @@ pub fn parse_field(
 ) -> syn::Result<AccountField> {
     let field_name = field.ident.as_ref().expect("named field");
     let field_ty = &field.ty;
-    let attrs = parse_account_attrs(&field.attrs)?;
-    if attrs.seeds_program.is_some() {
-        if attrs.is_init {
-            return Err(syn::Error::new(
-                attrs.seeds_program.as_ref().unwrap().span(),
-                "`seeds::program` cannot be used with `init`",
-            ));
-        }
-        if attrs.is_init_if_needed {
-            return Err(syn::Error::new(
-                attrs.seeds_program.as_ref().unwrap().span(),
-                "`seeds::program` cannot be used with `init_if_needed`",
-            ));
-        }
-    }
-    validate_init_constraint_refs(field_name, &attrs, field_summaries)?;
+    validate_init_constraint_refs(field_name, attrs, field_summaries)?;
     if attrs.close.is_some() && !attrs.is_mut {
         return Err(syn::Error::new(
             field_name.span(),
@@ -1953,7 +2300,6 @@ pub fn parse_field(
             // own offset.
             contributes_mut_bit: false,
             contributes_active_mut_bit: false,
-            init_payer: None,
             idl_writable: false,
             idl_init_signer: false,
             idl_has_one: vec![],
@@ -2647,7 +2993,7 @@ pub fn parse_field(
         let realloc_payer = attrs.realloc_payer.as_ref().ok_or_else(|| {
             syn::Error::new(
                 attrs.realloc_span.unwrap_or_else(|| field_name.span()),
-                "`realloc` requires `realloc_payer = <target>`",
+                "`realloc` requires `realloc_payer`",
             )
         })?;
         let zero_fill = attrs.realloc_zero;
@@ -2852,10 +3198,6 @@ pub fn parse_field(
 
     let contributes_mut_bit = attrs.is_mut && !attrs.is_dup && !is_optional;
     let contributes_active_mut_bit = attrs.is_mut && !attrs.is_dup && is_optional;
-    let init_payer = (attrs.is_init || attrs.is_init_if_needed)
-        .then(|| attrs.payer.as_ref().map(ToString::to_string))
-        .flatten();
-
     Ok(AccountField {
         name: field_name.clone(),
         ty: field.ty.clone(),
@@ -2869,7 +3211,6 @@ pub fn parse_field(
         offset_expr,
         contributes_mut_bit,
         contributes_active_mut_bit,
-        init_payer,
         idl_writable,
         idl_init_signer,
         idl_has_one,
@@ -2885,6 +3226,11 @@ pub fn parse_field(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn parse_test_field(field: &syn::Field) -> syn::Result<AccountField> {
+        let attrs = parse_account_attrs(&field.attrs)?;
+        parse_field(field, &attrs, &[], &[], quote!(0usize), &[], &[])
+    }
 
     #[test]
     fn test_parse_account_attrs() {
@@ -2915,16 +3261,18 @@ mod tests {
     }
 
     #[test]
-    fn empty_seed_array_with_seeds_program_is_accepted() {
+    fn empty_seed_array_with_seeds_program_requires_bump() {
         let attrs: Vec<Attribute> = vec![syn::parse_quote!(
             #[account(seeds = [], seeds::program = other_program.key())]
         )];
-        let parsed = parse_account_attrs(&attrs).expect("empty seeds array remains valid");
-        let Expr::Array(arr) = parsed.seeds.expect("seed array should be preserved") else {
-            panic!("expected parsed seeds to stay as an array expression");
+        let err = match parse_account_attrs(&attrs) {
+            Ok(_) => panic!("empty seeds array without bump must be rejected"),
+            Err(err) => err,
         };
-        assert!(arr.elems.is_empty());
-        assert!(parsed.seeds_program.is_some());
+        assert!(
+            err.to_string().contains("`seeds` requires `bump`"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]
@@ -2947,7 +3295,7 @@ mod tests {
                 pub inner: Nested<Inner>
             })
             .unwrap();
-        let err = match parse_field(&field, &[], &[], quote::quote!(0usize), &[], &[]) {
+        let err = match parse_test_field(&field) {
             Ok(_) => panic!("account attrs on Nested<T> must be rejected"),
             Err(err) => err,
         };
@@ -2973,7 +3321,7 @@ mod tests {
                 pub my_acc: Account<MyAcc>
             })
             .unwrap();
-        let parsed = parse_field(&field, &[], &[], quote::quote!(0usize), &[], &[]).unwrap();
+        let parsed = parse_test_field(&field).unwrap();
         let joined = parsed
             .constraints
             .iter()
@@ -3039,7 +3387,7 @@ mod tests {
         };
         assert!(
             err.to_string()
-                .contains("`init` requires `payer = <target>`"),
+                .contains("`init` and `init_if_needed` require `payer`"),
             "unexpected error: {err}"
         );
     }
@@ -3055,7 +3403,7 @@ mod tests {
         };
         assert!(
             err.to_string()
-                .contains("`init_if_needed` requires `payer = <target>`"),
+                .contains("`init` and `init_if_needed` require `payer`"),
             "unexpected error: {err}"
         );
     }
@@ -3071,7 +3419,7 @@ mod tests {
         };
         assert!(
             err.to_string()
-                .contains("`realloc` requires `realloc_payer = <target>`"),
+                .contains("`realloc` requires `realloc_payer`"),
             "unexpected error: {err}"
         );
     }
@@ -3202,7 +3550,7 @@ mod tests {
                 pub program: UncheckedAccount
             })
             .unwrap();
-        let parsed = parse_field(&field, &[], &[], quote::quote!(0usize), &[], &[]).unwrap();
+        let parsed = parse_test_field(&field).unwrap();
 
         assert!(parsed.idl_address.is_none());
         assert!(parsed.idl_address_expr.is_some());
@@ -3219,8 +3567,10 @@ mod tests {
                 pub program: UncheckedAccount
             })
             .unwrap();
+        let attrs = parse_account_attrs(&field.attrs).unwrap();
         let parsed = parse_field(
             &field,
+            &attrs,
             &["data".into(), "program".into()],
             &[],
             quote::quote!(0usize),

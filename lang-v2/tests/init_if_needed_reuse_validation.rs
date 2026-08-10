@@ -1,7 +1,8 @@
 use {
     anchor_lang_v2::{
-        accounts::{Signer, UncheckedAccount},
+        accounts::{Program, Signer, UncheckedAccount},
         cpi::rent_exempt_lamports,
+        programs::{System, Token},
         testing::AccountBuffer,
         AccountInitialize, Accounts, AnchorAccount, Error, ErrorCode, Id, TryAccounts,
     },
@@ -21,6 +22,7 @@ struct SeedlessReuseUnchecked {
     target: UncheckedAccount,
     #[account(mut)]
     payer: Signer,
+    system_program: Program<System>,
 }
 
 #[derive(Clone, Copy)]
@@ -306,6 +308,8 @@ struct ReuseFakeMint {
     authority: UncheckedAccount,
     #[account(mut)]
     payer: Signer,
+    token_program: Program<Token>,
+    system_program: Program<System>,
 }
 
 #[derive(Accounts)]
@@ -323,6 +327,8 @@ struct ReuseFakeMintWithFreezeAuthority {
     freeze_authority: UncheckedAccount,
     #[account(mut)]
     payer: Signer,
+    token_program: Program<Token>,
+    system_program: Program<System>,
 }
 
 #[derive(Accounts)]
@@ -339,6 +345,8 @@ struct ReuseFakeToken {
     authority: UncheckedAccount,
     #[account(mut)]
     payer: Signer,
+    token_program: Program<Token>,
+    system_program: Program<System>,
 }
 
 fn expect_err<T>(result: Result<T, ProgramError>) -> ProgramError {
@@ -369,6 +377,12 @@ fn payer_account() -> AccountBuffer<128> {
 fn authority_account(address: [u8; 32]) -> AccountBuffer<128> {
     let buf = AccountBuffer::<128>::new();
     buf.init(address, PROGRAM_ID, 0, false, false, false);
+    buf
+}
+
+fn program_account(address: Address) -> AccountBuffer<128> {
+    let buf = AccountBuffer::<128>::new();
+    buf.init(address.to_bytes(), [0u8; 32], 0, false, false, true);
     buf
 }
 
@@ -408,7 +422,12 @@ fn fake_token_account(
 }
 
 fn try_reuse(target: &AccountBuffer<128>, payer: &AccountBuffer<128>) -> Result<(), ProgramError> {
-    let views = [unsafe { target.view() }, unsafe { payer.view() }];
+    let system_program = program_account(System::id());
+    let views = [
+        unsafe { target.view() },
+        unsafe { payer.view() },
+        unsafe { system_program.view() },
+    ];
     SeedlessReuseUnchecked::try_accounts(&Address::new_from_array(PROGRAM_ID), &views, None, 0, &[])
         .map(|_| ())
 }
@@ -418,10 +437,14 @@ fn try_reuse_fake_mint(
     authority: &AccountBuffer<128>,
     payer: &AccountBuffer<128>,
 ) -> Result<(), ProgramError> {
+    let token_program = program_account(Token::id());
+    let system_program = program_account(System::id());
     let views = [
         unsafe { target.view() },
         unsafe { authority.view() },
         unsafe { payer.view() },
+        unsafe { token_program.view() },
+        unsafe { system_program.view() },
     ];
     ReuseFakeMint::try_accounts(&Address::new_from_array(PROGRAM_ID), &views, None, 0, &[])
         .map(|_| ())
@@ -433,11 +456,15 @@ fn try_reuse_fake_mint_with_freeze_authority(
     freeze_authority: &AccountBuffer<128>,
     payer: &AccountBuffer<128>,
 ) -> Result<(), ProgramError> {
+    let token_program = program_account(Token::id());
+    let system_program = program_account(System::id());
     let views = [
         unsafe { target.view() },
         unsafe { authority.view() },
         unsafe { freeze_authority.view() },
         unsafe { payer.view() },
+        unsafe { token_program.view() },
+        unsafe { system_program.view() },
     ];
     ReuseFakeMintWithFreezeAuthority::try_accounts(
         &Address::new_from_array(PROGRAM_ID),
@@ -455,11 +482,15 @@ fn try_reuse_fake_token(
     authority: &AccountBuffer<128>,
     payer: &AccountBuffer<128>,
 ) -> Result<(), ProgramError> {
+    let token_program = program_account(Token::id());
+    let system_program = program_account(System::id());
     let views = [
         unsafe { target.view() },
         unsafe { mint.view() },
         unsafe { authority.view() },
         unsafe { payer.view() },
+        unsafe { token_program.view() },
+        unsafe { system_program.view() },
     ];
     ReuseFakeToken::try_accounts(&Address::new_from_array(PROGRAM_ID), &views, None, 0, &[])
         .map(|_| ())
