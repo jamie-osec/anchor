@@ -1962,7 +1962,7 @@ pub fn parse_field(
             idl_address_v1_source: None,
             idl_docs: vec![],
             idl_pda: None,
-            idl_field_ty: None,
+            idl_field_ty: Some(field_ty.clone()),
         });
     }
 

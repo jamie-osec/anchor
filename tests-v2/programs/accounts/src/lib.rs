@@ -1108,3 +1108,28 @@ pub struct CheckAssociatedTokenProgramSeed {
     #[account(seeds = [b"vault"], bump, seeds::program = AssociatedToken::id())]
     pub data: UncheckedAccount,
 }
+
+#[account]
+pub struct NestedVault {
+    pub value: u64,
+}
+
+#[derive(Accounts)]
+pub struct NestedIdlDepsInner {
+    pub vault: Account<NestedVault>,
+}
+
+#[derive(Accounts)]
+pub struct NestedIdlDepsOuter {
+    pub inner: Nested<NestedIdlDepsInner>,
+}
+
+#[derive(Accounts)]
+pub struct NestedNoDepsInner {
+    pub authority: Signer,
+}
+
+#[derive(Accounts)]
+pub struct NestedNoDepsOuter {
+    pub inner: Nested<NestedNoDepsInner>,
+}

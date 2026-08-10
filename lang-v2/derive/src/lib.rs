@@ -1279,13 +1279,26 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         })
         .collect();
     let idl_accounts_fn = idl::build_accounts_emission(&accounts_fields);
-    // Only path-typed fields drive the IDL dep walk. `idl_field_ty` is
-    // already the post-Option-unwrap base type (see `parse::parse_field`),
-    // and is `None` for non-Path fields — filter those out so the emitted
-    // trait call has a concrete type to dispatch on.
-    let idl_field_tys: Vec<&syn::Type> = fields
+    // Most field types register transitive IDL deps through
+    // `IdlAccountType::__register_idl_deps`. `Nested<Inner>` is special:
+    // `#[derive(Accounts)]` emits an inherent `Inner::__idl_register_deps`
+    // helper, not an `IdlAccountType` impl for `Inner`, so route those
+    // fields to the inner helper directly.
+    let idl_dep_walkers: Vec<TokenStream2> = fields
         .iter()
-        .filter_map(|f| f.idl_field_ty.as_ref())
+        .filter_map(|f| {
+            if let Some(inner_ty) = parse::extract_nested_inner_type(&f.ty) {
+                Some(quote! {
+                    <#inner_ty>::__idl_register_deps(accounts, types);
+                })
+            } else {
+                f.idl_field_ty.as_ref().map(|ty| {
+                    quote! {
+                        <#ty as anchor_lang_v2::IdlAccountType>::__register_idl_deps(accounts, types);
+                    }
+                })
+            }
+        })
         .collect();
 
     let (ix_deser, ix_args_assoc, ix_args_return) = if ix_args.is_empty() {
@@ -1992,9 +2005,7 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
                 accounts: &mut anchor_lang_v2::__alloc::vec::Vec<&'static str>,
                 types: &mut anchor_lang_v2::__alloc::vec::Vec<&'static str>,
             ) {
-                #(
-                    <#idl_field_tys as anchor_lang_v2::IdlAccountType>::__register_idl_deps(accounts, types);
-                )*
+                #(#idl_dep_walkers)*
             }
         }
     }
@@ -2782,6 +2793,8 @@ fn gen_declared_program(
                 pub struct #marker_name;
 
                 impl anchor_lang_v2::Id for #marker_name {
+                    const IDL_ADDRESS: &'static str = #address_lit;
+
                     fn id() -> anchor_lang_v2::Address {
                         super::ID
                     }
@@ -6653,6 +6666,31 @@ mod tests {
     }
 
     #[test]
+    fn nested_accounts_register_idl_deps_through_nested_wrapper() {
+        let input: syn::DeriveInput = syn::parse_quote! {
+            pub struct Outer {
+                pub nested: anchor_lang_v2::Nested<Inner>,
+            }
+        };
+
+        let generated = impl_accounts(&input).to_string();
+
+        assert!(
+            generated.contains("< Inner > :: __idl_register_deps"),
+            "nested accounts should forward IDL dep registration through the inner helper: \
+             {generated}"
+        );
+        assert!(
+            !generated.contains(
+                "< anchor_lang_v2 :: Nested < Inner > as anchor_lang_v2 :: IdlAccountType > \
+                 :: __register_idl_deps"
+            ),
+            "nested accounts should not require an IdlAccountType impl on Inner via Nested: \
+             {generated}"
+        );
+    }
+
+    #[test]
     fn event_authority_dispatch_uses_precomputed_const_when_available() {
         let generated = event_authority_dispatch_check(Some([7; 32])).to_string();
 
@@ -6875,6 +6913,39 @@ mod tests {
         assert!(
             generated.contains("must take `&mut Context<T>` as an identifier like `ctx`, `_`, or `Context { .. }`"),
             "expected targeted top-level pattern error, got: {generated}"
+        );
+    }
+
+    #[test]
+    fn declare_program_markers_emit_known_idl_addresses() {
+        let idl = serde_json::json!({
+            "address": "Externa1111111111111111111111111111111111111",
+            "metadata": {
+                "name": "fixture",
+                "version": "0.1.0",
+                "spec": "0.1.0"
+            },
+            "instructions": [{
+                "name": "ping",
+                "discriminator": [1, 2, 3, 4, 5, 6, 7, 8],
+                "accounts": [],
+                "args": []
+            }],
+            "accounts": [],
+            "types": []
+        });
+        let name: syn::Ident = syn::parse_quote!(fixture);
+
+        let generated = gen_declared_program(&name, &idl)
+            .expect("fixture IDL should generate")
+            .to_string();
+
+        assert!(
+            generated.contains(
+                "const IDL_ADDRESS : & 'static str = \"Externa1111111111111111111111111111111111111\""
+            ),
+            "declare_program markers should expose their known address for IDL emission: \
+             {generated}"
         );
     }
 }
