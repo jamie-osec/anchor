@@ -4886,10 +4886,7 @@ fn process_handler(
                 },
             )
         } else {
-            (
-                quote! { -> anchor_lang_v2::Result<()> },
-                quote! { Ok(()) },
-            )
+            (quote! { -> anchor_lang_v2::Result<()> }, quote! { Ok(()) })
         };
         quote! {
             #(#handler_cfg_attrs)*
@@ -6506,7 +6503,9 @@ mod tests {
             "expected fallback coercion trait in wrapper: {wrapper}"
         );
         assert!(
-            wrapper.contains("impl < 'ix , __AnchorIxArgs > __AnchorIxArgCoerce < 'ix > for __AnchorIxArgs"),
+            wrapper.contains(
+                "impl < 'ix , __AnchorIxArgs > __AnchorIxArgCoerce < 'ix > for __AnchorIxArgs"
+            ),
             "expected generic instruction-arg coercion impl in wrapper: {wrapper}"
         );
     }

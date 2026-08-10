@@ -112,6 +112,9 @@ pub struct Counter {
     pub mode: PodMode,
 }
 
+#[derive(IdlType)]
+pub struct PairTupleIdl(pub u64, pub bool);
+
 // ---- Handlers -------------------------------------------------------------
 
 #[program]
@@ -292,5 +295,14 @@ mod idl_tests {
             &mut types,
         );
         assert!(types.iter().any(|ty| ty.contains("\"name\":\"Inner\"")));
+    }
+
+    #[test]
+    fn idl_type_tuple_struct_preserves_unnamed_fields() {
+        let type_def = <PairTupleIdl as IdlAccountType>::__idl_type_def()
+            .expect("PairTupleIdl should emit an IDL type");
+        assert!(type_def.contains("\"name\":\"PairTupleIdl\""));
+        assert!(type_def.contains("\"kind\":\"struct\""));
+        assert!(type_def.contains("\"fields\":[\"u64\",\"bool\"]"));
     }
 }

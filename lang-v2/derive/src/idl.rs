@@ -354,32 +354,35 @@ pub fn build_accounts_emission(fields: &[AccountsJsonField<'_>]) -> TokenStream2
                         anchor_lang_v2::__alloc::string::String::new();
                 },
             };
-            // `#[account(address = <expr>)]` override. Static address
-            // expressions are evaluated at IDL-build time; dotted field
-            // paths stay as pre-formatted client-side hints.
-            let address_override_json = f
-                .address_override
-                .map(|s| format!(",\"address\":\"{s}\""))
-                .unwrap_or_default();
             let init_signer = f.init_signer;
             if let Some(ty) = f.field_ty {
                 let addr_json_expr = if let Some(address_expr) = f.address_override_expr {
                     quote! {
                         let __addr: anchor_lang_v2::Address =
                             ::core::convert::Into::into(#address_expr);
+                        let __addr_string = anchor_lang_v2::__alloc::format!("{}", __addr);
                         let __addr_json: anchor_lang_v2::__alloc::string::String =
-                            anchor_lang_v2::__alloc::format!(",\"address\":\"{}\"", __addr);
+                            anchor_lang_v2::__alloc::format!(
+                                ",\"address\":{}",
+                                anchor_lang_v2::idl_build::__idl_json_string(&__addr_string),
+                            );
                     }
-                } else if f.address_override.is_some() {
+                } else if let Some(address_override) = f.address_override {
                     quote! {
                         let __addr_json: anchor_lang_v2::__alloc::string::String =
-                            anchor_lang_v2::__alloc::string::String::from(#address_override_json);
+                            anchor_lang_v2::__alloc::format!(
+                                ",\"address\":{}",
+                                anchor_lang_v2::idl_build::__idl_json_string(#address_override),
+                            );
                     }
                 } else {
                     quote! {
                         let __addr = <#ty as anchor_lang_v2::IdlAccountType>::__IDL_ADDRESS;
                         let __addr_json: anchor_lang_v2::__alloc::string::String = match __addr {
-                            Some(a) => anchor_lang_v2::__alloc::format!(",\"address\":\"{}\"", a),
+                            Some(a) => anchor_lang_v2::__alloc::format!(
+                                ",\"address\":{}",
+                                anchor_lang_v2::idl_build::__idl_json_string(a),
+                            ),
                             None => anchor_lang_v2::__alloc::string::String::new(),
                         };
                     }
@@ -412,15 +415,30 @@ pub fn build_accounts_emission(fields: &[AccountsJsonField<'_>]) -> TokenStream2
                 // can't resolve the trait, so we emit only compile-time
                 // flags. Never triggers for valid Accounts structs.
                 let signer_json = if init_signer { ",\"signer\":true" } else { "" };
+                let addr_json_expr = if let Some(address_override) = f.address_override {
+                    quote! {
+                        let __addr_json: anchor_lang_v2::__alloc::string::String =
+                            anchor_lang_v2::__alloc::format!(
+                                ",\"address\":{}",
+                                anchor_lang_v2::idl_build::__idl_json_string(#address_override),
+                            );
+                    }
+                } else {
+                    quote! {
+                        let __addr_json: anchor_lang_v2::__alloc::string::String =
+                            anchor_lang_v2::__alloc::string::String::new();
+                    }
+                };
                 quote! {
                     {
+                        #addr_json_expr
                         #pda_json_expr
                         anchor_lang_v2::__alloc::format!(
                             "{{\"name\":\"{}\"{}{}{}{}{}{}{}}}",
                             #name,
                             #writable_json,
                             #signer_json,
-                            #address_override_json,
+                            __addr_json,
                             #optional_json,
                             #relations_json,
                             #docs_json,
@@ -501,49 +519,6 @@ pub enum TypeKind {
     BytemuckRepr,
 }
 
-/// Pre-split IDL type strings emitted by the derive at macro-expansion time.
-///
-/// The runtime print test no longer parses JSON — it concatenates these
-/// strings directly. That lets `lang-v2` avoid a runtime `serde_json`
-/// dependency or local `idl-build` feature; derive output still emits
-/// `feature = "idl-build"` cfgs into user crates.
-pub struct IdlTypeStrings {
-    /// `{"name":"X","discriminator":[…]}` for the program-level
-    /// `accounts[]` array (spec:137-140). `None` when the discriminator
-    /// is empty — i.e. plain `#[derive(IdlType)]` types that only
-    /// contribute to `types[]`.
-    pub account_entry: Option<String>,
-    /// `IdlTypeDef` JSON (spec:176-188) — `name`, optional `docs`, the
-    /// `serialization` / `repr` pair, and the inner `type` object. Never
-    /// carries `discriminator`; that field belongs only on the
-    /// accounts entry.
-    pub type_def: TokenStream2,
-}
-
-pub fn build_type_strings(
-    name: &str,
-    disc: &[u8],
-    docs: &[String],
-    fields: &syn::punctuated::Punctuated<syn::Field, syn::token::Comma>,
-    kind: TypeKind,
-    generics: &Generics,
-) -> IdlTypeStrings {
-    let mut lowerer = TypeLowerer::with_generics(generics);
-    let mut type_def_obj = build_type_def_header(name, docs, kind, generics);
-    let field_values: Vec<Value> = fields
-        .iter()
-        .map(|field| named_field_value(field, &mut lowerer))
-        .collect();
-    type_def_obj.insert(
-        "type".into(),
-        json!({ "kind": "struct", "fields": field_values }),
-    );
-    IdlTypeStrings {
-        account_entry: build_account_entry(name, disc),
-        type_def: lowerer.finish(Value::Object(type_def_obj)),
-    }
-}
-
 pub fn build_account_entry_string(name: &str, disc: &[u8]) -> Option<String> {
     build_account_entry(name, disc)
 }
@@ -562,58 +537,21 @@ pub fn build_struct_type_def_emission(
             .iter()
             .map(|field| field_push_stmt(field, generics))
             .collect(),
-        syn::Fields::Unnamed(_) | syn::Fields::Unit => Vec::new(),
+        syn::Fields::Unnamed(unnamed) => unnamed
+            .unnamed
+            .iter()
+            .map(|field| {
+                let field_json = unnamed_field_emission(field, generics);
+                let cfg_attrs = crate::cfg_attrs(&field.attrs);
+                quote! {
+                    #(#cfg_attrs)*
+                    __entries.push(#field_json);
+                }
+            })
+            .collect(),
+        syn::Fields::Unit => Vec::new(),
     };
     build_joined_type_def_emission(header, suffix, &field_pushes)
-}
-
-/// Build pre-split IDL type strings from enum variants. Mirrors `build_type_strings`
-/// with `build_enum_type_strings`.
-pub fn build_enum_type_strings(
-    name: &str,
-    disc: &[u8],
-    docs: &[String],
-    variants: &syn::punctuated::Punctuated<syn::Variant, syn::token::Comma>,
-    kind: TypeKind,
-    generics: &Generics,
-) -> IdlTypeStrings {
-    let mut lowerer = TypeLowerer::with_generics(generics);
-    let mut type_def_obj = build_type_def_header(name, docs, kind, generics);
-    let variant_values: Vec<Value> = variants
-        .iter()
-        .map(|v| {
-            let mut obj = serde_json::Map::new();
-            obj.insert("name".into(), Value::String(v.ident.to_string()));
-            match &v.fields {
-                syn::Fields::Unit => {}
-                syn::Fields::Named(named) => {
-                    let fields: Vec<Value> = named
-                        .named
-                        .iter()
-                        .map(|field| named_field_value(field, &mut lowerer))
-                        .collect();
-                    obj.insert("fields".into(), Value::Array(fields));
-                }
-                syn::Fields::Unnamed(unnamed) => {
-                    let tys: Vec<Value> = unnamed
-                        .unnamed
-                        .iter()
-                        .map(|field| lowerer.lower(&field.ty))
-                        .collect();
-                    obj.insert("fields".into(), Value::Array(tys));
-                }
-            }
-            Value::Object(obj)
-        })
-        .collect();
-    type_def_obj.insert(
-        "type".into(),
-        json!({ "kind": "enum", "variants": variant_values }),
-    );
-    IdlTypeStrings {
-        account_entry: build_account_entry(name, disc),
-        type_def: lowerer.finish(Value::Object(type_def_obj)),
-    }
 }
 
 pub fn build_enum_type_def_emission(
