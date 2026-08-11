@@ -274,6 +274,24 @@ mod shim {
             "custom wincode codecs can change the serialized layout",
         ],
     );
+
+    compile_fail_case(
+        "init_space_wincode_tag_encoding",
+        r#"
+use anchor_lang_v2::InitSpace;
+
+#[derive(InitSpace, wincode::SchemaRead, wincode::SchemaWrite)]
+#[wincode(tag_encoding = "u32")]
+pub enum Bad {
+    A([u8; 32]),
+    B(u8),
+}
+"#,
+        &[
+            "#[derive(InitSpace)] does not support `#[wincode(tag_encoding = ...)]`",
+            "1-byte enum discriminant",
+        ],
+    );
 }
 
 #[test]

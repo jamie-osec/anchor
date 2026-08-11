@@ -18,6 +18,41 @@ use {
 
 pub fn expand(item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
+    match crate::find_unsupported_wincode_attr(&input.attrs) {
+        Ok(Some((crate::UnsupportedWincodeAttrKind::TagEncoding, span))) => {
+            return syn::Error::new(
+                span,
+                "#[derive(InitSpace)] does not support `#[wincode(tag_encoding = ...)]` because \
+                 InitSpace assumes borsh's 1-byte enum discriminant; remove the override or \
+                 compute the account size manually",
+            )
+            .to_compile_error()
+            .into();
+        }
+        Ok(Some((crate::UnsupportedWincodeAttrKind::Skip, span))) => {
+            return syn::Error::new(
+                span,
+                "#[derive(InitSpace)] does not support `#[wincode(skip)]` because wincode \
+                 overrides change the serialized layout; remove the override or compute the \
+                 account size manually",
+            )
+            .to_compile_error()
+            .into();
+        }
+        Ok(Some((crate::UnsupportedWincodeAttrKind::With, span))) => {
+            return syn::Error::new(
+                span,
+                "#[derive(InitSpace)] does not support `#[wincode(with = ...)]` because custom \
+                 wincode codecs can change the serialized layout; remove the override or \
+                 compute the account size manually",
+            )
+            .to_compile_error()
+            .into();
+        }
+        Ok(None) => {}
+        Err(err) => return err.to_compile_error().into(),
+    }
+
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
     let name = input.ident;
 
@@ -91,6 +126,15 @@ fn field_len_tokens(field: Field) -> TokenStream2 {
                 span,
                 "#[derive(InitSpace)] does not support `#[wincode(with = ...)]` fields because \
                  custom wincode codecs can change the serialized layout; remove the override or \
+                 compute the account size manually",
+            )
+            .to_compile_error();
+        }
+        Ok(Some((crate::UnsupportedWincodeAttrKind::TagEncoding, span))) => {
+            return syn::Error::new(
+                span,
+                "#[derive(InitSpace)] does not support `#[wincode(tag_encoding = ...)]` because \
+                 InitSpace assumes borsh's 1-byte enum discriminant; remove the override or \
                  compute the account size manually",
             )
             .to_compile_error();

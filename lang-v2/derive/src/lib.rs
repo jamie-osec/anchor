@@ -67,6 +67,8 @@ struct AccountMetaAttrs {
 pub(crate) enum UnsupportedWincodeAttrKind {
     Skip,
     With,
+    /// Enum-level override of discriminant width (e.g. `u32` instead of borsh's `u8`).
+    TagEncoding,
 }
 
 pub(crate) fn find_unsupported_wincode_attr(
@@ -103,6 +105,12 @@ pub(crate) fn find_unsupported_wincode_attr(
                     let _ = value.parse::<Expr>()?;
                 }
                 unsupported = Some((UnsupportedWincodeAttrKind::With, span));
+            } else if meta.path.is_ident("tag_encoding") {
+                if meta.input.peek(syn::Token![=]) {
+                    let value = meta.value()?;
+                    let _ = value.parse::<Expr>()?;
+                }
+                unsupported = Some((UnsupportedWincodeAttrKind::TagEncoding, span));
             }
             Ok(())
         });
@@ -4477,6 +4485,14 @@ fn unsupported_wincode_idl_attr_error(
                 "{surface} does not support `#[wincode(with = ...)]` fields because custom \
                  wincode codecs can change the serialized wire layout; remove the override or \
                  exclude this type from generated IDL"
+            ),
+        )),
+        Ok(Some((UnsupportedWincodeAttrKind::TagEncoding, span))) => Some(syn::Error::new(
+            span,
+            format!(
+                "{surface} does not support `#[wincode(tag_encoding = ...)]` because generated \
+                 IDL assumes borsh's 1-byte enum discriminant; remove the override or exclude \
+                 this type from generated IDL"
             ),
         )),
         Ok(None) => None,
