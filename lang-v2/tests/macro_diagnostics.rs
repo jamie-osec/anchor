@@ -765,6 +765,30 @@ pub struct Bad {
 "#,
         &["the payer specified for an init constraint must be mutable"],
     );
+
+    compile_fail_case(
+        "init_payer_optional_account_is_rejected",
+        r#"
+use anchor_lang_v2::prelude::*;
+
+declare_id!("11111111111111111111111111111111");
+
+#[account]
+pub struct Data {
+    pub value: u64,
+}
+
+#[derive(Accounts)]
+pub struct Bad {
+    #[account(init, payer = payer, space = 8 + core::mem::size_of::<Data>())]
+    pub data: Account<Data>,
+    #[account(mut)]
+    pub payer: Option<SystemAccount>,
+    pub system_program: Program<System>,
+}
+"#,
+        &["optional accounts cannot be used as init payers"],
+    );
 }
 
 #[test]
@@ -819,6 +843,39 @@ pub struct MissingReallocPayer {
 "#,
         &["`realloc` requires `realloc_payer`"],
         &["proc-macro derive panicked"],
+    );
+}
+
+#[test]
+#[cfg_attr(
+    miri,
+    ignore = "spawns cargo and writes temporary workspaces; covered by normal cargo test"
+)]
+fn realloc_payer_cannot_be_optional() {
+    compile_fail_case(
+        "realloc_payer_optional_account_is_rejected",
+        r#"
+use anchor_lang_v2::prelude::*;
+
+declare_id!("11111111111111111111111111111111");
+
+#[account]
+pub struct Data {
+    pub value: u64,
+}
+
+#[derive(Accounts)]
+pub struct Bad {
+    #[account(mut, realloc = 16, realloc_payer = payer, realloc_zero = false)]
+    pub data: Account<Data>,
+    #[account(mut)]
+    pub payer: Option<SystemAccount>,
+}
+"#,
+        &[
+            "optional accounts cannot be used as realloc payers",
+            "realloc_payer",
+        ],
     );
 }
 

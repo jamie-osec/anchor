@@ -179,7 +179,6 @@ fn update_accounts_stmt_for_handler_pat(pat: &mut Pat) -> syn::Result<syn::Stmt>
         )),
     }
 }
-
 fn impl_to_cpi_accounts(input: &DeriveInput) -> TokenStream2 {
     let fields = match &input.data {
         Data::Struct(s) => match &s.fields {
