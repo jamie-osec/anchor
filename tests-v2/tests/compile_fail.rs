@@ -1753,6 +1753,46 @@ pub unsafe fn load_bad(view: AccountView) {
 }
 
 #[test]
+fn slab_zero_sized_pod_tail_does_not_compile() {
+    CompileCase::new(
+        "slab_zero_sized_pod_tail",
+        r#"
+use anchor_lang_v2::{
+    accounts::{Slab, SlabSchema},
+    prelude::*,
+};
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GoodHeader {
+    value: u64,
+}
+
+unsafe impl anchor_lang_v2::bytemuck::Zeroable for GoodHeader {}
+unsafe impl anchor_lang_v2::bytemuck::Pod for GoodHeader {}
+
+impl SlabSchema for GoodHeader {
+    const DATA_OFFSET: usize = 0;
+    const MIN_DATA_LEN: usize = 8;
+
+    fn validate(
+        _view: &AccountView,
+        _data: &[u8],
+    ) -> core::result::Result<(), ProgramError> {
+        Ok(())
+    }
+}
+
+// `()` is Pod + ZST. Layout treats it as tail-less, but the tail API would
+// divide by zero in capacity — must fail at compile time.
+const _: usize = Slab::<GoodHeader, ()>::space_for(0);
+"#,
+    )
+    .build()
+    .expect_fail(&["Slab tail item type must be non-zero-sized"]);
+}
+
+#[test]
 fn realloc_on_unchecked_account_does_not_compile() {
     CompileCase::new(
         "realloc_on_unchecked_account",
