@@ -634,6 +634,30 @@ fn refund_is_noop_when_account_is_at_rent_floor() {
 }
 
 #[test]
+fn refund_with_self_recipient_is_noop() {
+    let buf = setup_ledger(/*capacity*/ 4, /*len*/ 1);
+
+    let required = expected_min_lamports(ITEMS_OFFSET + 4 * ITEM_SIZE).unwrap();
+    let original = required + 500;
+    buf.set_lamports(original);
+
+    let view = unsafe { buf.view() };
+    let mut slab = unsafe { CounterLedger::load_mut(view) }.unwrap();
+    // `AccountView` is `Copy`, so a program can pass an alias of the slab as
+    // the refund recipient. That must not burn the excess via credit-then-
+    // overwrite on the shared lamport slot.
+    let mut self_recipient = unsafe { buf.view() };
+
+    slab.refund(&mut self_recipient).unwrap();
+
+    assert_eq!(
+        slab.view().lamports(),
+        original,
+        "self-recipient refund must preserve the original balance",
+    );
+}
+
+#[test]
 #[should_panic(expected = "Tried to mutate `Slab<H, T>` through a read-only load")]
 fn top_up_panics_when_loaded_read_only() {
     let mut buf = setup_ledger(/*capacity*/ 4, /*len*/ 1);

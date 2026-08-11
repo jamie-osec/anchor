@@ -416,7 +416,9 @@ where
     }
 
     /// Move excess lamports (current - min_lamports) from the account to
-    /// `recipient`. No-op if the account is already at the rent floor.
+    /// `recipient`. No-op if the account is already at the rent floor, or if
+    /// `recipient` aliases this account's lamport slot (a self-transfer would
+    /// otherwise credit then overwrite and burn the excess).
     ///
     /// Direct lamport arithmetic, no CPI — callers must only use this for
     /// accounts whose owner permits in-program lamport mutation.
@@ -425,6 +427,11 @@ where
         let required = self.min_lamports()?;
         let current = self.view.lamports();
         if current <= required {
+            return Ok(());
+        }
+        // When the recipient aliases this account, credit-then-debit would
+        // overwrite the first write and burn `excess`. Skip both writes.
+        if pinocchio::address::address_eq(recipient.address(), self.view.address()) {
             return Ok(());
         }
         let excess = current - required;
