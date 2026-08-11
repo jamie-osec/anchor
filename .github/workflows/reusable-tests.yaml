@@ -126,46 +126,6 @@ jobs:
       - uses: ./.github/actions/setup-ts/
       - uses: ./.github/actions/setup-surfpool/
 
-      - uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3
-        if: ${{ env.CACHE != 'false' }}
-        name: basic-0 cache
-        id: cache-basic-0
-        with:
-          path: ./examples/tutorial/basic-0/target
-          key: cargo-${{ runner.os }}-${{ hashFiles('./examples/tutorial/basic-0/**/Cargo.toml') }}-${{ env.SOLANA_VERSION }}-${{ hashFiles('**/Cargo.lock') }}
-
-      - uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3
-        if: ${{ env.CACHE != 'false' }}
-        name: basic-1 cache
-        id: cache-basic-1
-        with:
-          path: ./examples/tutorial/basic-1/target
-          key: cargo-${{ runner.os }}-${{ hashFiles('./examples/tutorial/basic-1/**/Cargo.toml') }}-${{ env.SOLANA_VERSION }}-${{ hashFiles('**/Cargo.lock') }}
-
-      - uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3
-        if: ${{ env.CACHE != 'false' }}
-        name: basic-2 cache
-        id: cache-basic-2
-        with:
-          path: ./examples/tutorial/basic-2/target
-          key: cargo-${{ runner.os }}-${{ hashFiles('./examples/tutorial/basic-2/**/Cargo.toml') }}-${{ env.SOLANA_VERSION }}-${{ hashFiles('**/Cargo.lock') }}
-
-      - uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3
-        if: ${{ env.CACHE != 'false' }}
-        name: basic-3 cache
-        id: cache-basic-3
-        with:
-          path: ./examples/tutorial/basic-3/target
-          key: cargo-${{ runner.os }}-${{ hashFiles('./examples/tutorial/basic-3/**/Cargo.toml') }}-${{ env.SOLANA_VERSION }}-${{ hashFiles('**/Cargo.lock') }}
-
-      - uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3
-        if: ${{ env.CACHE != 'false' }}
-        name: basic-4 cache
-        id: cache-basic-4
-        with:
-          path: ./examples/tutorial/basic-4/target
-          key: cargo-${{ runner.os }}-${{ hashFiles('./examples/tutorial/basic-4/**/Cargo.toml') }}-${{ env.SOLANA_VERSION }}-${{ hashFiles('**/Cargo.lock') }}
-
       - run: cd examples/tutorial && yarn workspaces run test
       - uses: ./.github/actions/git-diff/
 
@@ -246,13 +206,6 @@ jobs:
         with:
           name: composite.so
           path: tests/composite/target/deploy/
-      - uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3
-        if: ${{ env.CACHE != 'false' }}
-        name: Cache client/example target
-        id: cache-test-target
-        with:
-          path: client/example/target
-          key: cargo-${{ runner.os }}-client/example-${{ env.ANCHOR_VERSION }}-${{ env.SOLANA_VERSION }}-${{ hashFiles('**/Cargo.lock') }}
       - uses: ./.github/actions/setup-solana/
       - uses: ./.github/actions/setup-surfpool/
       - run: cd client/example && ./run-test.sh
@@ -285,14 +238,6 @@ jobs:
           name: ${{ env.ANCHOR_BINARY_NAME }}
           path: ~/.cargo/bin/
       - run: chmod +x ~/.cargo/bin/anchor
-
-      - uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3
-        if: ${{ env.CACHE != 'false' }}
-        name: Cache tests/bpf-upgradeable-state target
-        id: cache-test-target
-        with:
-          path: tests/bpf-upgradeable-state/target
-          key: cargo-${{ runner.os }}-tests/bpf-upgradeable-state-${{ env.ANCHOR_VERSION }}-${{ env.SOLANA_VERSION }}-${{ hashFiles('**/Cargo.lock') }}
 
       - run: surfpool start --ci --offline &
         name: start surfpool
@@ -559,14 +504,6 @@ jobs:
           name: ${{ env.ANCHOR_BINARY_NAME }}
           path: ~/.cargo/bin/
       - run: chmod +x ~/.cargo/bin/anchor
-
-      - uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3
-        if: ${{ env.CACHE != 'false' }}
-        name: Cache ${{ matrix.node.path }} target
-        id: cache-test-target
-        with:
-          path: ${{ matrix.node.path }}/target
-          key: cargo-${{ runner.os }}-${{ matrix.node.path }}-${{ env.ANCHOR_VERSION }}-${{ env.SOLANA_VERSION }}-${{ hashFiles('**/Cargo.lock') }}
 
       - run: ${{ matrix.node.cmd }}
         name: ${{ matrix.node.path }} program test
