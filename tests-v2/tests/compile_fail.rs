@@ -661,6 +661,259 @@ pub struct Bad {
 }
 
 #[test]
+fn namespaced_constraints_reject_non_account_rhs_for_init_params() {
+    let spl = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("spl-v2");
+
+    CompileCase::new(
+        "namespaced_constraint_init_const_authority_rejected",
+        r#"
+use anchor_lang_v2::prelude::*;
+use anchor_spl_v2::{
+    mint::Mint,
+    token::Token,
+};
+
+declare_id!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
+
+const AUTH: Address = anchor_lang_v2::address!("11111111111111111111111111111111");
+
+#[derive(Accounts)]
+pub struct Bad {
+    #[account(mut)]
+    pub payer: Signer,
+    #[account(init, payer = payer, mint::decimals = 6, mint::authority = AUTH)]
+    pub mint: Account<Mint>,
+    pub token_program: Program<Token>,
+    pub system_program: Program<System>,
+}
+"#,
+    )
+    .dep(format!(
+        "anchor-spl-v2 = {{ path = \"{}\", features = [\"guardrails\"] }}",
+        spl.display()
+    ))
+    .expect_fail(&[
+        "SPL init constraint `mint::authority` needs an AccountView, not a pubkey",
+    ]);
+
+    CompileCase::new(
+        "namespaced_constraint_init_const_freeze_authority_rejected",
+        r#"
+use anchor_lang_v2::prelude::*;
+use anchor_spl_v2::{
+    mint::Mint,
+    token::Token,
+};
+
+declare_id!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
+
+const AUTH: Address = anchor_lang_v2::address!("11111111111111111111111111111111");
+
+#[derive(Accounts)]
+pub struct Bad {
+    #[account(mut)]
+    pub payer: Signer,
+    #[account(
+        init,
+        payer = payer,
+        mint::decimals = 6,
+        mint::authority = payer,
+        mint::freeze_authority = AUTH
+    )]
+    pub mint: Account<Mint>,
+    pub token_program: Program<Token>,
+    pub system_program: Program<System>,
+}
+"#,
+    )
+    .dep(format!(
+        "anchor-spl-v2 = {{ path = \"{}\", features = [\"guardrails\"] }}",
+        spl.display()
+    ))
+    .expect_fail(&[
+        "SPL init constraint `mint::freeze_authority` needs an AccountView, not a pubkey",
+    ]);
+
+    CompileCase::new(
+        "namespaced_constraint_init_const_mint_token_program_rejected",
+        r#"
+use anchor_lang_v2::prelude::*;
+use anchor_spl_v2::{
+    mint::Mint,
+    token::Token,
+};
+
+declare_id!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
+
+const TOKEN_PROGRAM_ID: Address = anchor_lang_v2::address!("11111111111111111111111111111111");
+
+#[derive(Accounts)]
+pub struct Bad {
+    #[account(mut)]
+    pub payer: Signer,
+    #[account(
+        init,
+        payer = payer,
+        mint::decimals = 6,
+        mint::authority = payer,
+        mint::token_program = TOKEN_PROGRAM_ID
+    )]
+    pub mint: Account<Mint>,
+    pub token_program: Program<Token>,
+    pub system_program: Program<System>,
+}
+"#,
+    )
+    .dep(format!(
+        "anchor-spl-v2 = {{ path = \"{}\", features = [\"guardrails\"] }}",
+        spl.display()
+    ))
+    .expect_fail(&[
+        "SPL init constraint `mint::token_program` needs an AccountView, not a pubkey",
+    ]);
+
+    CompileCase::new(
+        "namespaced_constraint_init_const_token_mint_rejected",
+        r#"
+use anchor_lang_v2::prelude::*;
+use anchor_spl_v2::token::{Token, TokenAccount};
+
+declare_id!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
+
+const MINT: Address = anchor_lang_v2::address!("11111111111111111111111111111111");
+
+#[derive(Accounts)]
+pub struct Bad {
+    #[account(mut)]
+    pub payer: Signer,
+    #[account(init, payer = payer, token::mint = MINT, token::authority = payer)]
+    pub token_account: Account<TokenAccount>,
+    pub token_program: Program<Token>,
+    pub system_program: Program<System>,
+}
+"#,
+    )
+    .dep(format!(
+        "anchor-spl-v2 = {{ path = \"{}\", features = [\"guardrails\"] }}",
+        spl.display()
+    ))
+    .expect_fail(&[
+        "SPL init constraint `token::mint` needs an AccountView, not a pubkey",
+    ]);
+
+    CompileCase::new(
+        "namespaced_constraint_init_const_token_authority_rejected",
+        r#"
+use anchor_lang_v2::prelude::*;
+use anchor_spl_v2::{
+    mint::Mint,
+    token::{Token, TokenAccount},
+};
+
+declare_id!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
+
+const AUTH: Address = anchor_lang_v2::address!("11111111111111111111111111111111");
+
+#[derive(Accounts)]
+pub struct Bad {
+    #[account(mut)]
+    pub payer: Signer,
+    pub mint: Account<Mint>,
+    #[account(init, payer = payer, token::mint = mint, token::authority = AUTH)]
+    pub token_account: Account<TokenAccount>,
+    pub token_program: Program<Token>,
+    pub system_program: Program<System>,
+}
+"#,
+    )
+    .dep(format!(
+        "anchor-spl-v2 = {{ path = \"{}\", features = [\"guardrails\"] }}",
+        spl.display()
+    ))
+    .expect_fail(&[
+        "SPL init constraint `token::authority` needs an AccountView, not a pubkey",
+    ]);
+
+    CompileCase::new(
+        "namespaced_constraint_init_const_token_token_program_rejected",
+        r#"
+use anchor_lang_v2::prelude::*;
+use anchor_spl_v2::{
+    mint::Mint,
+    token::{Token, TokenAccount},
+};
+
+declare_id!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
+
+const TOKEN_PROGRAM_ID: Address = anchor_lang_v2::address!("11111111111111111111111111111111");
+
+#[derive(Accounts)]
+pub struct Bad {
+    #[account(mut)]
+    pub payer: Signer,
+    pub mint: Account<Mint>,
+    #[account(
+        init,
+        payer = payer,
+        token::mint = mint,
+        token::authority = payer,
+        token::token_program = TOKEN_PROGRAM_ID
+    )]
+    pub token_account: Account<TokenAccount>,
+    pub token_program: Program<Token>,
+    pub system_program: Program<System>,
+}
+"#,
+    )
+    .dep(format!(
+        "anchor-spl-v2 = {{ path = \"{}\", features = [\"guardrails\"] }}",
+        spl.display()
+    ))
+    .expect_fail(&[
+        "SPL init constraint `token::token_program` needs an AccountView, not a pubkey",
+    ]);
+
+    CompileCase::new(
+        "namespaced_constraint_init_nested_field_authority_rejected",
+        r#"
+use anchor_lang_v2::prelude::*;
+use anchor_spl_v2::{
+    mint::Mint,
+    token::Token,
+};
+
+declare_id!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
+
+#[account]
+pub struct Config {
+    pub authority: Address,
+}
+
+#[derive(Accounts)]
+pub struct Bad {
+    #[account(mut)]
+    pub payer: Signer,
+    pub config: Account<Config>,
+    #[account(init, payer = payer, mint::decimals = 6, mint::authority = config.authority)]
+    pub mint: Account<Mint>,
+    pub token_program: Program<Token>,
+    pub system_program: Program<System>,
+}
+"#,
+    )
+    .dep(format!(
+        "anchor-spl-v2 = {{ path = \"{}\", features = [\"guardrails\"] }}",
+        spl.display()
+    ))
+    .expect_fail(&[
+        "SPL init constraint `mint::authority` needs an AccountView, not a pubkey",
+    ]);
+}
+
+#[test]
 fn associated_token_rejects_unknown_constraint_key() {
     CompileCase::new(
         "associated_token_unknown_constraint_key",
