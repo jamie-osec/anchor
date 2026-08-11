@@ -32,11 +32,9 @@ env:
   ANCHOR_BINARY_NAME: ${{ inputs.anchor_binary_name }}
   SURFPOOL_CLI_VERSION: ${{ inputs.surfpool_cli_version }}
   CARGO_CACHE_PATH: |
-    ~/.cargo/bin/
     ~/.cargo/registry/index/
     ~/.cargo/registry/cache/
     ~/.cargo/git/db/
-    ./target/
 
 jobs:
   test-core:
@@ -57,7 +55,7 @@ jobs:
         id: cache-cargo-build
         with:
           path: ${{ env.CARGO_CACHE_PATH }}
-          key: cargo-${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
       - run: cargo build
       - run: rustup component add --toolchain nightly-x86_64-unknown-linux-gnu rustfmt && cargo +nightly fmt -- --check
       - run: cargo clippy --all-targets -- -D warnings
@@ -93,7 +91,7 @@ jobs:
         id: cache-anchor
         with:
           path: ${{ env.CARGO_CACHE_PATH }}
-          key: cargo-${{ runner.os }}-${{ env.CARGO_PROFILE }}-anchor-${{ hashFiles('**/Cargo.lock') }}
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
 
       - run: cargo install --path cli anchor-cli --locked --force --debug --features idl-localnet-testing
         if: env.CARGO_PROFILE == 'debug'
@@ -280,7 +278,7 @@ jobs:
         id: cache-anchor
         with:
           path: ${{ env.CARGO_CACHE_PATH }}
-          key: cargo-${{ runner.os }}-${{ env.CARGO_PROFILE }}-anchor-${{ hashFiles('**/Cargo.lock') }}
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -382,7 +380,7 @@ jobs:
         id: cache-anchor
         with:
           path: ${{ env.CARGO_CACHE_PATH }}
-          key: cargo-${{ runner.os }}-${{ env.CARGO_PROFILE }}-anchor-${{ hashFiles('**/Cargo.lock') }}
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -554,7 +552,7 @@ jobs:
         id: cache-anchor
         with:
           path: ${{ env.CARGO_CACHE_PATH }}
-          key: cargo-${{ runner.os }}-${{ env.CARGO_PROFILE }}-anchor-${{ hashFiles('**/Cargo.lock') }}
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
