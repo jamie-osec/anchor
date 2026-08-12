@@ -6,7 +6,7 @@ extern crate alloc;
 
 use {
     alloc::string::String,
-    anchor_lang_v2::{
+    anchor_lang::{
         accounts::Slab,
         prelude::*,
         programs::{AssociatedToken, Memo},
@@ -19,7 +19,7 @@ use {
 declare_id!("Acc1111111111111111111111111111111111111111");
 
 const PROGRAM_OWNER: Address =
-    anchor_lang_v2::address!("Acc1111111111111111111111111111111111111111");
+    anchor_lang::address!("Acc1111111111111111111111111111111111111111");
 const SYSTEM_SEED: &str = "anchor-v2-seed";
 const SYSTEM_TRANSFER_SEED: &str = "anchor-v2-transfer";
 
@@ -134,7 +134,7 @@ pub mod accounts_test {
     #[discrim = 7]
     pub fn check_system(ctx: &mut Context<CheckSystem>, expected_wallet: Address) -> Result<()> {
         require!(
-            anchor_lang_v2::address_eq(ctx.accounts.wallet.address(), &expected_wallet),
+            anchor_lang::address_eq(ctx.accounts.wallet.address(), &expected_wallet),
             ProgramError::InvalidAccountData
         );
         Ok(())
@@ -148,7 +148,7 @@ pub mod accounts_test {
         expected_account: Address,
     ) -> Result<()> {
         require!(
-            anchor_lang_v2::address_eq(ctx.accounts.any_account.address(), &expected_account),
+            anchor_lang::address_eq(ctx.accounts.any_account.address(), &expected_account),
             ProgramError::InvalidAccountData
         );
         Ok(())
@@ -158,7 +158,7 @@ pub mod accounts_test {
     #[discrim = 9]
     pub fn check_system_program(ctx: &mut Context<CheckSystemProgram>) -> Result<()> {
         require!(
-            anchor_lang_v2::address_eq(ctx.accounts.program.address(), &system_program::ID),
+            anchor_lang::address_eq(ctx.accounts.program.address(), &system_program::ID),
             ProgramError::InvalidAccountData
         );
         Ok(())
@@ -168,7 +168,7 @@ pub mod accounts_test {
     #[discrim = 10]
     pub fn check_token_program(ctx: &mut Context<CheckTokenProgram>) -> Result<()> {
         require!(
-            anchor_lang_v2::address_eq(ctx.accounts.program.address(), &Token::id()),
+            anchor_lang::address_eq(ctx.accounts.program.address(), &Token::id()),
             ProgramError::InvalidAccountData
         );
         Ok(())
@@ -178,7 +178,7 @@ pub mod accounts_test {
     #[discrim = 11]
     pub fn check_token_2022_program(ctx: &mut Context<CheckToken2022Program>) -> Result<()> {
         require!(
-            anchor_lang_v2::address_eq(ctx.accounts.program.address(), &Token2022::id()),
+            anchor_lang::address_eq(ctx.accounts.program.address(), &Token2022::id()),
             ProgramError::InvalidAccountData
         );
         Ok(())
@@ -190,7 +190,7 @@ pub mod accounts_test {
         ctx: &mut Context<CheckAssociatedTokenProgram>,
     ) -> Result<()> {
         require!(
-            anchor_lang_v2::address_eq(ctx.accounts.program.address(), &AssociatedToken::id()),
+            anchor_lang::address_eq(ctx.accounts.program.address(), &AssociatedToken::id()),
             ProgramError::InvalidAccountData
         );
         Ok(())
@@ -200,13 +200,13 @@ pub mod accounts_test {
     #[discrim = 13]
     pub fn check_memo_program(ctx: &mut Context<CheckMemoProgram>) -> Result<()> {
         require!(
-            anchor_lang_v2::address_eq(ctx.accounts.program.address(), &Memo::id()),
+            anchor_lang::address_eq(ctx.accounts.program.address(), &Memo::id()),
             ProgramError::InvalidAccountData
         );
         Ok(())
     }
 
-    /// Transfers lamports through `anchor_lang_v2::system_program::transfer`.
+    /// Transfers lamports through `anchor_lang::system_program::transfer`.
     #[discrim = 14]
     pub fn transfer_lamports(ctx: &mut Context<TransferLamports>, amount: u64) -> Result<()> {
         let cpi_accounts = system_program::Transfer {

@@ -2,7 +2,7 @@
 //! SystemAccount, UncheckedAccount.
 
 use {
-    anchor_lang_v2::{
+    anchor_lang::{
         programs::{Token, Token2022},
         solana_program::instruction::{AccountMeta, Instruction},
         Id,
@@ -66,7 +66,7 @@ fn foreign_borsh_owner() -> Pubkey {
 }
 
 fn foreign_borsh_counter_disc() -> &'static [u8] {
-    <ForeignBorshCounter as anchor_lang_v2::Discriminator>::DISCRIMINATOR
+    <ForeignBorshCounter as anchor_lang::Discriminator>::DISCRIMINATOR
 }
 
 const SYSTEM_SEED: &str = "anchor-v2-seed";

@@ -1,7 +1,7 @@
 #![allow(dead_code, deprecated, unexpected_cfgs)]
 
 use {
-    anchor_lang_v2::{
+    anchor_lang::{
         accounts::{BorshAccount, Signer, UncheckedAccount},
         testing::AccountBuffer,
         wincode::{SchemaRead, SchemaWrite},
@@ -14,7 +14,7 @@ use {
     solana_program_error::ProgramError,
 };
 
-anchor_lang_v2::declare_id!("11111111111111111111111111111111");
+anchor_lang::declare_id!("11111111111111111111111111111111");
 
 const PROGRAM_ID: [u8; 32] = [0x42; 32];
 const OLD_AUTHORITY: [u8; 32] = [0x10; 32];
@@ -111,13 +111,13 @@ struct OuterNestedGate {
     witness: UncheckedAccount,
 }
 
-#[anchor_lang_v2::program]
+#[anchor_lang::program]
 mod demo_program {
     use super::*;
 
-    pub fn rotate(ctx: &mut anchor_lang_v2::Context<RotateAuthority>) -> anchor_lang_v2::Result<()> {
+    pub fn rotate(ctx: &mut anchor_lang::Context<RotateAuthority>) -> anchor_lang::Result<()> {
         if ctx.accounts.vault.current_authority.to_bytes() != NEW_AUTHORITY {
-            return Err(anchor_lang_v2::ErrorCode::ConstraintAddress.into());
+            return Err(anchor_lang::ErrorCode::ConstraintAddress.into());
         }
         Ok(())
     }
@@ -212,7 +212,7 @@ fn read_vault_authority_from_dispatch_input(input: &[u64]) -> [u8; 32] {
 
 fn build_rotate_ix_data() -> Vec<u64> {
     let ix = crate::instruction::Rotate {};
-    let data = <crate::instruction::Rotate as anchor_lang_v2::InstructionData>::data(&ix);
+    let data = <crate::instruction::Rotate as anchor_lang::InstructionData>::data(&ix);
     let byte_len = size_of::<u64>() + data.len() + 32;
     let mut bytes = Vec::with_capacity(byte_len);
     bytes.extend_from_slice(&(data.len() as u64).to_le_bytes());

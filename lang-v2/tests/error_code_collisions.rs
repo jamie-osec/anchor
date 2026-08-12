@@ -16,7 +16,7 @@
 //! being listed there, the match goes non-exhaustive and the test
 //! crate fails to compile — forcing a review.
 
-use anchor_lang_v2::ErrorCode;
+use anchor_lang::ErrorCode;
 use solana_program_error::ProgramError;
 
 // Exhaustive variant list. The inner `exhaustiveness_check` fn uses a

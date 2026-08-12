@@ -11,7 +11,7 @@ crate-type = ["lib"]
 default = []
 
 [dependencies]
-anchor-lang-v2 = { path = "../../../../lang-v2" }
+anchor-lang = { path = "../../../../lang-v2" }
 wincode = { version = "0.5", features = ["derive"] }
 
 [lints.rust.unexpected_cfgs]

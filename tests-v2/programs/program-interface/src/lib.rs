@@ -1,4 +1,4 @@
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -6,7 +6,7 @@ pub mod declared {
     use super::*;
 
     pub const ID: Address =
-        anchor_lang_v2::address!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
+        anchor_lang::address!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
 }
 
 #[derive(Clone, Copy, wincode::SchemaWrite)]

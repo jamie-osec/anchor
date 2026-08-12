@@ -61,7 +61,7 @@ pub fn expand(item: TokenStream) -> TokenStream {
 
         quote! {
             #[automatically_derived]
-            impl #impl_generics anchor_lang_v2::Space for #name #ty_generics #where_clause {
+            impl #impl_generics anchor_lang::Space for #name #ty_generics #where_clause {
                 const INIT_SPACE: usize = 0 #(+ #recurse)*;
             }
         }
@@ -73,7 +73,7 @@ pub fn expand(item: TokenStream) -> TokenStream {
             Fields::Unnamed(unnamed) => process_struct_fields(unnamed.unnamed),
             Fields::Unit => quote! {
                 #[automatically_derived]
-                impl #impl_generics anchor_lang_v2::Space for #name #ty_generics #where_clause {
+                impl #impl_generics anchor_lang::Space for #name #ty_generics #where_clause {
                     const INIT_SPACE: usize = 0;
                 }
             },
@@ -91,7 +91,7 @@ pub fn expand(item: TokenStream) -> TokenStream {
 
             quote! {
                 #[automatically_derived]
-                impl anchor_lang_v2::Space for #name {
+                impl anchor_lang::Space for #name {
                     const INIT_SPACE: usize = 1 + #max;
                 }
             }
@@ -150,7 +150,7 @@ fn field_len_tokens(field: Field) -> TokenStream2 {
 fn gen_max<T: Iterator<Item = TokenStream2>>(mut iter: T) -> TokenStream2 {
     if let Some(item) = iter.next() {
         let next_item = gen_max(iter);
-        quote!(anchor_lang_v2::__private::max(#item, #next_item))
+        quote!(anchor_lang::__private::max(#item, #next_item))
     } else {
         quote!(0)
     }
@@ -205,7 +205,7 @@ fn len_from_type(ty: Type, attrs: &mut Option<VecDeque<TokenStream2>>) -> TokenS
                 }
                 _ => {
                     let ty = &ty_path.path;
-                    quote!(<#ty as anchor_lang_v2::Space>::INIT_SPACE)
+                    quote!(<#ty as anchor_lang::Space>::INIT_SPACE)
                 }
             }
         }

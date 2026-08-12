@@ -13,7 +13,7 @@
 //! The trait + helpers are unconditionally compiled — empty default-method
 //! impls cost nothing in BPF. End-user crates opt into IDL emission via
 //! their own local `idl-build` feature; the macro emissions in
-//! `anchor-derive-accounts-v2` are gated on that user-side feature.
+//! `anchor-derive-accounts` are gated on that user-side feature.
 //!
 //! This module is exposed only for IDL generation; it is NOT part of the
 //! stable API and is subject to change.

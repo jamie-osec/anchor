@@ -715,7 +715,7 @@ pub trait ForeignOwnerInit: AccountInitialize {}
 ///
 /// ```ignore
 /// pub mod my_ns {
-///     use anchor_lang_v2::AccountConstraint;
+///     use anchor_lang::AccountConstraint;
 ///     use pinocchio::program_error::ProgramError;
 ///
 ///     pub struct MinBalanceConstraint;

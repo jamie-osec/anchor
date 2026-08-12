@@ -1,5 +1,5 @@
 [package]
-name = "anchor-lang-v2"
+name = "anchor-lang"
 version.workspace = true
 edition = "2021"
 repository = "https://github.com/otter-sec/anchor"
@@ -29,17 +29,17 @@ guardrails = []
 # `create_account` CPI. Enable via `--features const-rent` for fixed-`space`
 # programs where the ~90 CU matters more than formula drift safety.
 const-rent = []
-# Enables the `anchor_lang_v2::testing` module: stack-backed mock pinocchio
+# Enables the `anchor_lang::testing` module: stack-backed mock pinocchio
 # types (`AccountView`, SBF input buffer) used by the `tests/` integration
 # tests + Miri witnesses. Also enables `const-rent` so host-side tests can
 # exercise rent-dependent helpers without SVM sysvar support, and `compat`
 # so tests can cover the v1-style raw remaining-account shims.
 # Off by default so production BPF binaries never ship the scaffold.
-# `cargo test -p anchor-lang-v2 --features testing`.
+# `cargo test -p anchor-lang --features testing`.
 testing = ["const-rent", "compat"]
 
 [dependencies]
-anchor-derive-accounts-v2 = { workspace = true }
+anchor-derive-accounts = { workspace = true }
 # "copy" makes AccountView Copy — saves 2 CU per account (avoids memcpy on access).
 # "account-resize" lets AccountView::resize enforce MAX_PERMITTED_DATA_INCREASE.
 pinocchio = { workspace = true, features = ["copy", "account-resize"] }
@@ -67,7 +67,7 @@ level = "warn"
 # `feature = "idl-build"` is emitted by the derive macros in code that
 # expands inside the *user crate*, where it's a real local feature. v2
 # also carries a matching hidden feature so user crates can fan their
-# local `idl-build` through `anchor-lang-v2/idl-build`.
+# local `idl-build` through `anchor-lang/idl-build`.
 check-cfg = [
     'cfg(target_os, values("solana"))',
     'cfg(feature, values("idl-build"))',

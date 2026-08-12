@@ -114,19 +114,19 @@ coverage-v2-host-clean:
 
 .PHONY: coverage-v2-host-lang
 coverage-v2-host-lang:
-	# First pass: `anchor-lang-v2` with its `testing` feature enabled — the
-	# Miri-witnesses integration tests need the `anchor_lang_v2::testing`
+	# First pass: `anchor-lang` with its `testing` feature enabled — the
+	# Miri-witnesses integration tests need the `anchor_lang::testing`
 	# scaffold. Split into its own invocation because `testing` is a
 	# lang-v2-only feature, and passing it to a multi-package run would
-	# fail when `anchor-spl-v2` / `tests-v2` don't define it.
+	# fail when `anchor-spl` / `tests-v2` don't define it.
 	CARGO_PROFILE_RELEASE_DEBUG=2 \
-	cargo llvm-cov --no-report -p anchor-lang-v2 --features testing
+	cargo llvm-cov --no-report -p anchor-lang --features testing
 
 .PHONY: coverage-v2-host-spl
 coverage-v2-host-spl:
-	# Second pass: `anchor-spl-v2` under default features.
+	# Second pass: `anchor-spl` under default features.
 	CARGO_PROFILE_RELEASE_DEBUG=2 \
-	cargo llvm-cov --no-report -p anchor-spl-v2
+	cargo llvm-cov --no-report -p anchor-spl
 
 .PHONY: coverage-v2-host-tests
 coverage-v2-host-tests:
@@ -304,29 +304,11 @@ clean:
 
 .PHONY: publish
 publish:
-	cd lang/syn/ && cargo publish && cd ../../
+	cd lang-v2/derive/ && cargo publish && cd ../../
 	sleep 25
-	cd lang/derive/accounts/ && cargo publish && cd ../../../
+	cd lang-v2/ && cargo publish && cd ../
 	sleep 25
-	cd lang/derive/serde/ && cargo publish && cd ../../../
-	sleep 25
-	cd lang/derive/space/ && cargo publish && cd ../../../
-	sleep 25
-	cd lang/attribute/access-control/ && cargo publish && cd ../../../
-	sleep 25
-	cd lang/attribute/account/ && cargo publish && cd ../../../
-	sleep 25
-	cd lang/attribute/constant/ && cargo publish && cd ../../../
-	sleep 25
-	cd lang/attribute/error/ && cargo publish && cd ../../../
-	sleep 25
-	cd lang/attribute/program/ && cargo publish && cd ../../..
-	sleep 25
-	cd lang/attribute/event/ && cargo publish && cd ../../../
-	sleep 25
-	cd lang/ && cargo publish && cd ../
-	sleep 25
-	cd spl/ && cargo publish && cd ../
+	cd spl-v2/ && cargo publish && cd ../
 	sleep 25
 	cd client/ && cargo publish && cd ../
 	sleep 25

@@ -1,7 +1,7 @@
-//! Run: `cargo test -p anchor-lang-v2 --features testing --test program_invoke`
+//! Run: `cargo test -p anchor-lang --features testing --test program_invoke`
 
 use {
-    anchor_lang_v2::{
+    anchor_lang::{
         accounts::Account,
         prelude::BorshAccount,
         solana_program::{

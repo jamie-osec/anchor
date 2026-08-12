@@ -66,7 +66,7 @@ jobs:
       #   - cargo-llvm-cov for host-side instrumentation coverage.
       #
       # The three direct `cargo test -p anchor-{lang,spl}-v2` / `-p tests-v2`
-      # invocations that used to live here (including `anchor-lang-v2`'s
+      # invocations that used to live here (including `anchor-lang`'s
       # `--features testing` flag for the Miri-witnesses scaffold) are
       # subsumed by the coverage-v2 steps below — the Makefile's host
       # coverage targets run the same packages under instrumentation.
@@ -85,9 +85,9 @@ jobs:
         run: make coverage-v2-sbf-prune
       - name: v2 host coverage setup
         run: make coverage-v2-host-clean
-      - name: v2 host coverage for anchor-lang-v2
+      - name: v2 host coverage for anchor-lang
         run: make coverage-v2-host-lang
-      - name: v2 host coverage for anchor-spl-v2
+      - name: v2 host coverage for anchor-spl
         run: make coverage-v2-host-spl
       - name: v2 host coverage for tests-v2
         env:
@@ -137,13 +137,13 @@ jobs:
         run: |
           rustup toolchain install nightly --component miri --profile minimal
           cargo +nightly miri setup
-      - name: Miri (Tree Borrows) for anchor-lang-v2 + anchor-spl-v2
+      - name: Miri (Tree Borrows) for anchor-lang + anchor-spl
         env:
           MIRIFLAGS: '-Zmiri-tree-borrows'
-        run: cargo +nightly miri test -p anchor-lang-v2 -p anchor-spl-v2 --tests --features anchor-lang-v2/testing
+        run: cargo +nightly miri test -p anchor-lang -p anchor-spl --tests --features anchor-lang/testing
 
       # Kani harnesses live in-tree under `#[cfg(kani)]` and are runnable
-      # locally via `cargo kani -p anchor-lang-v2` / `-p anchor-spl-v2`,
+      # locally via `cargo kani -p anchor-lang` / `-p anchor-spl`,
       # but are not wired into CI: kani-verifier 0.67.0 has an
       # upstream-deterministic `.unwrap()` panic on CBMC `ERROR` status
       # lines (kani#4519, fixed on main in #4540, not yet released).

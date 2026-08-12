@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use anchor_lang_v2::{
+use anchor_lang::{
     account, declare_id, declare_program, AccountDeserialize, Discriminator, BORSH_CONFIG,
 };
 
@@ -44,7 +44,7 @@ fn pod_account_deserializes_full_bytes_in_checked_and_unchecked_modes() {
 #[test]
 fn borsh_account_deserializes_full_bytes_in_checked_and_unchecked_modes() {
     let payload =
-        anchor_lang_v2::wincode::config::serialize(&BorshCounter { value: 11 }, BORSH_CONFIG)
+        anchor_lang::wincode::config::serialize(&BorshCounter { value: 11 }, BORSH_CONFIG)
             .unwrap();
     let full = full_account_bytes::<BorshCounter>(&payload);
 
@@ -61,7 +61,7 @@ fn borsh_account_deserializes_full_bytes_in_checked_and_unchecked_modes() {
 
 #[test]
 fn declared_program_accounts_implement_account_deserialize() {
-    let payload = anchor_lang_v2::wincode::config::serialize(
+    let payload = anchor_lang::wincode::config::serialize(
         &deserialize_surface::DeclaredCounter { value: 19 },
         BORSH_CONFIG,
     )

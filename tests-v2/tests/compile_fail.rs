@@ -74,7 +74,7 @@ impl<'a> CompileCase<'a> {
         }
         fs::create_dir_all(&src_dir).unwrap();
 
-        let anchor_lang_v2 = manifest_dir
+        let anchor_lang = manifest_dir
             .parent()
             .expect("tests-v2 should live under the workspace root")
             .join("lang-v2");
@@ -89,7 +89,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-anchor-lang-v2 = {{ path = "{}" }}
+anchor-lang = {{ path = "{}" }}
 wincode = {{ version = "0.5", features = ["derive"] }}
 {}
 
@@ -100,7 +100,7 @@ idl-build = []
 [workspace]
 "#,
                 self.name,
-                anchor_lang_v2.display(),
+                anchor_lang.display(),
                 self.deps.join("\n")
             ),
         )
@@ -168,7 +168,7 @@ fn declare_program_case<'a>(name: &'a str, idl: &'a str) -> CompileCase<'a> {
     CompileCase::new(
         name,
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_program!(bad);
 "#,
@@ -185,7 +185,7 @@ fn program_interface_mode_compiles_client_and_cpi_surface() {
     CompileCase::new(
         "program_interface_mode",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -193,7 +193,7 @@ pub mod declared {
     use super::*;
 
     pub const ID: Address =
-        anchor_lang_v2::address!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
+        anchor_lang::address!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
 
     #[derive(Accounts)]
     pub struct Invoke {
@@ -214,7 +214,7 @@ pub mod declared {
     }
 }
 
-pub fn build_ix(authority: Address, data: Address) -> anchor_lang_v2::solana_program::instruction::Instruction {
+pub fn build_ix(authority: Address, data: Address) -> anchor_lang::solana_program::instruction::Instruction {
     let accounts = declared::accounts::Invoke { authority, data };
     declared::instruction::Invoke { amount: 5 }.to_instruction(accounts)
 }
@@ -240,7 +240,7 @@ fn qualified_context_accounts_path_compiles_client_and_cpi_surface() {
     CompileCase::new(
         "qualified_context_accounts_path",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -263,7 +263,7 @@ pub mod qualified_context_accounts_path {
     }
 }
 
-pub fn build_ix(system_program: Address) -> anchor_lang_v2::solana_program::instruction::Instruction {
+pub fn build_ix(system_program: Address) -> anchor_lang::solana_program::instruction::Instruction {
     let accounts = crate::accounts::DoThing { system_program };
     crate::instruction::DoThing {}.to_instruction(accounts)
 }
@@ -288,11 +288,11 @@ fn program_interface_cpi_optional_accounts_compile() {
     CompileCase::new(
         "program_interface_optional_cpi",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 const EXTERNAL_ID: Address =
-    anchor_lang_v2::address!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
+    anchor_lang::address!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
 
 #[derive(Accounts)]
 pub struct Maybe {
@@ -321,11 +321,11 @@ fn program_interface_rejects_empty_discriminator() {
     CompileCase::new(
         "program_interface_empty_discriminator",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 const EXTERNAL_ID: Address =
-    anchor_lang_v2::address!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
+    anchor_lang::address!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
 
 #[derive(Accounts)]
 pub struct Empty {}
@@ -350,11 +350,11 @@ fn program_interface_rejects_duplicate_discriminators() {
     CompileCase::new(
         "program_interface_duplicate_discriminator",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 const EXTERNAL_ID: Address =
-    anchor_lang_v2::address!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
+    anchor_lang::address!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
 
 #[derive(Accounts)]
 pub struct Empty {}
@@ -385,11 +385,11 @@ fn program_interface_allows_distinct_discriminators_with_shared_prefix_bytes() {
     CompileCase::new(
         "program_interface_shared_prefix_distinct",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 const EXTERNAL_ID: Address =
-    anchor_lang_v2::address!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
+    anchor_lang::address!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
 
 #[derive(Accounts)]
 pub struct Empty {}
@@ -420,11 +420,11 @@ fn program_interface_rejects_prefix_overlapping_discriminators() {
     CompileCase::new(
         "program_interface_prefix_overlap",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 const EXTERNAL_ID: Address =
-    anchor_lang_v2::address!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
+    anchor_lang::address!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
 
 #[derive(Accounts)]
 pub struct Empty {}
@@ -455,7 +455,7 @@ fn namespaced_constraints_accept_qualified_constants_as_values() {
     CompileCase::new(
         "namespaced_constraint_qualified_constant",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 #[derive(Default, wincode::SchemaRead, wincode::SchemaWrite)]
 pub struct Counter {
@@ -478,7 +478,7 @@ pub mod counter_ns {
     impl AccountConstraint<BorshAccount<Counter>> for MinValueConstraint {
         type Value = u64;
 
-        fn check(_: &BorshAccount<Counter>, _: &u64) -> anchor_lang_v2::Result<()> {
+        fn check(_: &BorshAccount<Counter>, _: &u64) -> anchor_lang::Result<()> {
             Ok(())
         }
     }
@@ -508,8 +508,8 @@ fn namespaced_constraints_accept_instruction_args_in_exit_hooks() {
     CompileCase::new(
         "namespaced_constraint_instruction_arg_exit",
         r#"
-use anchor_lang_v2::prelude::*;
-use anchor_spl_v2::{
+use anchor_lang::prelude::*;
+use anchor_spl::{
     mint::{self, Mint},
     token::Token,
 };
@@ -540,7 +540,7 @@ pub struct Good {
 "#,
     )
     .dep(format!(
-        "anchor-spl-v2 = {{ path = \"{}\", features = [\"guardrails\"] }}",
+        "anchor-spl = {{ path = \"{}\", features = [\"guardrails\"] }}",
         spl.display()
     ))
     .expect_pass();
@@ -556,8 +556,8 @@ fn namespaced_constraints_accept_sibling_field_paths_in_exit_and_update_hooks() 
     CompileCase::new(
         "namespaced_constraint_sibling_field_paths",
         r#"
-use anchor_lang_v2::prelude::*;
-use anchor_spl_v2::mint::{self, Mint};
+use anchor_lang::prelude::*;
+use anchor_spl::mint::{self, Mint};
 
 declare_id!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
 
@@ -581,7 +581,7 @@ pub struct Good {
 "#,
     )
     .dep(format!(
-        "anchor-spl-v2 = {{ path = \"{}\", features = [\"guardrails\"] }}",
+        "anchor-spl = {{ path = \"{}\", features = [\"guardrails\"] }}",
         spl.display()
     ))
     .expect_pass();
@@ -597,8 +597,8 @@ fn namespaced_constraints_reject_self_refs_during_init() {
     CompileCase::new(
         "namespaced_constraint_init_self_ref",
         r#"
-use anchor_lang_v2::prelude::*;
-use anchor_spl_v2::token::{Token, TokenAccount};
+use anchor_lang::prelude::*;
+use anchor_spl::token::{Token, TokenAccount};
 
 declare_id!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
 
@@ -614,7 +614,7 @@ pub struct Bad {
 "#,
     )
     .dep(format!(
-        "anchor-spl-v2 = {{ path = \"{}\", features = [\"guardrails\"] }}",
+        "anchor-spl = {{ path = \"{}\", features = [\"guardrails\"] }}",
         spl.display()
     ))
     .expect_fail(&[
@@ -632,8 +632,8 @@ fn namespaced_constraints_reject_later_init_refs() {
     CompileCase::new(
         "namespaced_constraint_later_init_ref",
         r#"
-use anchor_lang_v2::prelude::*;
-use anchor_spl_v2::{
+use anchor_lang::prelude::*;
+use anchor_spl::{
     mint::Mint,
     token::{Token, TokenAccount},
 };
@@ -654,7 +654,7 @@ pub struct Bad {
 "#,
     )
     .dep(format!(
-        "anchor-spl-v2 = {{ path = \"{}\", features = [\"guardrails\"] }}",
+        "anchor-spl = {{ path = \"{}\", features = [\"guardrails\"] }}",
         spl.display()
     ))
     .expect_fail(&["cannot reference later init field `mint` before it is initialized"]);
@@ -670,15 +670,15 @@ fn namespaced_constraints_reject_non_account_rhs_for_init_params() {
     CompileCase::new(
         "namespaced_constraint_init_const_authority_rejected",
         r#"
-use anchor_lang_v2::prelude::*;
-use anchor_spl_v2::{
+use anchor_lang::prelude::*;
+use anchor_spl::{
     mint::Mint,
     token::Token,
 };
 
 declare_id!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
 
-const AUTH: Address = anchor_lang_v2::address!("11111111111111111111111111111111");
+const AUTH: Address = anchor_lang::address!("11111111111111111111111111111111");
 
 #[derive(Accounts)]
 pub struct Bad {
@@ -692,7 +692,7 @@ pub struct Bad {
 "#,
     )
     .dep(format!(
-        "anchor-spl-v2 = {{ path = \"{}\", features = [\"guardrails\"] }}",
+        "anchor-spl = {{ path = \"{}\", features = [\"guardrails\"] }}",
         spl.display()
     ))
     .expect_fail(&[
@@ -702,15 +702,15 @@ pub struct Bad {
     CompileCase::new(
         "namespaced_constraint_init_const_freeze_authority_rejected",
         r#"
-use anchor_lang_v2::prelude::*;
-use anchor_spl_v2::{
+use anchor_lang::prelude::*;
+use anchor_spl::{
     mint::Mint,
     token::Token,
 };
 
 declare_id!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
 
-const AUTH: Address = anchor_lang_v2::address!("11111111111111111111111111111111");
+const AUTH: Address = anchor_lang::address!("11111111111111111111111111111111");
 
 #[derive(Accounts)]
 pub struct Bad {
@@ -730,7 +730,7 @@ pub struct Bad {
 "#,
     )
     .dep(format!(
-        "anchor-spl-v2 = {{ path = \"{}\", features = [\"guardrails\"] }}",
+        "anchor-spl = {{ path = \"{}\", features = [\"guardrails\"] }}",
         spl.display()
     ))
     .expect_fail(&[
@@ -740,15 +740,15 @@ pub struct Bad {
     CompileCase::new(
         "namespaced_constraint_init_const_mint_token_program_rejected",
         r#"
-use anchor_lang_v2::prelude::*;
-use anchor_spl_v2::{
+use anchor_lang::prelude::*;
+use anchor_spl::{
     mint::Mint,
     token::Token,
 };
 
 declare_id!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
 
-const TOKEN_PROGRAM_ID: Address = anchor_lang_v2::address!("11111111111111111111111111111111");
+const TOKEN_PROGRAM_ID: Address = anchor_lang::address!("11111111111111111111111111111111");
 
 #[derive(Accounts)]
 pub struct Bad {
@@ -768,7 +768,7 @@ pub struct Bad {
 "#,
     )
     .dep(format!(
-        "anchor-spl-v2 = {{ path = \"{}\", features = [\"guardrails\"] }}",
+        "anchor-spl = {{ path = \"{}\", features = [\"guardrails\"] }}",
         spl.display()
     ))
     .expect_fail(&[
@@ -778,12 +778,12 @@ pub struct Bad {
     CompileCase::new(
         "namespaced_constraint_init_const_token_mint_rejected",
         r#"
-use anchor_lang_v2::prelude::*;
-use anchor_spl_v2::token::{Token, TokenAccount};
+use anchor_lang::prelude::*;
+use anchor_spl::token::{Token, TokenAccount};
 
 declare_id!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
 
-const MINT: Address = anchor_lang_v2::address!("11111111111111111111111111111111");
+const MINT: Address = anchor_lang::address!("11111111111111111111111111111111");
 
 #[derive(Accounts)]
 pub struct Bad {
@@ -797,7 +797,7 @@ pub struct Bad {
 "#,
     )
     .dep(format!(
-        "anchor-spl-v2 = {{ path = \"{}\", features = [\"guardrails\"] }}",
+        "anchor-spl = {{ path = \"{}\", features = [\"guardrails\"] }}",
         spl.display()
     ))
     .expect_fail(&[
@@ -807,15 +807,15 @@ pub struct Bad {
     CompileCase::new(
         "namespaced_constraint_init_const_token_authority_rejected",
         r#"
-use anchor_lang_v2::prelude::*;
-use anchor_spl_v2::{
+use anchor_lang::prelude::*;
+use anchor_spl::{
     mint::Mint,
     token::{Token, TokenAccount},
 };
 
 declare_id!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
 
-const AUTH: Address = anchor_lang_v2::address!("11111111111111111111111111111111");
+const AUTH: Address = anchor_lang::address!("11111111111111111111111111111111");
 
 #[derive(Accounts)]
 pub struct Bad {
@@ -830,7 +830,7 @@ pub struct Bad {
 "#,
     )
     .dep(format!(
-        "anchor-spl-v2 = {{ path = \"{}\", features = [\"guardrails\"] }}",
+        "anchor-spl = {{ path = \"{}\", features = [\"guardrails\"] }}",
         spl.display()
     ))
     .expect_fail(&[
@@ -840,15 +840,15 @@ pub struct Bad {
     CompileCase::new(
         "namespaced_constraint_init_const_token_token_program_rejected",
         r#"
-use anchor_lang_v2::prelude::*;
-use anchor_spl_v2::{
+use anchor_lang::prelude::*;
+use anchor_spl::{
     mint::Mint,
     token::{Token, TokenAccount},
 };
 
 declare_id!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
 
-const TOKEN_PROGRAM_ID: Address = anchor_lang_v2::address!("11111111111111111111111111111111");
+const TOKEN_PROGRAM_ID: Address = anchor_lang::address!("11111111111111111111111111111111");
 
 #[derive(Accounts)]
 pub struct Bad {
@@ -869,7 +869,7 @@ pub struct Bad {
 "#,
     )
     .dep(format!(
-        "anchor-spl-v2 = {{ path = \"{}\", features = [\"guardrails\"] }}",
+        "anchor-spl = {{ path = \"{}\", features = [\"guardrails\"] }}",
         spl.display()
     ))
     .expect_fail(&[
@@ -879,8 +879,8 @@ pub struct Bad {
     CompileCase::new(
         "namespaced_constraint_init_nested_field_authority_rejected",
         r#"
-use anchor_lang_v2::prelude::*;
-use anchor_spl_v2::{
+use anchor_lang::prelude::*;
+use anchor_spl::{
     mint::Mint,
     token::Token,
 };
@@ -905,7 +905,7 @@ pub struct Bad {
 "#,
     )
     .dep(format!(
-        "anchor-spl-v2 = {{ path = \"{}\", features = [\"guardrails\"] }}",
+        "anchor-spl = {{ path = \"{}\", features = [\"guardrails\"] }}",
         spl.display()
     ))
     .expect_fail(&[
@@ -918,7 +918,7 @@ fn nested_bumps_compile_through_nested_context_surface() {
     CompileCase::new(
         "nested_bumps_context_surface",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -947,7 +947,7 @@ fn nested_bumps_reject_flat_access_for_nested_accounts() {
     CompileCase::new(
         "nested_bumps_flat_access",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -976,7 +976,7 @@ fn associated_token_rejects_unknown_constraint_key() {
     CompileCase::new(
         "associated_token_unknown_constraint_key",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -1008,7 +1008,7 @@ fn declare_program_missing_idls_directory_fails_clearly() {
     CompileCase::new(
         "declare_program_missing_idls_directory",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_program!(bad);
 "#,
@@ -1030,11 +1030,11 @@ fn declare_program_legacy_idl_conversion_compiles() {
     CompileCase::new(
         "declare_program_legacy_idl_conversion",
         r#"
-use anchor_lang_v2::{prelude::*, Event as _};
+use anchor_lang::{prelude::*, Event as _};
 
 declare_program!(legacy);
 
-pub fn build_ix(authority: Address, data: Address, owner: Address) -> anchor_lang_v2::solana_program::instruction::Instruction {
+pub fn build_ix(authority: Address, data: Address, owner: Address) -> anchor_lang::solana_program::instruction::Instruction {
     let _event_data = legacy::events::LegacyEvent { value: 7 }.data();
     let _constant = legacy::constants::LEGACY_BYTES;
     let _error = legacy::error::LegacyError::LegacyError as u32;
@@ -1116,7 +1116,7 @@ fn event_bytemuck_rejects_host_padding_layouts() {
     CompileCase::new(
         "event_bytemuck_rejects_host_padding_layouts",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 #[event(bytemuck)]
 pub struct BadLayout {
@@ -1134,7 +1134,7 @@ fn event_bytemuck_accepts_explicit_padding() {
     CompileCase::new(
         "event_bytemuck_accepts_explicit_padding",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 #[event(bytemuck)]
 pub struct GoodLayout {
@@ -1387,7 +1387,7 @@ fn declare_program_return_wrapper_compiles_for_returning_cpi() {
     CompileCase::new(
         "declare_program_return_wrapper",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_program!(bad);
 
@@ -1425,14 +1425,14 @@ fn declare_program_object_tuple_fields_compile() {
     CompileCase::new(
         "declare_program_object_tuple_fields",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_program!(bad);
 
 pub fn use_declared_types(
     value: bad::ObjectTuple,
     variant: bad::ObjectEnum,
-) -> anchor_lang_v2::__alloc::vec::Vec<u8> {
+) -> anchor_lang::__alloc::vec::Vec<u8> {
     let bad::ObjectTuple(bytes, maybe) = value;
     let _ = maybe;
     match variant {
@@ -1488,7 +1488,7 @@ fn declare_program_mixed_object_field_shapes_fail_cleanly() {
     CompileCase::new(
         "declare_program_mixed_object_field_shapes",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_program!(bad);
 "#,
@@ -1524,7 +1524,7 @@ fn declare_program_non_returning_cpi_has_no_return_wrapper() {
     CompileCase::new(
         "declare_program_non_return_wrapper",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_program!(bad);
 
@@ -1561,7 +1561,7 @@ fn executable_program_rejects_arbitrary_discriminator_bytes() {
     CompileCase::new(
         "executable_program_arbitrary_discriminator",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -1588,11 +1588,11 @@ fn executable_program_rejects_program_id_override() {
     CompileCase::new(
         "executable_program_id_override",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 const EXTERNAL_ID: Address =
-    anchor_lang_v2::address!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
+    anchor_lang::address!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
 
 #[derive(Accounts)]
 pub struct Empty {}
@@ -1616,7 +1616,7 @@ fn instruction_args_without_handler_args_do_not_compile() {
     CompileCase::new(
         "instruction_args_without_handler_args",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -1646,7 +1646,7 @@ fn extra_instruction_args_do_not_compile() {
     CompileCase::new(
         "extra_instruction_args",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -1676,7 +1676,7 @@ fn missing_instruction_args_do_not_compile() {
     CompileCase::new(
         "missing_instruction_args",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -1706,7 +1706,7 @@ fn wrong_instruction_arg_type_does_not_compile() {
     CompileCase::new(
         "wrong_instruction_arg_type",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -1736,7 +1736,7 @@ fn swapped_instruction_arg_types_do_not_compile() {
     CompileCase::new(
         "swapped_instruction_arg_types",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -1766,7 +1766,7 @@ fn close_on_unchecked_account_does_not_compile() {
     CompileCase::new(
         "close_on_unchecked_account",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -1801,7 +1801,7 @@ fn close_on_boxed_unchecked_account_does_not_compile() {
     CompileCase::new(
         "close_on_boxed_unchecked_account",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -1836,7 +1836,7 @@ fn close_on_optional_unchecked_account_does_not_compile() {
     CompileCase::new(
         "close_on_optional_unchecked_account",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -1871,7 +1871,7 @@ fn close_requires_mut_on_source_account() {
     CompileCase::new(
         "close_requires_mut_on_source_account",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -1903,7 +1903,7 @@ fn account_attrs_on_nested_field_do_not_compile() {
     CompileCase::new(
         "account_attrs_on_nested_field",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -1938,7 +1938,7 @@ fn slab_overaligned_header_does_not_compile() {
     CompileCase::new(
         "slab_overaligned_header",
         r#"
-use anchor_lang_v2::{
+use anchor_lang::{
     accounts::{Slab, SlabSchema},
     prelude::*,
     AccountView,
@@ -1950,8 +1950,8 @@ pub struct BadHeader {
     bytes: [u8; 16],
 }
 
-unsafe impl anchor_lang_v2::bytemuck::Zeroable for BadHeader {}
-unsafe impl anchor_lang_v2::bytemuck::Pod for BadHeader {}
+unsafe impl anchor_lang::bytemuck::Zeroable for BadHeader {}
+unsafe impl anchor_lang::bytemuck::Pod for BadHeader {}
 
 impl SlabSchema for BadHeader {
     const DATA_OFFSET: usize = 0;
@@ -1979,7 +1979,7 @@ fn slab_misaligned_header_offset_does_not_compile() {
     CompileCase::new(
         "slab_misaligned_header_offset",
         r#"
-use anchor_lang_v2::{
+use anchor_lang::{
     accounts::{Slab, SlabSchema},
     prelude::*,
     AccountView,
@@ -1991,8 +1991,8 @@ pub struct BadHeader {
     value: u64,
 }
 
-unsafe impl anchor_lang_v2::bytemuck::Zeroable for BadHeader {}
-unsafe impl anchor_lang_v2::bytemuck::Pod for BadHeader {}
+unsafe impl anchor_lang::bytemuck::Zeroable for BadHeader {}
+unsafe impl anchor_lang::bytemuck::Pod for BadHeader {}
 
 impl SlabSchema for BadHeader {
     const DATA_OFFSET: usize = 1;
@@ -2020,7 +2020,7 @@ fn slab_overaligned_tail_does_not_compile() {
     CompileCase::new(
         "slab_overaligned_tail",
         r#"
-use anchor_lang_v2::{
+use anchor_lang::{
     accounts::{Slab, SlabSchema},
     prelude::*,
     AccountView,
@@ -2032,8 +2032,8 @@ pub struct GoodHeader {
     value: u64,
 }
 
-unsafe impl anchor_lang_v2::bytemuck::Zeroable for GoodHeader {}
-unsafe impl anchor_lang_v2::bytemuck::Pod for GoodHeader {}
+unsafe impl anchor_lang::bytemuck::Zeroable for GoodHeader {}
+unsafe impl anchor_lang::bytemuck::Pod for GoodHeader {}
 
 impl SlabSchema for GoodHeader {
     const DATA_OFFSET: usize = 0;
@@ -2051,8 +2051,8 @@ impl SlabSchema for GoodHeader {
 #[derive(Clone, Copy)]
 pub struct OveralignedTail([u8; 16]);
 
-unsafe impl anchor_lang_v2::bytemuck::Zeroable for OveralignedTail {}
-unsafe impl anchor_lang_v2::bytemuck::Pod for OveralignedTail {}
+unsafe impl anchor_lang::bytemuck::Zeroable for OveralignedTail {}
+unsafe impl anchor_lang::bytemuck::Pod for OveralignedTail {}
 
 pub unsafe fn load_bad(view: AccountView) {
     let _ = <Slab<GoodHeader, OveralignedTail> as AnchorAccount>::load_mut(view);
@@ -2068,7 +2068,7 @@ fn slab_zero_sized_pod_tail_does_not_compile() {
     CompileCase::new(
         "slab_zero_sized_pod_tail",
         r#"
-use anchor_lang_v2::{
+use anchor_lang::{
     accounts::{Slab, SlabSchema},
     prelude::*,
 };
@@ -2079,8 +2079,8 @@ pub struct GoodHeader {
     value: u64,
 }
 
-unsafe impl anchor_lang_v2::bytemuck::Zeroable for GoodHeader {}
-unsafe impl anchor_lang_v2::bytemuck::Pod for GoodHeader {}
+unsafe impl anchor_lang::bytemuck::Zeroable for GoodHeader {}
+unsafe impl anchor_lang::bytemuck::Pod for GoodHeader {}
 
 impl SlabSchema for GoodHeader {
     const DATA_OFFSET: usize = 0;
@@ -2108,7 +2108,7 @@ fn realloc_on_unchecked_account_does_not_compile() {
     CompileCase::new(
         "realloc_on_unchecked_account",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -2140,7 +2140,7 @@ fn realloc_on_boxed_unchecked_account_does_not_compile() {
     CompileCase::new(
         "realloc_on_boxed_unchecked_account",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -2172,7 +2172,7 @@ fn realloc_on_optional_unchecked_account_does_not_compile() {
     CompileCase::new(
         "realloc_on_optional_unchecked_account",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -2204,7 +2204,7 @@ fn realloc_on_unchecked_account_alias_does_not_compile() {
     CompileCase::new(
         "realloc_on_unchecked_account_alias",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 type UA = UncheckedAccount;
 
@@ -2225,8 +2225,8 @@ fn realloc_on_renamed_unchecked_account_does_not_compile() {
     CompileCase::new(
         "realloc_on_renamed_unchecked_account",
         r#"
-use anchor_lang_v2::prelude::*;
-use anchor_lang_v2::accounts::UncheckedAccount as UA;
+use anchor_lang::prelude::*;
+use anchor_lang::accounts::UncheckedAccount as UA;
 
 #[derive(Accounts)]
 pub struct Resize {
@@ -2245,7 +2245,7 @@ fn realloc_on_box_alias_unchecked_account_does_not_compile() {
     CompileCase::new(
         "realloc_on_box_alias_unchecked_account",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 type MyBox<T> = Box<T>;
 
@@ -2266,7 +2266,7 @@ fn realloc_on_borsh_account_alias_compiles() {
     CompileCase::new(
         "realloc_on_borsh_account_alias",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 #[derive(wincode::SchemaRead, wincode::SchemaWrite, Default)]
 pub struct Data {
@@ -2300,7 +2300,7 @@ pub struct Resize {
 // with a diagnostic that points at `#[derive(IdlType)]` (the old message
 // suggested `#[account]`, which drags in Pod/discriminator baggage).
 const DEFINED_ARGS_PROGRAM: &str = r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 

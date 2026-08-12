@@ -1,5 +1,5 @@
 use {
-    anchor_lang_v2::{AccountDeserialize, Discriminator, Id, InstructionData, BORSH_CONFIG},
+    anchor_lang::{AccountDeserialize, Discriminator, Id, InstructionData, BORSH_CONFIG},
     declare_program_serialization::serialization,
     solana_pubkey::Pubkey,
 };
@@ -23,32 +23,32 @@ fn declared_serialization_exports_program_marker_and_id() {
 fn declared_program_type_serialization_controls_account_traits() {
     fn assert_borsh_account<T>()
     where
-        T: anchor_lang_v2::Owner
-            + anchor_lang_v2::Discriminator
-            + anchor_lang_v2::AccountDeserialize
-            + anchor_lang_v2::IdlAccountType
-            + anchor_lang_v2::wincode::SchemaWrite<anchor_lang_v2::BorshConfig, Src = T>
-            + for<'de> anchor_lang_v2::wincode::SchemaRead<'de, anchor_lang_v2::BorshConfig, Dst = T>,
+        T: anchor_lang::Owner
+            + anchor_lang::Discriminator
+            + anchor_lang::AccountDeserialize
+            + anchor_lang::IdlAccountType
+            + anchor_lang::wincode::SchemaWrite<anchor_lang::BorshConfig, Src = T>
+            + for<'de> anchor_lang::wincode::SchemaRead<'de, anchor_lang::BorshConfig, Dst = T>,
     {
     }
 
     fn assert_borsh_account_wrapper_idl<T>()
     where
-        T: anchor_lang_v2::Owner
-            + anchor_lang_v2::Discriminator
-            + anchor_lang_v2::wincode::SchemaWrite<anchor_lang_v2::BorshConfig, Src = T>
-            + for<'de> anchor_lang_v2::wincode::SchemaRead<'de, anchor_lang_v2::BorshConfig, Dst = T>,
-        anchor_lang_v2::accounts::BorshAccount<T>: anchor_lang_v2::IdlAccountType,
+        T: anchor_lang::Owner
+            + anchor_lang::Discriminator
+            + anchor_lang::wincode::SchemaWrite<anchor_lang::BorshConfig, Src = T>
+            + for<'de> anchor_lang::wincode::SchemaRead<'de, anchor_lang::BorshConfig, Dst = T>,
+        anchor_lang::accounts::BorshAccount<T>: anchor_lang::IdlAccountType,
     {
     }
 
     fn assert_zero_copy_account<T>()
     where
-        T: anchor_lang_v2::Owner
-            + anchor_lang_v2::Discriminator
-            + anchor_lang_v2::accounts::SlabSchema
-            + anchor_lang_v2::bytemuck::Pod
-            + anchor_lang_v2::bytemuck::Zeroable,
+        T: anchor_lang::Owner
+            + anchor_lang::Discriminator
+            + anchor_lang::accounts::SlabSchema
+            + anchor_lang::bytemuck::Pod
+            + anchor_lang::bytemuck::Zeroable,
     {
     }
 
@@ -60,12 +60,12 @@ fn declared_program_type_serialization_controls_account_traits() {
     assert_zero_copy_account::<serialization::UnsafeZeroCopyAccount>();
 
     assert!(
-        <serialization::ImplicitBorshAccount as anchor_lang_v2::IdlAccountType>::__IDL_ACCOUNT_ENTRY
+        <serialization::ImplicitBorshAccount as anchor_lang::IdlAccountType>::__IDL_ACCOUNT_ENTRY
             .expect("declared account type should have an IDL account entry")
             .contains("\"name\":\"ImplicitBorshAccount\"")
     );
     assert!(
-        <serialization::ImplicitBorshAccount as anchor_lang_v2::IdlAccountType>::__IDL_TYPE_DEF
+        <serialization::ImplicitBorshAccount as anchor_lang::IdlAccountType>::__IDL_TYPE_DEF
             .expect("declared account type should have an IDL type definition")
             .contains("\"name\":\"ImplicitBorshAccount\"")
     );
@@ -88,7 +88,7 @@ fn declared_program_type_serialization_controls_account_traits() {
     );
 
     assert_eq!(
-        <serialization::ImplicitBorshAccount as anchor_lang_v2::Owner>::OWNER,
+        <serialization::ImplicitBorshAccount as anchor_lang::Owner>::OWNER,
         serialization::ID
     );
 
@@ -118,7 +118,7 @@ fn declared_program_type_serialization_controls_account_traits() {
         narrow: 0x1112_1314,
         tag: *b"zero",
     };
-    let zero_bytes = anchor_lang_v2::bytemuck::bytes_of(&zero);
+    let zero_bytes = anchor_lang::bytemuck::bytes_of(&zero);
     assert_eq!(zero_bytes.len(), 16);
     assert_eq!(&zero_bytes[..8], &0x0102_0304_0506_0708u64.to_le_bytes());
     assert_eq!(&zero_bytes[8..12], &0x1112_1314u32.to_le_bytes());
@@ -133,7 +133,7 @@ fn declared_account_deserialize_unchecked_skips_discriminator_prefix() {
         items: vec![5, 6, 7],
     };
     let payload =
-        anchor_lang_v2::wincode::config::serialize(&original, BORSH_CONFIG).unwrap();
+        anchor_lang::wincode::config::serialize(&original, BORSH_CONFIG).unwrap();
     let mut bytes = Vec::from(serialization::ImplicitBorshAccount::DISCRIMINATOR);
     bytes.extend_from_slice(&payload);
 
@@ -155,7 +155,7 @@ fn declared_account_deserialize_rejects_wrong_discriminator() {
         items: vec![8, 9],
     };
     let payload =
-        anchor_lang_v2::wincode::config::serialize(&original, BORSH_CONFIG).unwrap();
+        anchor_lang::wincode::config::serialize(&original, BORSH_CONFIG).unwrap();
     let mut bytes = vec![0u8; serialization::ImplicitBorshAccount::DISCRIMINATOR.len()];
     bytes.extend_from_slice(&payload);
 

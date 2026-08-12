@@ -1,5 +1,5 @@
 use {
-    anchor_lang_v2::{
+    anchor_lang::{
         accounts::{Program, Signer, UncheckedAccount},
         cpi::rent_exempt_lamports,
         programs::{System, Token},
@@ -217,7 +217,7 @@ impl AccountInitialize for FakeTokenAccount {
 mod mint {
     use {
         super::FakeMintAccount,
-        anchor_lang_v2::{AccountConstraint, Error},
+        anchor_lang::{AccountConstraint, Error},
         solana_program_error::ProgramError,
     };
 
@@ -227,7 +227,7 @@ mod mint {
         type Value = pinocchio::address::Address;
 
         fn check(account: &FakeMintAccount, expected: &Self::Value) -> Result<(), ProgramError> {
-            if !anchor_lang_v2::address_eq(account.authority(), expected) {
+            if !anchor_lang::address_eq(account.authority(), expected) {
                 return Err(Error::InvalidAccountData);
             }
             Ok(())
@@ -264,7 +264,7 @@ mod mint {
 mod token {
     use {
         super::FakeTokenAccount,
-        anchor_lang_v2::{AccountConstraint, Error},
+        anchor_lang::{AccountConstraint, Error},
         solana_program_error::ProgramError,
     };
 
@@ -274,7 +274,7 @@ mod token {
         type Value = pinocchio::address::Address;
 
         fn check(account: &FakeTokenAccount, expected: &Self::Value) -> Result<(), ProgramError> {
-            if !anchor_lang_v2::address_eq(account.authority(), expected) {
+            if !anchor_lang::address_eq(account.authority(), expected) {
                 return Err(Error::InvalidAccountData);
             }
             Ok(())
@@ -287,7 +287,7 @@ mod token {
         type Value = pinocchio::address::Address;
 
         fn check(account: &FakeTokenAccount, expected: &Self::Value) -> Result<(), ProgramError> {
-            if !anchor_lang_v2::address_eq(account.mint(), expected) {
+            if !anchor_lang::address_eq(account.mint(), expected) {
                 return Err(Error::InvalidAccountData);
             }
             Ok(())

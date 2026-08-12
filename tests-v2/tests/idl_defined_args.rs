@@ -6,7 +6,7 @@
 
 use {
     anchor_lang_idl_spec::{IdlArrayLen, IdlDefinedFields, IdlType, IdlTypeDef, IdlTypeDefTy},
-    anchor_lang_v2::IdlAccountType,
+    anchor_lang::IdlAccountType,
 };
 
 #[test]

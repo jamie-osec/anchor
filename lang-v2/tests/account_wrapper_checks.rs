@@ -11,10 +11,10 @@
 //! auth bypass (see `program.rs` and `sysvar.rs` docs on why
 //! `address = X @ MyErr` cannot override these).
 //!
-//! Run: `cargo test -p anchor-lang-v2 --features testing --test account_wrapper_checks`
+//! Run: `cargo test -p anchor-lang --features testing --test account_wrapper_checks`
 
 use {
-    anchor_lang_v2::{
+    anchor_lang::{
         accounts::{
             Account, BorshAccount, Interface, Program, Signer, SlabSchema, SystemAccount, Sysvar,
             UncheckedAccount,

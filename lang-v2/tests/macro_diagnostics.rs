@@ -20,7 +20,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-anchor-lang-v2 = {{ path = "{}" }}
+anchor-lang = {{ path = "{}" }}
 wincode = {{ version = "0.5", features = ["derive"] }}
 
 [features]
@@ -114,7 +114,7 @@ fn raw_constraint_rejects_obvious_non_bool_literals() {
     compile_fail_case(
         "raw_constraint_non_bool",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
 pub struct Bad {
@@ -138,7 +138,7 @@ fn invalid_account_arguments_are_targeted() {
     compile_fail_case(
         "invalid_account_argument",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
 pub struct Bad {
@@ -159,7 +159,7 @@ fn unsafe_dup_constraint_has_targeted_message() {
     compile_fail_case(
         "unsafe_dup_required",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
 pub struct Bad {
@@ -183,7 +183,7 @@ fn init_space_rejects_union_and_unsized_reference_fields() {
     compile_fail_case(
         "init_space_union",
         r#"
-use anchor_lang_v2::InitSpace;
+use anchor_lang::InitSpace;
 
 #[derive(Copy, Clone, InitSpace)]
 union Bad {
@@ -196,7 +196,7 @@ union Bad {
     compile_fail_case(
         "init_space_reference",
         r#"
-use anchor_lang_v2::InitSpace;
+use anchor_lang::InitSpace;
 
 #[derive(InitSpace)]
 pub struct Bad<'a> {
@@ -219,7 +219,7 @@ fn init_space_rejects_wincode_field_overrides() {
     compile_fail_case(
         "init_space_wincode_skip",
         r#"
-use anchor_lang_v2::InitSpace;
+use anchor_lang::InitSpace;
 
 #[derive(InitSpace, wincode::SchemaRead, wincode::SchemaWrite)]
 pub struct Bad {
@@ -237,7 +237,7 @@ pub struct Bad {
     compile_fail_case(
         "init_space_wincode_skip_default_val",
         r#"
-use anchor_lang_v2::InitSpace;
+use anchor_lang::InitSpace;
 
 #[derive(InitSpace, wincode::SchemaRead, wincode::SchemaWrite)]
 pub struct Bad {
@@ -255,7 +255,7 @@ pub struct Bad {
     compile_fail_case(
         "init_space_wincode_with",
         r#"
-use anchor_lang_v2::InitSpace;
+use anchor_lang::InitSpace;
 
 #[derive(InitSpace, wincode::SchemaRead, wincode::SchemaWrite)]
 pub struct Bad {
@@ -276,7 +276,7 @@ mod shim {
     compile_fail_case(
         "init_space_wincode_tag_encoding",
         r#"
-use anchor_lang_v2::InitSpace;
+use anchor_lang::InitSpace;
 
 #[derive(InitSpace, wincode::SchemaRead, wincode::SchemaWrite)]
 #[wincode(tag_encoding = "u32")]
@@ -301,7 +301,7 @@ fn idl_generation_rejects_wincode_field_overrides() {
     compile_fail_case(
         "idl_type_wincode_skip",
         r#"
-use anchor_lang_v2::IdlType;
+use anchor_lang::IdlType;
 
 #[derive(IdlType, wincode::SchemaRead, wincode::SchemaWrite)]
 pub struct Bad {
@@ -319,7 +319,7 @@ pub struct Bad {
     compile_fail_case(
         "account_borsh_wincode_skip",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -339,7 +339,7 @@ pub struct Bad {
     compile_fail_case(
         "event_wincode_with",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 #[event]
 pub struct Bad {
@@ -367,7 +367,7 @@ fn idl_generation_rejects_lossy_packed_repr_modifiers() {
     compile_fail_case(
         "event_bytemuck_packed_two",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 #[event(bytemuck)]
 #[repr(C, packed(2))]
@@ -392,7 +392,7 @@ fn malformed_discriminator_attribute_has_targeted_message() {
     compile_fail_case(
         "bad_discriminator",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -422,7 +422,7 @@ fn unknown_error_code_argument_is_rejected() {
     compile_fail_case(
         "unknown_error_code_argument",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 #[error_code(unknown = 7000)]
 pub enum MyError {
@@ -445,7 +445,7 @@ fn instruction_args_must_match_zero_arg_handler() {
     compile_fail_case(
         "instruction_args_without_handler_args",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -479,7 +479,7 @@ fn instruction_args_reject_generated_name_namespace() {
     compile_fail_case(
         "reserved_instruction_arg",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
 #[instruction(__base_offset: usize)]
@@ -501,7 +501,7 @@ fn close_target_cannot_also_be_closed() {
     compile_fail_case(
         "close_chain",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -536,7 +536,7 @@ fn nested_accounts_reject_instruction_arguments() {
     compile_fail_case(
         "nested_instruction_args",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -575,7 +575,7 @@ fn cfg_gated_public_handlers_do_not_emit_missing_wrappers() {
     compile_pass_case(
         "cfg_gated_handler",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -604,7 +604,7 @@ fn cfg_disabled_members_are_omitted_from_idl_and_error_codes() {
     cargo_test_pass_case(
         "cfg_filtered_idl",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -667,7 +667,7 @@ fn slot_hashes_is_not_a_supported_sysvar_account() {
     compile_fail_case(
         "unsupported_slot_hashes_sysvar",
         r#"
-use anchor_lang_v2::{accounts::Sysvar, pinocchio, AnchorAccount};
+use anchor_lang::{accounts::Sysvar, pinocchio, AnchorAccount};
 
 type SlotHashes = pinocchio::sysvars::slot_hashes::SlotHashes<&'static [u8]>;
 
@@ -690,7 +690,7 @@ fn qualified_accounts_paths_compile() {
     compile_pass_case(
         "qualified_accounts_paths",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -742,11 +742,11 @@ fn seeds_preserve_nontrivial_as_ref_receivers() {
     compile_pass_case(
         "seed_nontrivial_as_ref",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
-#[derive(anchor_lang_v2::wincode::SchemaRead, anchor_lang_v2::wincode::SchemaWrite)]
+#[derive(anchor_lang::wincode::SchemaRead, anchor_lang::wincode::SchemaWrite)]
 pub struct SeedBuf(Vec<u8>);
 
 impl SeedBuf {
@@ -755,7 +755,7 @@ impl SeedBuf {
     }
 }
 
-#[derive(anchor_lang_v2::wincode::SchemaRead, anchor_lang_v2::wincode::SchemaWrite)]
+#[derive(anchor_lang::wincode::SchemaRead, anchor_lang::wincode::SchemaWrite)]
 pub struct SeedConfig {
     pub seed: SeedBuf,
 }
@@ -787,11 +787,11 @@ fn init_opaque_seed_expressions_keep_bump_bytes_alive() {
     compile_pass_case(
         "init_opaque_seed_expr",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
-#[derive(anchor_lang_v2::wincode::SchemaRead, anchor_lang_v2::wincode::SchemaWrite)]
+#[derive(anchor_lang::wincode::SchemaRead, anchor_lang::wincode::SchemaWrite)]
 pub struct Data {
     pub value: u64,
 }
@@ -845,7 +845,7 @@ fn init_payer_must_be_mutable() {
     compile_fail_case(
         "init_payer_must_be_mutable",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -868,7 +868,7 @@ pub struct Bad {
     compile_fail_case(
         "init_payer_optional_account_is_rejected",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -899,7 +899,7 @@ fn missing_init_and_realloc_payers_are_diagnosed() {
     compile_fail_case_with_forbidden(
         "missing_init_payer",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -922,7 +922,7 @@ pub struct MissingInitPayer {
     compile_fail_case_with_forbidden(
         "missing_realloc_payer",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -954,7 +954,7 @@ fn realloc_payer_cannot_be_optional() {
     compile_fail_case(
         "realloc_payer_optional_account_is_rejected",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -987,7 +987,7 @@ fn pda_init_payer_must_be_system_account() {
     compile_fail_case(
         "pda_init_payer_must_be_system_account",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 #[account]
 pub struct Data {
@@ -1016,7 +1016,7 @@ fn init_and_init_if_needed_reject_seeds_program() {
     compile_fail_case(
         "init_seeds_program_rejected",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -1050,7 +1050,7 @@ pub struct Bad {
     compile_fail_case(
         "init_if_needed_seeds_program_rejected",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -1091,7 +1091,7 @@ fn seeds_program_requires_seeds_and_rejects_duplicates() {
     compile_fail_case(
         "seeds_program_without_seeds",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -1110,7 +1110,7 @@ pub struct Bad {
     compile_fail_case(
         "duplicate_seeds_program_rejected",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -1143,7 +1143,7 @@ fn optional_pda_init_payer_is_rejected() {
     compile_fail_case(
         "optional_pda_init_payer_is_rejected",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 #[account]
 pub struct Data {
@@ -1172,7 +1172,7 @@ fn close_on_unchecked_account_is_rejected() {
     compile_fail_case(
         "close_on_unchecked_account",
         r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 
@@ -1200,7 +1200,7 @@ fn init_owner_override_rejects_typed_accounts() {
     fn case(name: &str, account_attr: &str, field_ty: &str) {
         let source = format!(
             r#"
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("11111111111111111111111111111111");
 

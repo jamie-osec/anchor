@@ -1,4 +1,4 @@
-use anchor_lang_v2::{
+use anchor_lang::{
     prelude::*,
     testing::{AccountBuffer, MIN_ACCOUNT_BUF},
 };

@@ -809,16 +809,16 @@ fn emit_constraint_expected_binding(
                                 Some(__anchor_account) => *__anchor_account.account().address(),
                                 None => {
                                     return Err(
-                                        anchor_lang_v2::ErrorCode::ConstraintAccountIsNone.into()
+                                        anchor_lang::ErrorCode::ConstraintAccountIsNone.into()
                                     );
                                 }
                             }
                         }
                     } else {
-                        quote! { *anchor_lang_v2::AccountAddress::account_address(&(#value_expr)) }
+                        quote! { *anchor_lang::AccountAddress::account_address(&(#value_expr)) }
                     }
                 } else {
-                    quote! { core::convert::Into::<anchor_lang_v2::Address>::into(#value_expr) }
+                    quote! { core::convert::Into::<anchor_lang::Address>::into(#value_expr) }
                 };
             (
                 quote! {
@@ -955,10 +955,10 @@ fn field_readonly_cpi_handle_expr(
             let field_ty = anchor_account_field_type(&summary.ty);
             let is_mut = summary.attrs.is_mut;
             quote! {
-                anchor_lang_v2::__private::readonly_cpi_handle_for_account_field(
+                anchor_lang::__private::readonly_cpi_handle_for_account_field(
                     #view,
                     #is_mut
-                        && <#field_ty as anchor_lang_v2::AnchorAccount>
+                        && <#field_ty as anchor_lang::AnchorAccount>
                             ::RELAX_READONLY_CPI_BORROW_FROM_MUT,
                 )
             }
@@ -1076,7 +1076,7 @@ fn wrap_init_body_with_constraints(
                 quote! { &#value }
             };
             quote! {
-                <#ns::#key as anchor_lang_v2::AccountConstraint<_>>::init(
+                <#ns::#key as anchor_lang::AccountConstraint<_>>::init(
                     &mut __init, #expected,
                 )?;
             }
@@ -1677,10 +1677,10 @@ fn emit_seeds_check(
                     let bump_assign = wrap_bump(quote! { #bump_const });
                     let check = quote! {
                         const #bump_const: u8 = #bump;
-                        const #pda_const: anchor_lang_v2::Address =
-                            anchor_lang_v2::Address::new_from_array([#(#pda_bytes_tokens),*]);
-                        if !anchor_lang_v2::address_eq(#target_addr_ref, &#pda_const) {
-                            return Err(anchor_lang_v2::ErrorCode::ConstraintSeeds.into());
+                        const #pda_const: anchor_lang::Address =
+                            anchor_lang::Address::new_from_array([#(#pda_bytes_tokens),*]);
+                        if !anchor_lang::address_eq(#target_addr_ref, &#pda_const) {
+                            return Err(anchor_lang::ErrorCode::ConstraintSeeds.into());
                         }
                         #bump_cache = #bump_assign;
                     };
@@ -1722,13 +1722,13 @@ fn emit_seeds_check(
     let find = quote! {
         #(#seed_bindings)*
         let __bump = if #skip_curve {
-            anchor_lang_v2::find_and_verify_program_address_skip_curve(
+            anchor_lang::find_and_verify_program_address_skip_curve(
                 &[#(#seed_refs),*], #pda_program, #target_addr_ref,
-            ).map_err(|_| anchor_lang_v2::ErrorCode::ConstraintSeeds)?
+            ).map_err(|_| anchor_lang::ErrorCode::ConstraintSeeds)?
         } else {
-            anchor_lang_v2::find_and_verify_program_address(
+            anchor_lang::find_and_verify_program_address(
                 &[#(#seed_refs),*], #pda_program, #target_addr_ref,
-            ).map_err(|_| anchor_lang_v2::ErrorCode::ConstraintSeeds)?
+            ).map_err(|_| anchor_lang::ErrorCode::ConstraintSeeds)?
         };
         #bump_cache = #bump_assign;
     };
@@ -1793,11 +1793,11 @@ fn emit_payer_signer_seeds_binding(
         if let Some(Some(ref bump_expr)) = payer_field.attrs.bump {
             return Ok(quote! {
                 #(#seed_bindings)*
-                if #seed_count > anchor_lang_v2::MAX_PAYER_SEEDS {
-                    return Err(anchor_lang_v2::ErrorCode::ConstraintSeeds.into());
+                if #seed_count > anchor_lang::MAX_PAYER_SEEDS {
+                    return Err(anchor_lang::ErrorCode::ConstraintSeeds.into());
                 }
                 let __payer_bump: u8 = #bump_expr;
-                anchor_lang_v2::verify_program_address(
+                anchor_lang::verify_program_address(
                     &[#(#seed_refs),* , &[__payer_bump]],
                     __program_id,
                     __payer.address(),
@@ -1811,13 +1811,13 @@ fn emit_payer_signer_seeds_binding(
 
         return Ok(quote! {
             #(#seed_bindings)*
-            if #seed_count > anchor_lang_v2::MAX_PAYER_SEEDS {
-                return Err(anchor_lang_v2::ErrorCode::ConstraintSeeds.into());
+            if #seed_count > anchor_lang::MAX_PAYER_SEEDS {
+                return Err(anchor_lang::ErrorCode::ConstraintSeeds.into());
             }
             let __payer_bump =
-                anchor_lang_v2::find_and_verify_program_address(
+                anchor_lang::find_and_verify_program_address(
                     &[#(#seed_refs),*], __program_id, __payer.address(),
-                ).map_err(|_| anchor_lang_v2::ErrorCode::ConstraintSeeds)?;
+                ).map_err(|_| anchor_lang::ErrorCode::ConstraintSeeds)?;
             #bump_cache = __payer_bump;
             let __payer_bump_seed = [__payer_bump];
             let __payer_signer_seeds: Option<&[&[u8]]> =
@@ -1829,17 +1829,17 @@ fn emit_payer_signer_seeds_binding(
         return Ok(quote! {
             let __payer_seed_expr_val = #seeds_expr;
             let __payer_seed_ref: &[&[u8]] = __payer_seed_expr_val.as_ref();
-            if __payer_seed_ref.len() > anchor_lang_v2::MAX_PAYER_SEEDS {
-                return Err(anchor_lang_v2::ErrorCode::ConstraintSeeds.into());
+            if __payer_seed_ref.len() > anchor_lang::MAX_PAYER_SEEDS {
+                return Err(anchor_lang::ErrorCode::ConstraintSeeds.into());
             }
             let __payer_bump: u8 = #bump_expr;
             let __payer_bump_bytes = [__payer_bump];
-            let mut __payer_seed_buf: [&[u8]; anchor_lang_v2::MAX_PAYER_SEEDS_WITH_BUMP] =
-                [&[]; anchor_lang_v2::MAX_PAYER_SEEDS_WITH_BUMP];
+            let mut __payer_seed_buf: [&[u8]; anchor_lang::MAX_PAYER_SEEDS_WITH_BUMP] =
+                [&[]; anchor_lang::MAX_PAYER_SEEDS_WITH_BUMP];
             let __payer_seed_count = __payer_seed_ref.len();
             __payer_seed_buf[..__payer_seed_count].copy_from_slice(__payer_seed_ref);
             __payer_seed_buf[__payer_seed_count] = &__payer_bump_bytes;
-            anchor_lang_v2::verify_program_address(
+            anchor_lang::verify_program_address(
                 &__payer_seed_buf[..__payer_seed_count + 1],
                 __program_id,
                 __payer.address(),
@@ -1854,13 +1854,13 @@ fn emit_payer_signer_seeds_binding(
         let __payer_seed_expr_val = #seeds_expr;
         let __payer_seed_ref: &[&[u8]] = __payer_seed_expr_val.as_ref();
         let __payer_bump =
-            anchor_lang_v2::find_and_verify_program_address(
+            anchor_lang::find_and_verify_program_address(
                 __payer_seed_ref, __program_id, __payer.address(),
-            ).map_err(|_| anchor_lang_v2::ErrorCode::ConstraintSeeds)?;
+            ).map_err(|_| anchor_lang::ErrorCode::ConstraintSeeds)?;
         #bump_cache = __payer_bump;
         let __payer_bump_bytes = [__payer_bump];
-        let mut __payer_seed_buf: [&[u8]; anchor_lang_v2::MAX_PAYER_SEEDS_WITH_BUMP] =
-            [&[]; anchor_lang_v2::MAX_PAYER_SEEDS_WITH_BUMP];
+        let mut __payer_seed_buf: [&[u8]; anchor_lang::MAX_PAYER_SEEDS_WITH_BUMP] =
+            [&[]; anchor_lang::MAX_PAYER_SEEDS_WITH_BUMP];
         let __payer_seed_count = __payer_seed_ref.len();
         __payer_seed_buf[..__payer_seed_count].copy_from_slice(__payer_seed_ref);
         __payer_seed_buf[__payer_seed_count] = &__payer_bump_bytes;
@@ -1898,7 +1898,7 @@ fn emit_init_body(
     let owner_check = attrs.owner.as_ref().map(|_| {
         quote! {
             fn __anchor_assert_foreign_owner_init<
-                T: anchor_lang_v2::ForeignOwnerInit,
+                T: anchor_lang::ForeignOwnerInit,
             >() {}
             __anchor_assert_foreign_owner_init::<#field_ty>();
         }
@@ -1925,7 +1925,7 @@ fn emit_init_body(
                                     Some(__anchor_account) => __anchor_account.account(),
                                     None => {
                                         return Err(
-                                            anchor_lang_v2::ErrorCode::ConstraintAccountIsNone
+                                            anchor_lang::ErrorCode::ConstraintAccountIsNone
                                                 .into(),
                                         );
                                     }
@@ -1981,9 +1981,9 @@ fn emit_init_body(
                 let __seed_expr_val = #seeds_expr;
                 let __seed_ref: &[&[u8]] = __seed_expr_val.as_ref();
                 let __bump =
-                    anchor_lang_v2::find_and_verify_program_address(
+                    anchor_lang::find_and_verify_program_address(
                         __seed_ref, #pda_program, &__target.address(),
-                    ).map_err(|_| anchor_lang_v2::ErrorCode::ConstraintSeeds)?;
+                    ).map_err(|_| anchor_lang::ErrorCode::ConstraintSeeds)?;
                 #bump_cache = #bump_assign;
                 let __bump_bytes = [__bump];
                 let mut __seed_buf: [&[u8]; 17] = [&[]; 17];
@@ -2004,12 +2004,12 @@ fn emit_init_body(
         #owner_check
         let __owner = #owner;
         let __init_params = {
-            type __P<'__a> = <#field_ty as anchor_lang_v2::AccountInitialize>::Params<'__a>;
+            type __P<'__a> = <#field_ty as anchor_lang::AccountInitialize>::Params<'__a>;
             let mut __p = <__P as Default>::default();
             #(#param_assignments)*
             __p
         };
-        <#field_ty as anchor_lang_v2::AccountInitialize>::create_and_initialize(
+        <#field_ty as anchor_lang::AccountInitialize>::create_and_initialize(
             __payer, &__target, #space, &__owner, &__init_params, __seeds, __payer_signer_seeds,
         )?
     })
@@ -2022,7 +2022,7 @@ fn init_space_expr(field_ty: &Type, attrs: &AccountAttrs) -> TokenStream2 {
     // without hardcoding magic numbers like `space = 165`.
     match attrs.space.as_ref() {
         Some(expr) => quote! { #expr },
-        None => quote! { <#field_ty as anchor_lang_v2::Space>::INIT_SPACE },
+        None => quote! { <#field_ty as anchor_lang::Space>::INIT_SPACE },
     }
 }
 
@@ -2071,42 +2071,42 @@ fn emit_associated_token_init_body(
     Ok(quote! {
         {
             let mut __payer_account =
-                <anchor_lang_v2::accounts::UncheckedAccount as anchor_lang_v2::AnchorAccount>
+                <anchor_lang::accounts::UncheckedAccount as anchor_lang::AnchorAccount>
                     ::load(__views[#payer_offset])?;
             let __payer = __payer_account.account();
             #payer_signer_seeds
             let mut __associated_token =
-                <anchor_lang_v2::accounts::UncheckedAccount as anchor_lang_v2::AnchorAccount>
+                <anchor_lang::accounts::UncheckedAccount as anchor_lang::AnchorAccount>
                     ::load(__target)?;
             let __authority =
-                <anchor_lang_v2::accounts::UncheckedAccount as anchor_lang_v2::AnchorAccount>
+                <anchor_lang::accounts::UncheckedAccount as anchor_lang::AnchorAccount>
                     ::load(__views[#authority_offset])?;
             let __mint =
-                <anchor_lang_v2::accounts::UncheckedAccount as anchor_lang_v2::AnchorAccount>
+                <anchor_lang::accounts::UncheckedAccount as anchor_lang::AnchorAccount>
                     ::load(__views[#mint_offset])?;
             let __system_program =
-                <anchor_lang_v2::accounts::UncheckedAccount as anchor_lang_v2::AnchorAccount>
+                <anchor_lang::accounts::UncheckedAccount as anchor_lang::AnchorAccount>
                     ::load(__views[#system_program_offset])?;
             let __token_program =
-                <anchor_lang_v2::accounts::UncheckedAccount as anchor_lang_v2::AnchorAccount>
+                <anchor_lang::accounts::UncheckedAccount as anchor_lang::AnchorAccount>
                     ::load(__views[#token_program_offset])?;
             let __associated_token_program =
-                <anchor_lang_v2::accounts::UncheckedAccount as anchor_lang_v2::AnchorAccount>
+                <anchor_lang::accounts::UncheckedAccount as anchor_lang::AnchorAccount>
                     ::load(__views[#associated_token_program_offset])?;
 
-            if !anchor_lang_v2::address_eq(
+            if !anchor_lang::address_eq(
                 __system_program.account().address(),
-                &<anchor_lang_v2::programs::System as anchor_lang_v2::Id>::id(),
+                &<anchor_lang::programs::System as anchor_lang::Id>::id(),
             ) {
-                return Err(anchor_lang_v2::ErrorCode::ConstraintAddress.into());
+                return Err(anchor_lang::ErrorCode::ConstraintAddress.into());
             }
-            if !anchor_lang_v2::address_eq(
+            if !anchor_lang::address_eq(
                 __associated_token_program.account().address(),
-                &<anchor_lang_v2::programs::AssociatedToken as anchor_lang_v2::Id>::id(),
+                &<anchor_lang::programs::AssociatedToken as anchor_lang::Id>::id(),
             ) {
-                return Err(anchor_lang_v2::ErrorCode::ConstraintAddress.into());
+                return Err(anchor_lang::ErrorCode::ConstraintAddress.into());
             }
-            let __create_accounts = anchor_spl_v2::associated_token::Create {
+            let __create_accounts = anchor_spl::associated_token::Create {
                 payer: __payer_account.cpi_handle_mut(),
                 associated_token: __associated_token.cpi_handle_mut(),
                 authority: #authority_handle,
@@ -2116,8 +2116,8 @@ fn emit_associated_token_init_body(
             };
             match __payer_signer_seeds {
                 Some(__payer_signer) => {
-                    anchor_spl_v2::associated_token::create(
-                        anchor_lang_v2::CpiContext::new_with_signer(
+                    anchor_spl::associated_token::create(
+                        anchor_lang::CpiContext::new_with_signer(
                             __associated_token_program.account().address(),
                             __create_accounts,
                             &[__payer_signer],
@@ -2125,7 +2125,7 @@ fn emit_associated_token_init_body(
                     )?;
                 }
                 None => {
-                    anchor_spl_v2::associated_token::create(anchor_lang_v2::CpiContext::new(
+                    anchor_spl::associated_token::create(anchor_lang::CpiContext::new(
                         __associated_token_program.account().address(),
                         __create_accounts,
                     ))?;
@@ -2137,7 +2137,7 @@ fn emit_associated_token_init_body(
             // the generated account bitvec check. ATA init is performed by
             // external programs selected at runtime, so run the field type's
             // full validation after the CPI.
-            unsafe { <#field_ty as anchor_lang_v2::AnchorAccount>::load_mut(__target)? }
+            unsafe { <#field_ty as anchor_lang::AnchorAccount>::load_mut(__target)? }
         }
     })
 }
@@ -2155,7 +2155,7 @@ fn emit_init_if_needed_signer_check(
     if attrs.seeds.is_none() && !attrs.is_signer && associated_token.is_none() {
         quote! {
             if !__target.is_signer() {
-                return Err(anchor_lang_v2::ErrorCode::ConstraintSigner.into());
+                return Err(anchor_lang::ErrorCode::ConstraintSigner.into());
             }
         }
     } else {
@@ -2179,7 +2179,7 @@ fn emit_init_if_needed_reuse_validation(
 
     let space = match attrs.space.as_ref() {
         Some(expr) => quote! { #expr },
-        None => quote! { <#field_ty as anchor_lang_v2::Space>::INIT_SPACE },
+        None => quote! { <#field_ty as anchor_lang::Space>::INIT_SPACE },
     };
     let owner = if let Some(expr) = attrs.owner.as_ref() {
         quote! { #expr }
@@ -2191,15 +2191,15 @@ fn emit_init_if_needed_reuse_validation(
         let __expected_space = #space;
         #signer_check
         if __target.data_len() != __expected_space {
-            return Err(anchor_lang_v2::ErrorCode::ConstraintSpace.into());
+            return Err(anchor_lang::ErrorCode::ConstraintSpace.into());
         }
         let __expected_owner = #owner;
         if !__target.owned_by(&__expected_owner) {
-            return Err(anchor_lang_v2::ErrorCode::ConstraintOwner.into());
+            return Err(anchor_lang::ErrorCode::ConstraintOwner.into());
         }
-        let __required_lamports = anchor_lang_v2::cpi::rent_exempt_lamports(__expected_space)?;
+        let __required_lamports = anchor_lang::cpi::rent_exempt_lamports(__expected_space)?;
         if __target.lamports() < __required_lamports {
-            return Err(anchor_lang_v2::ErrorCode::ConstraintRentExempt.into());
+            return Err(anchor_lang::ErrorCode::ConstraintRentExempt.into());
         }
     })
 }
@@ -2345,9 +2345,9 @@ pub fn parse_field(
         // or use a wrapper that offsets transparently.
         let load = quote! {
             let (__nested_inner, #nested_bumps, __nested_ix_args) =
-                <#inner_ty as anchor_lang_v2::TryAccounts>::validate_accounts(
+                <#inner_ty as anchor_lang::TryAccounts>::validate_accounts(
                     __program_id,
-                    &__views[#offset_expr .. #offset_expr + <#inner_ty as anchor_lang_v2::TryAccounts>::HEADER_SIZE],
+                    &__views[#offset_expr .. #offset_expr + <#inner_ty as anchor_lang::TryAccounts>::HEADER_SIZE],
                     __duplicates,
                     __base_offset + #offset_expr,
                     __ix_data,
@@ -2359,7 +2359,7 @@ pub fn parse_field(
             #[inline(always)]
             fn #assert_no_nested_ix_args(_: ()) {}
             #assert_no_nested_ix_args(__nested_ix_args);
-            let #field_name = anchor_lang_v2::Nested(__nested_inner);
+            let #field_name = anchor_lang::Nested(__nested_inner);
         };
         let exit = Some(quote! {
             self.#field_name.0.exit_accounts(__ix_data)?;
@@ -2451,12 +2451,12 @@ pub fn parse_field(
             let init_body_with_constraints =
                 wrap_init_body_with_constraints(inner_ty, &attrs, field_names, &init_body);
             quote! {
-                if !__target.owned_by(&anchor_lang_v2::programs::System::id()) {
+                if !__target.owned_by(&anchor_lang::programs::System::id()) {
                         #init_if_needed_reuse_validation
                     // SAFETY: the bitvec duplicate-account check below ensures
                     // no other mutable reference to this account's data exists.
                     Some(unsafe {
-                        <#inner_ty as anchor_lang_v2::AnchorAccount>::load_mut(__target)?
+                        <#inner_ty as anchor_lang::AnchorAccount>::load_mut(__target)?
                     })
                 } else {
                     Some({ #init_body_with_constraints })
@@ -2465,13 +2465,13 @@ pub fn parse_field(
         } else if attrs.is_zeroed {
             quote! {
                 {
-                    let __disc = <#inner_ty as anchor_lang_v2::Discriminator>::DISCRIMINATOR;
+                    let __disc = <#inner_ty as anchor_lang::Discriminator>::DISCRIMINATOR;
                     {
                         let __data = __target.try_borrow()?;
                         if __data.len() < __disc.len()
                             || __data[..__disc.len()].iter().any(|b| *b != 0)
                         {
-                            return Err(anchor_lang_v2::ErrorCode::ConstraintZero.into());
+                            return Err(anchor_lang::ErrorCode::ConstraintZero.into());
                         }
                     }
                     unsafe {
@@ -2482,7 +2482,7 @@ pub fn parse_field(
                     // SAFETY: the bitvec duplicate-account check below ensures
                     // no other mutable reference to this account's data exists.
                     Some(unsafe {
-                        <#inner_ty as anchor_lang_v2::AnchorAccount>::load_mut(__target)?
+                        <#inner_ty as anchor_lang::AnchorAccount>::load_mut(__target)?
                     })
                 }
             }
@@ -2491,20 +2491,20 @@ pub fn parse_field(
                 // SAFETY: the bitvec duplicate-account check below ensures
                 // no other mutable reference to this account's data exists.
                 Some(unsafe {
-                    <#inner_ty as anchor_lang_v2::AnchorAccount>::load_mut(__target)?
+                    <#inner_ty as anchor_lang::AnchorAccount>::load_mut(__target)?
                 })
             }
         } else {
             quote! {
-                Some(<#inner_ty as anchor_lang_v2::AnchorAccount>::load(__target)?)
+                Some(<#inner_ty as anchor_lang::AnchorAccount>::load(__target)?)
             }
         };
         let init_if_needed_existed_binding = init_if_needed_existed.as_ref().map(|existed| {
             quote! {
                 let #existed = {
                     let __target = __views[#offset_expr];
-                    !anchor_lang_v2::address_eq(__target.address(), __program_id)
-                        && !__target.owned_by(&anchor_lang_v2::programs::System::id())
+                    !anchor_lang::address_eq(__target.address(), __program_id)
+                        && !__target.owned_by(&anchor_lang::programs::System::id())
                 };
             }
         });
@@ -2514,7 +2514,7 @@ pub fn parse_field(
                     if let Some(__dups) = __duplicates {
                         if __dups.get((__base_offset + #offset_expr) as u8) {
                             return Err(
-                                anchor_lang_v2::ErrorCode::ConstraintDuplicateMutableAccount.into(),
+                                anchor_lang::ErrorCode::ConstraintDuplicateMutableAccount.into(),
                             );
                         }
                     }
@@ -2526,7 +2526,7 @@ pub fn parse_field(
             #init_if_needed_existed_binding
             let mut #field_name: #field_ty = {
                 let __target = __views[#offset_expr];
-                if anchor_lang_v2::address_eq(__target.address(), __program_id) {
+                if anchor_lang::address_eq(__target.address(), __program_id) {
                     None
                 } else {
                     #optional_dup_precheck
@@ -2597,7 +2597,7 @@ pub fn parse_field(
         deferred_load = Some(quote! {
             let #existed = {
                 let __target = __views[#offset_expr];
-                !__target.owned_by(&anchor_lang_v2::programs::System::id())
+                !__target.owned_by(&anchor_lang::programs::System::id())
             };
             let mut #field_name: #field_ty = {
                 let __target = __views[#offset_expr];
@@ -2605,7 +2605,7 @@ pub fn parse_field(
                     #init_if_needed_reuse_validation
                     // SAFETY: the bitvec duplicate-account check below ensures
                     // no other mutable reference to this account's data exists.
-                    unsafe { <#field_ty as anchor_lang_v2::AnchorAccount>::load_mut(__target)? }
+                    unsafe { <#field_ty as anchor_lang::AnchorAccount>::load_mut(__target)? }
                 } else {
                     // Create branch: run `AccountConstraint::init` for every
                     // runtime-only constraint AFTER the account's typed
@@ -2622,11 +2622,11 @@ pub fn parse_field(
         quote! {
             let mut #field_name: #field_ty = {
                 let __target = __views[#offset_expr];
-                let __disc = <#field_ty as anchor_lang_v2::Discriminator>::DISCRIMINATOR;
+                let __disc = <#field_ty as anchor_lang::Discriminator>::DISCRIMINATOR;
                 {
                     let __data = __target.try_borrow()?;
                     if __data.len() < __disc.len() || __data[..__disc.len()].iter().any(|b| *b != 0) {
-                        return Err(anchor_lang_v2::ErrorCode::ConstraintZero.into());
+                        return Err(anchor_lang::ErrorCode::ConstraintZero.into());
                     }
                 }
                 unsafe {
@@ -2636,18 +2636,18 @@ pub fn parse_field(
                 }
                 // SAFETY: the bitvec duplicate-account check below ensures
                 // no other mutable reference to this account's data exists.
-                unsafe { <#field_ty as anchor_lang_v2::AnchorAccount>::load_mut(__target)? }
+                unsafe { <#field_ty as anchor_lang::AnchorAccount>::load_mut(__target)? }
             };
         }
     } else if attrs.is_mut {
         quote! {
             // SAFETY: the bitvec duplicate-account check below ensures no
             // other mutable reference to this account's data exists.
-            let mut #field_name = unsafe { <#field_ty as anchor_lang_v2::AnchorAccount>::load_mut(__views[#offset_expr])? };
+            let mut #field_name = unsafe { <#field_ty as anchor_lang::AnchorAccount>::load_mut(__views[#offset_expr])? };
         }
     } else {
         quote! {
-            let #field_name: #field_ty = anchor_lang_v2::AnchorAccount::load(__views[#offset_expr])?;
+            let #field_name: #field_ty = anchor_lang::AnchorAccount::load(__views[#offset_expr])?;
         }
     };
 
@@ -2667,7 +2667,7 @@ pub fn parse_field(
     if attrs.is_signer {
         constraints.push(quote! {
             if !#field_name.account().is_signer() {
-                return Err(anchor_lang_v2::ErrorCode::ConstraintSigner.into());
+                return Err(anchor_lang::ErrorCode::ConstraintSigner.into());
             }
         });
     }
@@ -2680,14 +2680,14 @@ pub fn parse_field(
             constraints.push(quote! {
                 if let Some(__mint) = &#field_name {
                     if __mint.freeze_authority().is_some() {
-                        return Err(anchor_lang_v2::Error::InvalidAccountData);
+                        return Err(anchor_lang::Error::InvalidAccountData);
                     }
                 }
             });
         } else {
             constraints.push(quote! {
                 if #field_name.freeze_authority().is_some() {
-                    return Err(anchor_lang_v2::Error::InvalidAccountData);
+                    return Err(anchor_lang::Error::InvalidAccountData);
                 }
             });
         }
@@ -2697,7 +2697,7 @@ pub fn parse_field(
     if attrs.is_executable {
         constraints.push(quote! {
             if !#field_name.account().executable() {
-                return Err(anchor_lang_v2::ErrorCode::ConstraintExecutable.into());
+                return Err(anchor_lang::ErrorCode::ConstraintExecutable.into());
             }
         });
     }
@@ -2731,7 +2731,7 @@ pub fn parse_field(
                         {
                             #(#seed_bindings)*
                             let __bump_val: u8 = #bump_expr;
-                            anchor_lang_v2::verify_program_address(
+                            anchor_lang::verify_program_address(
                                 &[#(#seed_refs),* , &[__bump_val]],
                                 #pda_program,
                                 #field_name.account().address(),
@@ -2776,7 +2776,7 @@ pub fn parse_field(
                             let __seed_val = #seeds_expr;
                             let __seed_ref: &[&[u8]] = __seed_val.as_ref();
                             if __seed_ref.len() > 16 {
-                                return Err(anchor_lang_v2::ErrorCode::ConstraintSeeds.into());
+                                return Err(anchor_lang::ErrorCode::ConstraintSeeds.into());
                             }
                             let __bump: u8 = #bump_expr;
                             let __bump_bytes = [__bump];
@@ -2784,7 +2784,7 @@ pub fn parse_field(
                             let __n = __seed_ref.len();
                             __seed_buf[..__n].copy_from_slice(__seed_ref);
                             __seed_buf[__n] = &__bump_bytes;
-                            anchor_lang_v2::verify_program_address(
+                            anchor_lang::verify_program_address(
                                 &__seed_buf[..__n + 1],
                                 #pda_program,
                                 #field_name.account().address(),
@@ -2797,7 +2797,7 @@ pub fn parse_field(
                     // Bare bump: use find_and_verify with skip_curve
                     // when the account type guarantees non-zero data.
                     let skip_curve = quote! {
-                        <#field_ty as anchor_lang_v2::AnchorAccount>::MIN_DATA_LEN > 0
+                        <#field_ty as anchor_lang::AnchorAccount>::MIN_DATA_LEN > 0
                     };
                     let target_addr = quote! { #field_name.account().address() };
                     quote! {
@@ -2805,13 +2805,13 @@ pub fn parse_field(
                             let __seed_val = #seeds_expr;
                             let __seed_ref: &[&[u8]] = __seed_val.as_ref();
                             let __bump = if #skip_curve {
-                                anchor_lang_v2::find_and_verify_program_address_skip_curve(
+                                anchor_lang::find_and_verify_program_address_skip_curve(
                                     __seed_ref, #pda_program, #target_addr,
-                                ).map_err(|_| anchor_lang_v2::ErrorCode::ConstraintSeeds)?
+                                ).map_err(|_| anchor_lang::ErrorCode::ConstraintSeeds)?
                             } else {
-                                anchor_lang_v2::find_and_verify_program_address(
+                                anchor_lang::find_and_verify_program_address(
                                     __seed_ref, #pda_program, #target_addr,
-                                ).map_err(|_| anchor_lang_v2::ErrorCode::ConstraintSeeds)?
+                                ).map_err(|_| anchor_lang::ErrorCode::ConstraintSeeds)?
                             };
                             #bump_cache = #bump_assign;
                         }
@@ -2837,7 +2837,7 @@ pub fn parse_field(
         let err = if let Some(ref e) = ho_err {
             quote! { core::convert::Into::into(#e) }
         } else {
-            quote! { anchor_lang_v2::ErrorCode::ConstraintHasOne.into() }
+            quote! { anchor_lang::ErrorCode::ConstraintHasOne.into() }
         };
         let deprecation = quote_spanned! { *ho_span =>
             {
@@ -2862,7 +2862,7 @@ pub fn parse_field(
         let err = if let Some(ref e) = attrs.address_error {
             quote! { core::convert::Into::into(#e) }
         } else {
-            quote! { anchor_lang_v2::ErrorCode::ConstraintAddress.into() }
+            quote! { anchor_lang::ErrorCode::ConstraintAddress.into() }
         };
         constraints.push(quote! {
             {
@@ -2872,9 +2872,9 @@ pub fn parse_field(
                 // with an `Into<Address>` impl all flow through the
                 // same conversion. Still binds to a local first so
                 // `address_eq` sees a stable reference.
-                let __expected: anchor_lang_v2::Address =
+                let __expected: anchor_lang::Address =
                     core::convert::Into::into(#addr);
-                if !anchor_lang_v2::address_eq(#field_name.account().address(), &__expected) {
+                if !anchor_lang::address_eq(#field_name.account().address(), &__expected) {
                     return Err(#err);
                 }
             }
@@ -2886,7 +2886,7 @@ pub fn parse_field(
         let err = if let Some(ref e) = attrs.owner_error {
             quote! { core::convert::Into::into(#e) }
         } else {
-            quote! { anchor_lang_v2::ErrorCode::ConstraintOwner.into() }
+            quote! { anchor_lang::ErrorCode::ConstraintOwner.into() }
         };
         constraints.push(quote! {
             if !#field_name.account().owned_by(&#owner_expr) {
@@ -2900,7 +2900,7 @@ pub fn parse_field(
         let err = if let Some(custom_err) = custom_err {
             quote! { core::convert::Into::into(#custom_err) }
         } else {
-            quote! { anchor_lang_v2::ErrorCode::ConstraintRaw.into() }
+            quote! { anchor_lang::ErrorCode::ConstraintRaw.into() }
         };
         constraints.push(quote! {
             if !(#expr) {
@@ -2920,13 +2920,13 @@ pub fn parse_field(
                         Some(__anchor_account) => *__anchor_account.account().address(),
                         None => {
                             return Err(
-                                anchor_lang_v2::ErrorCode::ConstraintAccountIsNone.into()
+                                anchor_lang::ErrorCode::ConstraintAccountIsNone.into()
                             );
                         }
                     }
                 }
             } else {
-                quote! { *anchor_lang_v2::AccountAddress::account_address(&(#mint)) }
+                quote! { *anchor_lang::AccountAddress::account_address(&(#mint)) }
             };
             let authority_addr = if field_is_optional(field_summaries, authority) {
                 quote! {
@@ -2934,13 +2934,13 @@ pub fn parse_field(
                         Some(__anchor_account) => *__anchor_account.account().address(),
                         None => {
                             return Err(
-                                anchor_lang_v2::ErrorCode::ConstraintAccountIsNone.into()
+                                anchor_lang::ErrorCode::ConstraintAccountIsNone.into()
                             );
                         }
                     }
                 }
             } else {
-                quote! { *anchor_lang_v2::AccountAddress::account_address(&(#authority)) }
+                quote! { *anchor_lang::AccountAddress::account_address(&(#authority)) }
             };
             let token_program_addr = if field_is_optional(field_summaries, token_program) {
                 quote! {
@@ -2948,13 +2948,13 @@ pub fn parse_field(
                         Some(__anchor_account) => *__anchor_account.account().address(),
                         None => {
                             return Err(
-                                anchor_lang_v2::ErrorCode::ConstraintAccountIsNone.into()
+                                anchor_lang::ErrorCode::ConstraintAccountIsNone.into()
                             );
                         }
                     }
                 }
             } else {
-                quote! { *anchor_lang_v2::AccountAddress::account_address(&(#token_program)) }
+                quote! { *anchor_lang::AccountAddress::account_address(&(#token_program)) }
             };
             constraints.push(quote! {
                 {
@@ -2962,33 +2962,33 @@ pub fn parse_field(
                     let __associated_token_authority = #authority_addr;
                     let __associated_token_token_program = #token_program_addr;
 
-                    if !anchor_lang_v2::address_eq(
+                    if !anchor_lang::address_eq(
                         #field_name.mint(),
                         &__associated_token_mint,
                     ) {
-                        return Err(anchor_lang_v2::ErrorCode::ConstraintAddress.into());
+                        return Err(anchor_lang::ErrorCode::ConstraintAddress.into());
                     }
-                    if !anchor_lang_v2::address_eq(
+                    if !anchor_lang::address_eq(
                         #field_name.owner(),
                         &__associated_token_authority,
                     ) {
-                        return Err(anchor_lang_v2::ErrorCode::ConstraintAddress.into());
+                        return Err(anchor_lang::ErrorCode::ConstraintAddress.into());
                     }
                     if !#field_name.account().owned_by(&__associated_token_token_program) {
-                        return Err(anchor_lang_v2::ErrorCode::ConstraintOwner.into());
+                        return Err(anchor_lang::ErrorCode::ConstraintOwner.into());
                     }
 
                     let __expected_associated_token =
-                        anchor_spl_v2::associated_token::get_associated_token_address_with_program_id(
+                        anchor_spl::associated_token::get_associated_token_address_with_program_id(
                             &__associated_token_authority,
                             &__associated_token_mint,
                             &__associated_token_token_program,
                         );
-                    if !anchor_lang_v2::address_eq(
+                    if !anchor_lang::address_eq(
                         #field_name.account().address(),
                         &__expected_associated_token,
                     ) {
-                        return Err(anchor_lang_v2::ErrorCode::ConstraintAddress.into());
+                        return Err(anchor_lang::ErrorCode::ConstraintAddress.into());
                     }
                 }
             });
@@ -3022,7 +3022,7 @@ pub fn parse_field(
         // TODO: Improve diagnostics for missing SPL namespace imports.
         // Today `token::...` / `mint::...` resolution failures point at the
         // derive output. We want to keep the normal Rust E0433, but add a
-        // useful hint for importing `anchor_spl_v2::prelude::*` or the
+        // useful hint for importing `anchor_spl::prelude::*` or the
         // specific marker module.
         let ns = syn::Ident::new(&nc.namespace, proc_macro2::Span::call_site());
         let key = syn::Ident::new(&nc.key, proc_macro2::Span::call_site());
@@ -3047,7 +3047,7 @@ pub fn parse_field(
             updates.push(quote! {
                 {
                     #update_expected_binding
-                    <#ns::#key as anchor_lang_v2::AccountConstraint<_>>::update(
+                    <#ns::#key as anchor_lang::AccountConstraint<_>>::update(
                         #update_target, #update_expected_arg,
                     )?;
                 }
@@ -3075,7 +3075,7 @@ pub fn parse_field(
             constraints.push(quote! {
                 {
                     #expected_binding
-                    <#ns::#key as anchor_lang_v2::AccountConstraint<_>>::check(
+                    <#ns::#key as anchor_lang::AccountConstraint<_>>::check(
                         #check_target, #expected_arg,
                     )?;
                 }
@@ -3101,7 +3101,7 @@ pub fn parse_field(
             {
                 let __new_space = #new_space;
                 let __payer_view = *#realloc_payer.account();
-                anchor_lang_v2::AccountRealloc::realloc_account(
+                anchor_lang::AccountRealloc::realloc_account(
                     #realloc_target,
                     __new_space,
                     __payer_view,
@@ -3130,7 +3130,7 @@ pub fn parse_field(
             quote! {
                 {
                     #expected_binding
-                    <#ns::#key as anchor_lang_v2::AccountConstraint<_>>::exit(
+                    <#ns::#key as anchor_lang::AccountConstraint<_>>::exit(
                         &mut self.#field_name, #expected_arg,
                     )?;
                 }
@@ -3142,16 +3142,16 @@ pub fn parse_field(
     // close (self-close prevention constraint + exit)
     let exit = if let Some(ref close_target) = attrs.close {
         constraints.push(quote! {
-            if anchor_lang_v2::address_eq(
+            if anchor_lang::address_eq(
                 #field_name.account().address(),
                 #close_target.account().address(),
             ) {
-                return Err(anchor_lang_v2::ErrorCode::ConstraintClose.into());
+                return Err(anchor_lang::ErrorCode::ConstraintClose.into());
             }
         });
         Some(quote! {
             #(#constraint_exits)*
-            anchor_lang_v2::AccountClose::close(
+            anchor_lang::AccountClose::close(
                 &mut self.#field_name,
                 *self.#close_target.account(),
             )?;
@@ -3159,7 +3159,7 @@ pub fn parse_field(
     } else if attrs.is_mut {
         Some(quote! {
             #(#constraint_exits)*
-            anchor_lang_v2::AnchorAccount::exit(&mut self.#field_name)?;
+            anchor_lang::AnchorAccount::exit(&mut self.#field_name)?;
         })
     } else if has_constraint_exits {
         // Constraint exits even on read-only fields: callers can attach
@@ -3248,7 +3248,7 @@ pub fn parse_field(
                     quote! {
                         {
                             #expected_binding
-                            <#ns::#key as anchor_lang_v2::AccountConstraint<_>>::exit(
+                            <#ns::#key as anchor_lang::AccountConstraint<_>>::exit(
                                 __inner, #expected_arg,
                             )?;
                         }
@@ -3260,7 +3260,7 @@ pub fn parse_field(
                 quote! {
                     if let Some(__inner) = self.#field_name.as_mut() {
                         #(#inner_constraint_exits)*
-                        anchor_lang_v2::AccountClose::close(
+                        anchor_lang::AccountClose::close(
                             __inner,
                             *self.#close_target.account(),
                         )?;
@@ -3270,7 +3270,7 @@ pub fn parse_field(
                 quote! {
                     if let Some(__inner) = self.#field_name.as_mut() {
                         #(#inner_constraint_exits)*
-                        anchor_lang_v2::AnchorAccount::exit(__inner)?;
+                        anchor_lang::AnchorAccount::exit(__inner)?;
                     }
                 }
             } else {
