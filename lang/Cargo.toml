@@ -57,7 +57,7 @@ anchor-derive-serde = { path = "./derive/serde", version = "2.0.0" }
 anchor-derive-space = { path = "./derive/space", version = "2.0.0" }
 
 # `anchor-lang-idl` should only be included with `idl-build` feature
-anchor-lang-idl = { path = "../idl", version = "0.1.2", optional = true }
+anchor-lang-idl = { workspace = true, optional = true }
 
 base64 = "0.21"
 bincode = "1"

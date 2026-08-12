@@ -22,4 +22,4 @@ curve25519-dalek = { version = "4", default-features = false, features = ["alloc
 bs58 = "0.5"
 serde_json = "1"
 solana-address = "2.0"
-anchor-lang-idl = { path = "../../idl", version = "0.1.2", features = ["convert"] }
+anchor-lang-idl = { workspace = true, features = ["convert"] }
