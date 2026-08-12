@@ -20,6 +20,7 @@ Implementing `AnchorAccount{:rs}` on a wrapper type is what makes it usable as a
 
 ```rust title="my_wrapper.rs" showLineNumbers=false
 use anchor_lang_v2::prelude::*;
+use anchor_lang_v2::bytemuck::Pod;
 use core::ops::Deref;
 
 pub struct MyWrapper<T: Pod> {
@@ -36,12 +37,12 @@ impl<T: Pod + Discriminator + Owner> AnchorAccount for MyWrapper<T> {
     type Data = T;
     const MIN_DATA_LEN: usize = 8 + core::mem::size_of::<T>();
 
-    fn load(view: AccountView, program_id: &Address) -> Result<Self, ProgramError> {
+    fn load(view: AccountView) -> Result<Self, ProgramError> {
         // Validate owner, discriminator, size, then pointer-cast bytes into `T`.
         unimplemented!()
     }
 
-    unsafe fn load_mut(view: AccountView, program_id: &Address) -> Result<Self, ProgramError> {
+    unsafe fn load_mut(view: AccountView) -> Result<Self, ProgramError> {
         // Same as load, plus an `is_writable` check and the mutable borrow flag.
         unimplemented!()
     }
@@ -119,6 +120,6 @@ At load time, `Program<MyProgram>{:rs}` validates that the account's address mat
 
 ## Why this works
 
-The core derive shrinks materially because the generated code now goes through trait calls like `<MyType as AnchorAccount>::load(view, program_id){:rs}` rather than inlining all of the validation logic per field. Adding a new account wrapper or constraint becomes a trait implementation in a downstream crate, not a fork of the macro itself.
+The core derive shrinks materially because the generated code now goes through trait calls like `<MyType as AnchorAccount>::load(view){:rs}` rather than inlining all of the validation logic per field. Adding a new account wrapper or constraint becomes a trait implementation in a downstream crate, not a fork of the macro itself.
 
 For the full trait surface, see [`lang-v2/src/traits.rs`](https://github.com/otter-sec/anchor/blob/anchor-next/lang-v2/src/traits.rs) on the `anchor-next` branch.

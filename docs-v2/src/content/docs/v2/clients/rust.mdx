@@ -108,9 +108,7 @@ Several bench tests use this shape because it keeps the test focused on the acco
 For PDA fields, the generated accounts module includes helper methods named from the account field:
 
 ```rust showLineNumbers=false
-let (counter, bump) = counter::accounts::Initialize::find_counter_address(
-    payer.pubkey().as_ref(),
-);
+let (counter, bump) = counter::accounts::Initialize::find_counter_address(&payer.pubkey());
 ```
 
 When seeds have no runtime inputs, the helper has no arguments:

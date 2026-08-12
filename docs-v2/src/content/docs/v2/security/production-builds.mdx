@@ -11,7 +11,7 @@ Production builds are the last step, not the first. Start with the defaults, mea
 anchor-lang-v2 = { git = "https://github.com/otter-sec/anchor.git", branch = "anchor-next" }
 ```
 
-The default features are `alloc{:toml}`, `guardrails{:toml}`, and `account-resize{:toml}`. `guardrails{:toml}` catches runtime misuse such as wrong program id dispatch or mutable access to a read-only account. `account-resize{:toml}` enables `realloc_account{:rs}` and the pinocchio hook that tracks original account lengths. Disable it only if the program has no realloc paths.
+The default features are `alloc{:toml}` and `guardrails{:toml}`.
 
 A minimal profile looks like:
 
