@@ -163,6 +163,10 @@ name = "account_deserialize_surface"
 required-features = ["testing"]
 
 [[test]]
+name = "nested_bumps"
+required-features = ["testing"]
+
+[[test]]
 name = "address_idl_surface"
 
 [[test]]

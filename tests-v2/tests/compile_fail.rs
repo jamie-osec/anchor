@@ -914,6 +914,64 @@ pub struct Bad {
 }
 
 #[test]
+fn nested_bumps_compile_through_nested_context_surface() {
+    CompileCase::new(
+        "nested_bumps_context_surface",
+        r#"
+use anchor_lang_v2::prelude::*;
+
+declare_id!("11111111111111111111111111111111");
+
+#[derive(Accounts)]
+pub struct Inner {
+    #[account(seeds = [b"vault"], bump)]
+    pub vault: UncheckedAccount,
+}
+
+#[derive(Accounts)]
+pub struct Outer {
+    pub authority: UncheckedAccount,
+    pub inner: Nested<Inner>,
+}
+
+pub fn nested_bump(ctx: &Context<'_, Outer>) -> u8 {
+    ctx.bumps.inner.vault
+}
+"#,
+    )
+    .expect_pass();
+}
+
+#[test]
+fn nested_bumps_reject_flat_access_for_nested_accounts() {
+    CompileCase::new(
+        "nested_bumps_flat_access",
+        r#"
+use anchor_lang_v2::prelude::*;
+
+declare_id!("11111111111111111111111111111111");
+
+#[derive(Accounts)]
+pub struct Inner {
+    #[account(seeds = [b"vault"], bump)]
+    pub vault: UncheckedAccount,
+}
+
+#[derive(Accounts)]
+pub struct Outer {
+    pub authority: UncheckedAccount,
+    pub inner: Nested<Inner>,
+}
+
+pub fn nested_bump(ctx: &Context<'_, Outer>) -> u8 {
+    ctx.bumps.vault
+}
+"#,
+    )
+    .expect_fail(&["no field `vault`"]);
+}
+
+#[test]
 fn associated_token_rejects_unknown_constraint_key() {
     CompileCase::new(
         "associated_token_unknown_constraint_key",

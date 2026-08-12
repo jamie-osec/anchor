@@ -1080,20 +1080,70 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
     let constraints: Vec<_> = fields.iter().flat_map(|f| &f.constraints).collect();
     let updates: Vec<_> = fields.iter().filter_map(|f| f.update.as_ref()).collect();
     let exits: Vec<_> = fields.iter().filter_map(|f| f.exit.as_ref()).collect();
-    // Bumps fields. Optional accounts get `Option<u8>` so the default
-    // (`None`) maps cleanly to the sentinel-`None` load path; the seeds
-    // check assigns `Some(bump)` only when the inner is `Some`. Mirrors
-    // v1's `bumps.rs:36` Optional handling.
+    // Bump-cache surface:
+    //   - direct PDA fields keep their existing `u8` / `Option<u8>` entries;
+    //     optional accounts still use `Option<u8>` so the sentinel-`None`
+    //     path mirrors v1's `bumps.rs:36` handling
+    //   - `Nested<Inner>` fields preserve the inner `Inner::Bumps` payload so
+    //     handlers can reach it through `ctx.bumps.<nested>.*`
+    //
+    // Direct fields still use per-field mutable locals during parsing; nested
+    // fields bind the inner bumps value returned by `Inner::try_accounts`.
     let bump_fields: Vec<proc_macro2::TokenStream> = fields
+        .iter()
+        .filter_map(|f| {
+            let n = &f.name;
+            if f.has_bump {
+                Some(if f.is_optional {
+                    quote! { pub #n: Option<u8> }
+                } else {
+                    quote! { pub #n: u8 }
+                })
+            } else {
+                parse::extract_nested_inner_type(&f.ty)
+                    .map(|inner_ty| quote! { pub #n: <#inner_ty as anchor_lang_v2::Bumps>::Bumps })
+            }
+        })
+        .collect();
+    let nested_bump_default_bounds: Vec<proc_macro2::TokenStream> = fields
+        .iter()
+        .filter_map(|f| {
+            parse::extract_nested_inner_type(&f.ty).map(|inner_ty| {
+                quote! { <#inner_ty as anchor_lang_v2::Bumps>::Bumps: ::core::default::Default }
+            })
+        })
+        .collect();
+    let bump_cache_locals: Vec<proc_macro2::TokenStream> = fields
         .iter()
         .filter(|f| f.has_bump)
         .map(|f| {
-            let n = &f.name;
+            let bump_cache = parse::bump_cache_ident(&f.name);
             if f.is_optional {
-                quote! { #n: Option<u8> }
+                quote! {
+                    let mut #bump_cache: ::core::option::Option<u8> = ::core::default::Default::default();
+                }
             } else {
-                quote! { #n: u8 }
+                quote! {
+                    let mut #bump_cache: u8 = ::core::default::Default::default();
+                }
             }
+        })
+        .collect();
+    let bump_cache_fields: Vec<proc_macro2::TokenStream> = fields
+        .iter()
+        .filter(|f| f.has_bump || parse::extract_nested_inner_type(&f.ty).is_some())
+        .map(|f| {
+            let n = &f.name;
+            let bump_cache = parse::bump_cache_ident(n);
+            quote! { #n: #bump_cache }
+        })
+        .collect();
+    let bump_default_fields: Vec<proc_macro2::TokenStream> = fields
+        .iter()
+        .filter(|f| f.has_bump || parse::extract_nested_inner_type(&f.ty).is_some())
+        .map(|f| {
+            let n = &f.name;
+            quote! { #n: ::core::default::Default::default() }
         })
         .collect();
 
@@ -1329,14 +1379,27 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
     let has_bumps = !bump_fields.is_empty();
     let bumps_def = if has_bumps {
         quote! {
-            #[derive(Default, Clone)]
-            pub struct #bumps_name { #(pub #bump_fields,)* }
+            #[derive(Clone)]
+            pub struct #bumps_name { #(#bump_fields,)* }
+
+            impl ::core::default::Default for #bumps_name
+            where
+                #(#nested_bump_default_bounds,)*
+            {
+                fn default() -> Self {
+                    Self {
+                        #(#bump_default_fields,)*
+                    }
+                }
+            }
         }
     } else {
         quote! { pub type #bumps_name = (); }
     };
-    let bumps_init = if has_bumps {
-        quote! { let mut __bumps = #bumps_name::default(); }
+    let bumps_build = if has_bumps {
+        quote! {
+            let __bumps = #bumps_name { #(#bump_cache_fields,)* };
+        }
     } else {
         quote! { let __bumps = #bumps_name::default(); }
     };
@@ -1975,10 +2038,11 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
                 __ix_data: &'ix [u8],
             ) -> anchor_lang_v2::Result<(Self, #bumps_name, Self::IxArgs<'ix>)> {
                 #ix_deser
-                #bumps_init
+                #(#bump_cache_locals)*
                 #(#loads)*
                 #(#deferred_loads)*
                 #(#constraints)*
+                #bumps_build
                 Ok((Self { #(#field_names),* }, __bumps, #ix_args_return))
             }
 
@@ -6964,6 +7028,37 @@ mod tests {
             ),
             "declare_program markers should expose their known address for IDL emission: \
              {generated}"
+        );
+    }
+
+    fn nested_accounts_preserve_inner_bumps_in_generated_surface() {
+        let input: syn::DeriveInput = syn::parse_quote! {
+            pub struct Outer {
+                pub authority: anchor_lang_v2::accounts::UncheckedAccount,
+                pub inner: anchor_lang_v2::Nested<Inner>,
+            }
+        };
+
+        let generated = impl_accounts(&input).to_string();
+
+        assert!(
+            generated.contains("pub struct OuterBumps"),
+            "expected outer bumps struct: {generated}"
+        );
+        assert!(
+            generated.contains("pub inner : < Inner as anchor_lang_v2 :: Bumps > :: Bumps"),
+            "expected nested field to retain the inner bumps type: {generated}"
+        );
+        assert!(
+            generated.contains(
+                "let (__nested_inner , __anchor_bump_cache_inner , _) = < Inner as anchor_lang_v2 :: TryAccounts > :: validate_accounts"
+            ),
+            "expected nested validate_accounts call to keep the returned bumps value: {generated}"
+        );
+        assert!(
+            generated
+                .contains("let __bumps = OuterBumps { inner : __anchor_bump_cache_inner , } ;"),
+            "expected final outer bumps assembly to include the nested bump cache: {generated}"
         );
     }
 }
