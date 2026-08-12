@@ -115,6 +115,32 @@ pub struct Counter {
 #[derive(IdlType)]
 pub struct PairTupleIdl(pub u64, pub bool);
 
+#[account]
+#[repr(C)]
+pub struct PodWrapperOnly {
+    pub mode: PodMode,
+}
+
+#[account]
+#[repr(C)]
+pub struct PodVecOnly {
+    pub items: PodVec<PodU64, 4>,
+}
+
+#[account]
+#[repr(C, packed(1))]
+pub struct PackedProducer {
+    pub tag: u8,
+    pub wide: u64,
+}
+
+#[event(bytemuck)]
+#[repr(C, packed(1))]
+pub struct PackedSnapshot {
+    pub tag: u8,
+    pub wide: u64,
+}
+
 // ---- Handlers -------------------------------------------------------------
 
 #[program]
@@ -304,5 +330,69 @@ mod idl_tests {
         assert!(type_def.contains("\"name\":\"PairTupleIdl\""));
         assert!(type_def.contains("\"kind\":\"struct\""));
         assert!(type_def.contains("\"fields\":[\"u64\",\"bool\"]"));
+    }
+
+    #[test]
+    fn pod_wrapper_registers_alias_type_definition() {
+        let type_def =
+            <PodMode as IdlAccountType>::__IDL_TYPE_DEF.expect("PodMode should emit an IDL type");
+        assert!(type_def.contains("\"name\":\"PodMode\""));
+        assert!(type_def.contains("\"alias\":\"u8\""));
+
+        let mut accounts = Vec::new();
+        let mut types = Vec::new();
+        <PodWrapperOnly as IdlAccountType>::__register_idl_deps(&mut accounts, &mut types);
+        let wrapper_account = types
+            .iter()
+            .find(|entry| entry.contains("\"name\":\"PodWrapperOnly\""))
+            .expect("PodWrapperOnly should emit its IDL type");
+        assert!(wrapper_account.contains("\"defined\":{\"name\":\"PodMode\"}"));
+        assert!(types.iter().any(|entry| entry.contains("\"name\":\"PodMode\"")));
+    }
+
+    #[test]
+    fn pod_vec_registers_generic_layout_and_account_fields_use_generics() {
+        let mut accounts = Vec::new();
+        let mut types = Vec::new();
+        <PodVecOnly as IdlAccountType>::__register_idl_deps(&mut accounts, &mut types);
+
+        let pod_vec_account = types
+            .iter()
+            .find(|entry| entry.contains("\"name\":\"PodVecOnly\""))
+            .expect("PodVecOnly should emit its IDL type");
+        assert!(pod_vec_account.contains("\"defined\":{"));
+        assert!(pod_vec_account.contains("\"name\":\"PodVec\""));
+        assert!(pod_vec_account.contains("\"kind\":\"type\",\"type\":{\"defined\":{\"name\":\"PodU64\"}}"));
+        assert!(pod_vec_account.contains("\"kind\":\"const\",\"value\":\"4\""));
+
+        let pod_vec_type = types
+            .iter()
+            .find(|entry| {
+                entry.contains("\"name\":\"PodVec\"")
+                    && entry.contains("\"kind\":\"const\",\"name\":\"MAX\",\"type\":\"usize\"")
+            })
+            .expect("PodVec generic layout should be registered");
+        assert!(pod_vec_type.contains("\"generics\":[{\"kind\":\"type\",\"name\":\"T\"},{\"kind\":\"const\",\"name\":\"MAX\",\"type\":\"usize\"}]"));
+        assert!(pod_vec_type.contains("\"serialization\":\"bytemuck\""));
+        assert!(pod_vec_type.contains("\"repr\":{\"kind\":\"c\"}"));
+        assert!(pod_vec_type.contains("\"fields\":[{\"name\":\"len\",\"type\":{\"defined\":{\"name\":\"PodU16\"}}},{\"name\":\"data\",\"type\":{\"array\":[{\"generic\":\"T\"},{\"generic\":\"MAX\"}]}}]"));
+    }
+
+    #[test]
+    fn packed_bytemuck_idl_preserves_packed_repr() {
+        let type_def = <PackedProducer as IdlAccountType>::__idl_type_def()
+            .expect("PackedProducer should emit an IDL type");
+        assert!(type_def.contains("\"name\":\"PackedProducer\""));
+        assert!(type_def.contains("\"serialization\":\"bytemuck\""));
+        assert!(type_def.contains("\"repr\":{\"kind\":\"c\",\"packed\":true}"));
+    }
+
+    #[test]
+    fn packed_bytemuck_event_idl_preserves_packed_repr() {
+        let type_def = <PackedSnapshot as IdlAccountType>::__idl_type_def()
+            .expect("PackedSnapshot should emit an IDL type");
+        assert!(type_def.contains("\"name\":\"PackedSnapshot\""));
+        assert!(type_def.contains("\"serialization\":\"bytemuck\""));
+        assert!(type_def.contains("\"repr\":{\"kind\":\"c\",\"packed\":true}"));
     }
 }

@@ -363,6 +363,31 @@ mod shim {
     miri,
     ignore = "spawns cargo and writes temporary workspaces; covered by normal cargo test"
 )]
+fn idl_generation_rejects_lossy_packed_repr_modifiers() {
+    compile_fail_case(
+        "event_bytemuck_packed_two",
+        r#"
+use anchor_lang_v2::prelude::*;
+
+#[event(bytemuck)]
+#[repr(C, packed(2))]
+pub struct Bad {
+    pub tag: u16,
+    pub wide: u64,
+}
+"#,
+        &[
+            "Anchor IDL only supports `#[repr(..., packed)]` or `#[repr(..., packed(1))]`",
+            "lossy IDL layout",
+        ],
+    );
+}
+
+#[test]
+#[cfg_attr(
+    miri,
+    ignore = "spawns cargo and writes temporary workspaces; covered by normal cargo test"
+)]
 fn malformed_discriminator_attribute_has_targeted_message() {
     compile_fail_case(
         "bad_discriminator",

@@ -2155,7 +2155,11 @@ pub fn account(attr: TokenStream, item: TokenStream) -> TokenStream {
     let type_kind = if is_borsh {
         idl::TypeKind::Borsh
     } else {
-        idl::TypeKind::BytemuckRepr
+        let repr = match idl::bytemuck_repr_from_attrs(attrs) {
+            Ok(repr) => repr,
+            Err(err) => return err.to_compile_error().into(),
+        };
+        idl::TypeKind::BytemuckRepr(repr)
     };
     let idl_account_entry = match idl::build_account_entry_string(&name_str, disc_bytes) {
         Some(s) => quote! { Some(#s) },
@@ -4160,7 +4164,22 @@ fn gen_declare_program_pod_impls(
     let field_types = fields.tys();
     let impl_generics = &generics.impl_generics;
     let ty_generics = &generics.ty_generics;
-    let where_clause = &generics.pod_where_clause;
+    let generic_where_clause = &generics.pod_where_clause;
+    let where_clause = if field_types.is_empty() {
+        generic_where_clause.clone()
+    } else if generic_where_clause.is_empty() {
+        quote! {
+            where
+                #(#field_types: anchor_lang_v2::bytemuck::Pod
+                    + anchor_lang_v2::bytemuck::Zeroable),*
+        }
+    } else {
+        quote! {
+            #generic_where_clause,
+            #(#field_types: anchor_lang_v2::bytemuck::Pod
+                + anchor_lang_v2::bytemuck::Zeroable),*
+        }
+    };
     quote! {
         impl #impl_generics #ident #ty_generics #where_clause {
             const __ANCHOR_DECLARE_PROGRAM_POD_ASSERT: fn() = || {
@@ -4269,6 +4288,9 @@ fn declare_idl_type_to_tokens(
         } else {
             json_str(defined, "name", span)?
         };
+        if let Some(builtin) = declare_idl_defined_builtin(defined_name) {
+            return Ok(builtin);
+        }
         let ident = Ident::new(&to_type_name(defined_name), span);
         let generic_args = defined
             .get("generics")
@@ -4314,6 +4336,21 @@ fn declare_idl_type_to_tokens(
         span,
         format!("unsupported IDL type `{value}`"),
     ))
+}
+
+fn declare_idl_defined_builtin(name: &str) -> Option<TokenStream2> {
+    match name {
+        "PodBool" => Some(quote! { anchor_lang_v2::pod::PodBool }),
+        "PodU16" => Some(quote! { anchor_lang_v2::pod::PodU16 }),
+        "PodU32" => Some(quote! { anchor_lang_v2::pod::PodU32 }),
+        "PodU64" => Some(quote! { anchor_lang_v2::pod::PodU64 }),
+        "PodU128" => Some(quote! { anchor_lang_v2::pod::PodU128 }),
+        "PodI16" => Some(quote! { anchor_lang_v2::pod::PodI16 }),
+        "PodI32" => Some(quote! { anchor_lang_v2::pod::PodI32 }),
+        "PodI64" => Some(quote! { anchor_lang_v2::pod::PodI64 }),
+        "PodI128" => Some(quote! { anchor_lang_v2::pod::PodI128 }),
+        _ => None,
+    }
 }
 
 fn declare_idl_array_len_to_tokens(
@@ -5691,7 +5728,13 @@ pub fn event(attr: TokenStream, item: TokenStream) -> TokenStream {
     // `{serialization:"bytemuck",repr:{kind:"c"}}`.
     let type_kind = match mode {
         EventMode::Wincode => idl::TypeKind::Borsh,
-        EventMode::Bytemuck => idl::TypeKind::BytemuckRepr,
+        EventMode::Bytemuck => {
+            let repr = match idl::bytemuck_repr_from_attrs(attrs) {
+                Ok(repr) => repr,
+                Err(err) => return err.to_compile_error().into(),
+            };
+            idl::TypeKind::BytemuckRepr(repr)
+        }
     };
     let struct_docs = idl::extract_doc_lines(attrs);
     let idl_validation_tokens = if matches!(mode, EventMode::Wincode) {
@@ -7063,6 +7106,24 @@ mod tests {
             "declare_program markers should expose their known address for IDL emission: \
              {generated}"
         );
+    }
+
+    #[test]
+    fn declare_idl_defined_pod_wrappers_use_runtime_types() {
+        let span = proc_macro2::Span::call_site();
+        let pod_u64 = declare_idl_type_to_tokens(
+            &json!({ "defined": { "name": "PodU64" } }),
+            span,
+        )
+        .unwrap();
+        assert_eq!(pod_u64.to_string(), "anchor_lang_v2 :: pod :: PodU64");
+
+        let pod_bool = declare_idl_type_to_tokens(
+            &json!({ "defined": { "name": "PodBool" } }),
+            span,
+        )
+        .unwrap();
+        assert_eq!(pod_bool.to_string(), "anchor_lang_v2 :: pod :: PodBool");
     }
 
     fn nested_accounts_preserve_inner_bumps_in_generated_surface() {

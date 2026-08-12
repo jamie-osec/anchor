@@ -17,7 +17,10 @@ use {
     proc_macro2::TokenStream as TokenStream2,
     quote::quote,
     serde_json::{json, Value},
-    syn::{visit::Visit, Expr, GenericParam, Generics, Lit, PathArguments, Type, TypePath},
+    syn::{
+        punctuated::Punctuated, spanned::Spanned, visit::Visit, Expr, GenericParam, Generics,
+        Lit, PathArguments, Token, Type, TypePath,
+    },
 };
 
 const DYNAMIC_LEN_KEY: &str = "__anchor_private_const_len";
@@ -37,6 +40,9 @@ impl<'a> TypeLowerer<'a> {
     }
 
     fn lower(&mut self, ty: &Type) -> Value {
+        if let Some(value) = pod_vec_type_to_idl_value(ty) {
+            return value;
+        }
         match ty {
             Type::Reference(reference) => self.lower(&reference.elem),
             Type::Group(group) => self.lower(&group.elem),
@@ -168,6 +174,72 @@ pub fn rust_type_to_idl(ty: &Type) -> TokenStream2 {
     let value = lowerer.lower(ty);
     lowerer.finish(value)
 }
+
+fn pod_vec_type_to_idl_value(ty: &Type) -> Option<Value> {
+    match ty {
+        Type::Group(group) => pod_vec_type_to_idl_value(&group.elem),
+        Type::Paren(paren) => pod_vec_type_to_idl_value(&paren.elem),
+        Type::Reference(reference) => pod_vec_type_to_idl_value(reference.elem.as_ref()),
+        Type::Path(type_path) => {
+            let segment = type_path.path.segments.last()?;
+            if segment.ident != "PodVec" {
+                return None;
+            }
+            let PathArguments::AngleBracketed(args) = &segment.arguments else {
+                return None;
+            };
+            if args.args.len() != 2 {
+                return None;
+            }
+            let mut args_iter = args.args.iter();
+            let inner_ty = match args_iter.next()? {
+                syn::GenericArgument::Type(ty) => ty,
+                _ => return None,
+            };
+            let max_expr = match args_iter.next()? {
+                syn::GenericArgument::Const(expr) => expr,
+                _ => return None,
+            };
+            Some(json!({
+                "defined": {
+                    "name": "PodVec",
+                    "generics": [
+                        {
+                            "kind": "type",
+                            "type": pod_vec_element_type_to_idl_value(inner_ty),
+                        },
+                        {
+                            "kind": "const",
+                            "value": quote!(#max_expr).to_string().replace(' ', ""),
+                        },
+                    ],
+                }
+            }))
+        }
+        _ => None,
+    }
+}
+
+fn pod_vec_element_type_to_idl_value(ty: &Type) -> Value {
+    match ty {
+        Type::Path(type_path) => {
+            let Some(segment) = type_path.path.segments.last() else {
+                return TypeLowerer::default().lower(ty);
+            };
+            match normalize_builtin_path(&segment.ident.to_string()) {
+                "PodBool" | "PodU16" | "PodU32" | "PodU64" | "PodU128" | "PodI16" | "PodI32"
+                | "PodI64" | "PodI128" => json!({
+                    "defined": {
+                        "name": segment.ident.to_string(),
+                    }
+                }),
+                _ => TypeLowerer::default().lower(ty),
+            }
+        }
+        _ => TypeLowerer::default().lower(ty),
+    }
+}
+
 fn normalize_builtin_path(ty: &str) -> &str {
     let ty = ty.trim_start_matches("::");
     [
@@ -515,8 +587,50 @@ pub enum TypeKind {
     /// Default borsh layout. Spec `skip_serializing_if`s both fields at the
     /// default value, so nothing extra gets emitted.
     Borsh,
-    /// `bytemuck` Pod + `repr(C)`. Both fields show up in the JSON.
-    BytemuckRepr,
+    /// `bytemuck` Pod + `repr(C)` plus any layout modifiers preserved from
+    /// the source item's `#[repr(...)]` attributes.
+    BytemuckRepr(BytemuckRepr),
+}
+
+#[derive(Clone, Copy, Default)]
+pub struct BytemuckRepr {
+    pub packed: bool,
+    pub align: Option<usize>,
+}
+
+pub fn bytemuck_repr_from_attrs(attrs: &[syn::Attribute]) -> syn::Result<BytemuckRepr> {
+    let mut repr = BytemuckRepr::default();
+
+    for attr in attrs.iter().filter(|attr| attr.path().is_ident("repr")) {
+        let metas = attr.parse_args_with(Punctuated::<syn::Meta, Token![,]>::parse_terminated)?;
+        for meta in metas {
+            match meta {
+                syn::Meta::Path(path) if path.is_ident("packed") => {
+                    repr.packed = true;
+                }
+                syn::Meta::List(list) if list.path.is_ident("packed") => {
+                    let packed = list.parse_args::<syn::LitInt>()?;
+                    let packed = packed.base10_parse::<usize>()?;
+                    if packed != 1 {
+                        return Err(syn::Error::new(
+                            list.span(),
+                            "Anchor IDL only supports `#[repr(..., packed)]` or \
+                             `#[repr(..., packed(1))]`; other packed widths \
+                             would produce a lossy IDL layout"
+                        ));
+                    }
+                    repr.packed = true;
+                }
+                syn::Meta::List(list) if list.path.is_ident("align") => {
+                    let align = list.parse_args::<syn::LitInt>()?;
+                    repr.align = Some(align.base10_parse()?);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    Ok(repr)
 }
 
 pub fn build_account_entry_string(name: &str, disc: &[u8]) -> Option<String> {
@@ -755,9 +869,17 @@ fn build_type_def_header(
     }
     match kind {
         TypeKind::Borsh => {}
-        TypeKind::BytemuckRepr => {
+        TypeKind::BytemuckRepr(repr) => {
             out.insert("serialization".into(), Value::String("bytemuck".into()));
-            out.insert("repr".into(), json!({ "kind": "c" }));
+            let mut repr_json = serde_json::Map::new();
+            repr_json.insert("kind".into(), Value::String("c".into()));
+            if repr.packed {
+                repr_json.insert("packed".into(), Value::Bool(true));
+            }
+            if let Some(align) = repr.align {
+                repr_json.insert("align".into(), json!(align));
+            }
+            out.insert("repr".into(), Value::Object(repr_json));
         }
     }
     out
@@ -1338,6 +1460,33 @@ mod tests {
     }
 
     #[test]
+    fn pod_vec_references_preserve_type_and_const_generics() {
+        let ty: Type = syn::parse_quote!(PodVec<PodU64, 4>);
+        assert_eq!(
+            rust_type_to_idl_value(&ty),
+            json!({
+                "defined": {
+                    "name": "PodVec",
+                    "generics": [
+                        {
+                            "kind": "type",
+                            "type": {
+                                "defined": {
+                                    "name": "PodU64",
+                                }
+                            }
+                        },
+                        {
+                            "kind": "const",
+                            "value": "4",
+                        }
+                    ]
+                }
+            })
+        );
+    }
+
+    #[test]
     fn array_lengths_are_lowered_in_their_defining_context() {
         let generics: Generics = syn::parse_quote!(<const N: usize>);
         let mut lowerer = TypeLowerer::with_generics(&generics);
@@ -1359,6 +1508,25 @@ mod tests {
         assert!(generated.contains("Box :: leak"));
         assert!(generated.contains("limits :: ITEMS"));
         assert!(!generated.contains("generic"));
+    }
+
+    #[test]
+    fn packed_one_repr_modifier_sets_packed_flag() {
+        let attrs: Vec<syn::Attribute> = vec![syn::parse_quote!(#[repr(C, packed(1))])];
+        let repr = bytemuck_repr_from_attrs(&attrs).expect("packed(1) should parse");
+        assert!(repr.packed);
+        assert_eq!(repr.align, None);
+    }
+
+    #[test]
+    fn packed_greater_than_one_repr_modifier_is_rejected() {
+        let attrs: Vec<syn::Attribute> = vec![syn::parse_quote!(#[repr(C, packed(2))])];
+        let err = match bytemuck_repr_from_attrs(&attrs) {
+            Ok(_) => panic!("packed(2) should be rejected"),
+            Err(err) => err,
+        };
+        assert!(err.to_string().contains("Anchor IDL only supports"));
+        assert!(err.to_string().contains("lossy IDL layout"));
     }
 
     #[test]
