@@ -112,6 +112,9 @@ fn derive_to_cpi_accounts_emits_metas_and_erased_handles() {
     assert!(handles[4].is_writable());
     assert!(!handles[5].is_writable());
     assert!(handles[6].is_writable());
+
+    let flags = accounts.optional_account_sentinel_flags();
+    assert_eq!(flags, vec![false, false, false, false, false, false, false, true]);
 }
 
 #[test]
@@ -122,4 +125,5 @@ fn derive_to_cpi_accounts_accepts_phantom_only_empty_structs() {
 
     assert!(accounts.to_instruction_accounts().is_empty());
     assert!(accounts.to_cpi_handles().is_empty());
+    assert!(accounts.optional_account_sentinel_flags().is_empty());
 }

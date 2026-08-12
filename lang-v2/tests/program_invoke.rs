@@ -184,7 +184,67 @@ fn checked_invoke_accepts_optional_none_program_id_sentinel() {
     };
     let handles = [view.to_cpi_handle()];
 
+    // Index 1 is an intentional Option::None sentinel — not a required account.
+    program::invoke_with_optional_sentinels(&ix, &handles, &[false, true]).unwrap();
+}
+
+#[test]
+fn checked_invoke_rejects_required_program_id_account_without_handle() {
+    // Pre-fix: any readonly non-signer meta at the callee program id was
+    // treated as an optional None sentinel, so a required program-id account
+    // could be skipped when its handle was omitted.
+    let other = account_view([1; 32], false);
+    let other_view = unsafe { other.view() };
+    let ix = Instruction {
+        program_id: ID,
+        accounts: vec![
+            AccountMeta::new_readonly(*other_view.address(), false),
+            AccountMeta::new_readonly(ID, false),
+        ],
+        data: vec![],
+    };
+    let handles = [other_view.to_cpi_handle()];
+
+    let err = program::invoke(&ix, &handles).unwrap_err();
+    assert_eq!(err, ProgramError::NotEnoughAccountKeys);
+}
+
+#[test]
+fn checked_invoke_accepts_required_program_id_account_with_handle() {
+    let other = account_view([1; 32], false);
+    let program_account = account_view([7; 32], false);
+    let other_view = unsafe { other.view() };
+    let program_view = unsafe { program_account.view() };
+    let ix = Instruction {
+        program_id: ID,
+        accounts: vec![
+            AccountMeta::new_readonly(*other_view.address(), false),
+            AccountMeta::new_readonly(ID, false),
+        ],
+        data: vec![],
+    };
+    let handles = [other_view.to_cpi_handle(), program_view.to_cpi_handle()];
+
     program::invoke(&ix, &handles).unwrap();
+}
+
+#[test]
+fn checked_invoke_optional_none_before_required_program_id_uses_mask() {
+    // Optional None sentinel then a required program-id account. The handle
+    // must bind to the required slot, not be stolen by the sentinel.
+    let program_account = account_view([7; 32], false);
+    let program_view = unsafe { program_account.view() };
+    let ix = Instruction {
+        program_id: ID,
+        accounts: vec![
+            AccountMeta::new_readonly(ID, false),
+            AccountMeta::new_readonly(ID, false),
+        ],
+        data: vec![],
+    };
+    let handles = [program_view.to_cpi_handle()];
+
+    program::invoke_with_optional_sentinels(&ix, &handles, &[true, false]).unwrap();
 }
 
 #[test]

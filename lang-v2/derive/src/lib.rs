@@ -356,6 +356,21 @@ fn impl_to_cpi_accounts(input: &DeriveInput) -> TokenStream2 {
         },
     });
 
+    let flag_steps = cpi_fields.iter().map(|(ident, kind, _)| match kind {
+        CpiFieldKind::Phantom => quote! {},
+        CpiFieldKind::Nested => quote! {
+            __flags.extend(
+                anchor_lang_v2::ToCpiAccounts::optional_account_sentinel_flags(&self.#ident),
+            );
+        },
+        CpiFieldKind::Readonly | CpiFieldKind::Writable => quote! {
+            __flags.push(false);
+        },
+        CpiFieldKind::OptionalReadonly | CpiFieldKind::OptionalWritable => quote! {
+            __flags.push(self.#ident.is_none());
+        },
+    });
+
     quote! {
         impl #impl_generics anchor_lang_v2::ToCpiAccounts<#cpi_lifetime>
             for #name #ty_generics #where_clause
@@ -376,6 +391,12 @@ fn impl_to_cpi_accounts(input: &DeriveInput) -> TokenStream2 {
                 let mut __handles = anchor_lang_v2::__alloc::vec::Vec::new();
                 #(#handle_steps)*
                 __handles
+            }
+
+            fn optional_account_sentinel_flags(&self) -> anchor_lang_v2::__alloc::vec::Vec<bool> {
+                let mut __flags = anchor_lang_v2::__alloc::vec::Vec::new();
+                #(#flag_steps)*
+                __flags
             }
         }
     }
@@ -6123,6 +6144,14 @@ pub fn emit_cpi(input: TokenStream) -> TokenStream {
                     let mut __handles = anchor_lang_v2::__alloc::vec::Vec::with_capacity(1);
                     __handles.push(self.event_authority);
                     __handles
+                }
+
+                fn optional_account_sentinel_flags(
+                    &self,
+                ) -> anchor_lang_v2::__alloc::vec::Vec<bool> {
+                    let mut __flags = anchor_lang_v2::__alloc::vec::Vec::with_capacity(1);
+                    __flags.push(false);
+                    __flags
                 }
             }
 

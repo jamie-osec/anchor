@@ -214,6 +214,14 @@ pub trait ToCpiAccounts<'a> {
 
     /// Collect all CPI handles for the invocation.
     fn to_cpi_handles(&self) -> alloc::vec::Vec<CpiHandle<'a>>;
+
+    /// Parallel to [`to_instruction_accounts`]: `true` at each index where an
+    /// optional field was `None` and a program-id sentinel meta was emitted.
+    ///
+    /// The CPI invoker may skip a matching handle only for these indices.
+    /// Required accounts whose address equals the callee program id must be
+    /// `false` here so they still require a handle.
+    fn optional_account_sentinel_flags(&self) -> alloc::vec::Vec<bool>;
 }
 
 pub trait AnchorAccount: Deref<Target = Self::Data> + Sized {
