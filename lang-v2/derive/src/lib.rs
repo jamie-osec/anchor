@@ -1115,10 +1115,15 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         .collect();
     let bump_cache_locals: Vec<proc_macro2::TokenStream> = fields
         .iter()
-        .filter(|f| f.has_bump)
+        .filter(|f| f.has_bump || parse::extract_nested_inner_type(&f.ty).is_some())
         .map(|f| {
             let bump_cache = parse::bump_cache_ident(&f.name);
-            if f.is_optional {
+            if let Some(inner_ty) = parse::extract_nested_inner_type(&f.ty) {
+                quote! {
+                    let mut #bump_cache: <#inner_ty as anchor_lang_v2::Bumps>::Bumps =
+                        ::core::default::Default::default();
+                }
+            } else if f.is_optional {
                 quote! {
                     let mut #bump_cache: ::core::option::Option<u8> = ::core::default::Default::default();
                 }
@@ -7054,6 +7059,12 @@ mod tests {
                 "let (__nested_inner , __anchor_bump_cache_inner , _) = < Inner as anchor_lang_v2 :: TryAccounts > :: validate_accounts"
             ),
             "expected nested validate_accounts call to keep the returned bumps value: {generated}"
+        );
+        assert!(
+            generated.contains(
+                "let mut __anchor_bump_cache_inner : < Inner as anchor_lang_v2 :: Bumps > :: Bumps = :: core :: default :: Default :: default() ;"
+            ),
+            "expected nested bump cache local declaration: {generated}"
         );
         assert!(
             generated
