@@ -8,14 +8,12 @@ use {
     abs_path::AbsolutePath,
     anchor_cli_macros::AbsolutePath,
     anchor_client::Cluster,
-    anchor_lang::{
-        prelude::UpgradeableLoaderState, solana_program::bpf_loader_upgradeable, AnchorDeserialize,
-    },
     anchor_lang_idl::{
         convert::convert_idl,
         types::{Idl, IdlArrayLen, IdlDefinedFields, IdlType, IdlTypeDefTy},
     },
     anyhow::{anyhow, bail, Context, Result},
+    borsh::BorshDeserialize,
     checks::{check_anchor_version, check_deps, check_idl_build_feature, check_overflow},
     clap::{CommandFactory, Parser},
     dirs::home_dir,
@@ -30,6 +28,7 @@ use {
     solana_compute_budget_interface::ComputeBudgetInstruction,
     solana_instruction::Instruction,
     solana_keypair::Keypair,
+    solana_loader_v3_interface::state::UpgradeableLoaderState,
     solana_pubkey::Pubkey,
     solana_pubsub_client::pubsub_client::{PubsubClient, PubsubClientSubscription},
     solana_rpc_client::rpc_client::RpcClient,
@@ -39,6 +38,7 @@ use {
         response::{Response as RpcResponse, RpcLogsResponse},
     },
     solana_signer::{EncodableKey, Signer},
+    solana_sdk_ids::bpf_loader_upgradeable,
     std::{
         collections::{BTreeMap, HashMap, HashSet},
         ffi::OsString,
@@ -3364,7 +3364,7 @@ fn deserialize_idl_defined_type_to_json(
             }
         }
         IdlTypeDefTy::Enum { variants } => {
-            let repr = <u8 as AnchorDeserialize>::deserialize(data)?;
+            let repr = <u8 as BorshDeserialize>::deserialize(data)?;
 
             let variant = variants
                 .get(repr as usize)
@@ -3404,7 +3404,7 @@ fn deserialize_idl_defined_type_to_json(
     Ok(JsonValue::Object(deserialized_fields))
 }
 
-// Deserializes a primitive type using AnchorDeserialize
+// Deserializes a primitive type using BorshDeserialize
 fn deserialize_idl_type_to_json(
     idl_type: &IdlType,
     data: &mut &[u8],
@@ -3415,50 +3415,50 @@ fn deserialize_idl_type_to_json(
     }
 
     Ok(match idl_type {
-        IdlType::Bool => json!(<bool as AnchorDeserialize>::deserialize(data)?),
+        IdlType::Bool => json!(<bool as BorshDeserialize>::deserialize(data)?),
         IdlType::U8 => {
-            json!(<u8 as AnchorDeserialize>::deserialize(data)?)
+            json!(<u8 as BorshDeserialize>::deserialize(data)?)
         }
         IdlType::I8 => {
-            json!(<i8 as AnchorDeserialize>::deserialize(data)?)
+            json!(<i8 as BorshDeserialize>::deserialize(data)?)
         }
         IdlType::U16 => {
-            json!(<u16 as AnchorDeserialize>::deserialize(data)?)
+            json!(<u16 as BorshDeserialize>::deserialize(data)?)
         }
         IdlType::I16 => {
-            json!(<i16 as AnchorDeserialize>::deserialize(data)?)
+            json!(<i16 as BorshDeserialize>::deserialize(data)?)
         }
         IdlType::U32 => {
-            json!(<u32 as AnchorDeserialize>::deserialize(data)?)
+            json!(<u32 as BorshDeserialize>::deserialize(data)?)
         }
         IdlType::I32 => {
-            json!(<i32 as AnchorDeserialize>::deserialize(data)?)
+            json!(<i32 as BorshDeserialize>::deserialize(data)?)
         }
-        IdlType::F32 => json!(<f32 as AnchorDeserialize>::deserialize(data)?),
+        IdlType::F32 => json!(<f32 as BorshDeserialize>::deserialize(data)?),
         IdlType::U64 => {
-            json!(<u64 as AnchorDeserialize>::deserialize(data)?)
+            json!(<u64 as BorshDeserialize>::deserialize(data)?)
         }
         IdlType::I64 => {
-            json!(<i64 as AnchorDeserialize>::deserialize(data)?)
+            json!(<i64 as BorshDeserialize>::deserialize(data)?)
         }
-        IdlType::F64 => json!(<f64 as AnchorDeserialize>::deserialize(data)?),
+        IdlType::F64 => json!(<f64 as BorshDeserialize>::deserialize(data)?),
         IdlType::U128 => {
-            json!(<u128 as AnchorDeserialize>::deserialize(data)?)
+            json!(<u128 as BorshDeserialize>::deserialize(data)?)
         }
         IdlType::I128 => {
-            json!(<i128 as AnchorDeserialize>::deserialize(data)?)
+            json!(<i128 as BorshDeserialize>::deserialize(data)?)
         }
         IdlType::U256 => todo!("Upon completion of u256 IDL standard"),
         IdlType::I256 => todo!("Upon completion of i256 IDL standard"),
         IdlType::Bytes => JsonValue::Array(
-            <Vec<u8> as AnchorDeserialize>::deserialize(data)?
+            <Vec<u8> as BorshDeserialize>::deserialize(data)?
                 .iter()
                 .map(|i| json!(*i))
                 .collect(),
         ),
-        IdlType::String => json!(<String as AnchorDeserialize>::deserialize(data)?),
+        IdlType::String => json!(<String as BorshDeserialize>::deserialize(data)?),
         IdlType::Pubkey => {
-            json!(<Pubkey as AnchorDeserialize>::deserialize(data)?.to_string())
+            json!(<Pubkey as BorshDeserialize>::deserialize(data)?.to_string())
         }
         IdlType::Array(ty, size) => match size {
             IdlArrayLen::Value(size) => {
@@ -3474,7 +3474,7 @@ fn deserialize_idl_type_to_json(
             IdlArrayLen::Generic(_) => unimplemented!("Generic array length is not yet supported"),
         },
         IdlType::Option(ty) => {
-            let is_present = <u8 as AnchorDeserialize>::deserialize(data)?;
+            let is_present = <u8 as BorshDeserialize>::deserialize(data)?;
 
             if is_present == 0 {
                 JsonValue::String("None".to_string())
@@ -3483,7 +3483,7 @@ fn deserialize_idl_type_to_json(
             }
         }
         IdlType::Vec(ty) => {
-            let size: usize = <u32 as AnchorDeserialize>::deserialize(data)?
+            let size: usize = <u32 as BorshDeserialize>::deserialize(data)?
                 .try_into()
                 .unwrap();
 

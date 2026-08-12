@@ -38,8 +38,8 @@
 //! // variant panics. The raw-byte read via `pod.0` remains unvalidated —
 //! // it's the intentional escape hatch for callers that want to inspect
 //! // bytes without triggering the variant check.
-//! unsafe impl anchor_lang_v2::bytemuck::Pod for PodMarketMode {}
-//! unsafe impl anchor_lang_v2::bytemuck::Zeroable for PodMarketMode {}
+//! unsafe impl anchor_lang::bytemuck::Pod for PodMarketMode {}
+//! unsafe impl anchor_lang::bytemuck::Zeroable for PodMarketMode {}
 //!
 //! // Cross-type comparisons let existing `engine.market_mode == MarketMode::Live`
 //! // keep working untouched after migrating the field from `MarketMode` to
@@ -179,8 +179,8 @@ pub fn expand(item: TokenStream) -> TokenStream {
         // Byte patterns that don't correspond to a declared variant are
         // surfaced at conversion time (`From<#pod_name> for #name`), not at
         // cast time — so `bytemuck`'s zero-copy cast is always sound.
-        unsafe impl anchor_lang_v2::bytemuck::Pod for #pod_name {}
-        unsafe impl anchor_lang_v2::bytemuck::Zeroable for #pod_name {}
+        unsafe impl anchor_lang::bytemuck::Pod for #pod_name {}
+        unsafe impl anchor_lang::bytemuck::Zeroable for #pod_name {}
 
         impl #pod_name {
             #(#variant_consts)*
@@ -244,14 +244,14 @@ pub fn expand(item: TokenStream) -> TokenStream {
         // just a byte, but it still needs a type def so downstream
         // `declare_program!` consumers can resolve `Pod{Enum}` references.
         #[cfg(feature = "idl-build")]
-        impl anchor_lang_v2::IdlAccountType for #pod_name {
+        impl anchor_lang::IdlAccountType for #pod_name {
             const __IDL_TYPE_DEF: Option<&'static str> = Some(#idl_type_def);
 
             fn __register_idl_deps(
-                _accounts: &mut anchor_lang_v2::__alloc::vec::Vec<&'static str>,
-                types: &mut anchor_lang_v2::__alloc::vec::Vec<&'static str>,
+                _accounts: &mut anchor_lang::__alloc::vec::Vec<&'static str>,
+                types: &mut anchor_lang::__alloc::vec::Vec<&'static str>,
             ) {
-                if let Some(t) = <Self as anchor_lang_v2::IdlAccountType>::__IDL_TYPE_DEF {
+                if let Some(t) = <Self as anchor_lang::IdlAccountType>::__IDL_TYPE_DEF {
                     types.push(t);
                 }
             }

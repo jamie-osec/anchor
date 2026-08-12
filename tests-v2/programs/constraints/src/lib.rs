@@ -16,7 +16,7 @@
 //!   - `zeroed`                 (pre-zeroed disc + non-zero rejection)
 //!   - `#[account(signer)]` on `UncheckedAccount`
 
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
 
@@ -24,13 +24,13 @@ declare_id!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
 /// `seeds::program = OTHER_PROGRAM` override test. The PDA only has to be
 /// verifiable under this key — it is never actually invoked.
 pub const OTHER_PROGRAM: Address =
-    anchor_lang_v2::address!("Gue5TpR6sstSyGhSvmVeH2TeKqBYYqmXpRCacB9jAk8u");
+    anchor_lang::address!("Gue5TpR6sstSyGhSvmVeH2TeKqBYYqmXpRCacB9jAk8u");
 
 /// Expected address for the `address = PINNED_ADDRESS` check.
 /// Pinned to a known off-curve pubkey — tests pass this exact address
 /// on the happy path and a different one on the violation path.
 pub const PINNED_ADDRESS: Address =
-    anchor_lang_v2::address!("Pin1111111111111111111111111111111111111111");
+    anchor_lang::address!("Pin1111111111111111111111111111111111111111");
 
 // -- Custom error enum -------------------------------------------------------
 
@@ -449,7 +449,7 @@ pub struct CheckAddressFieldPathRenamed {
 /// string rather than a raw Rust source snippet.
 #[derive(Accounts)]
 pub struct CheckAddressMacroLiteral {
-    #[account(address = anchor_lang_v2::address!("11111111111111111111111111111111"))]
+    #[account(address = anchor_lang::address!("11111111111111111111111111111111"))]
     pub pinned: UncheckedAccount,
 }
 

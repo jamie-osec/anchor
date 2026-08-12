@@ -4,7 +4,7 @@
 
 #![no_std]
 extern crate alloc;
-extern crate self as anchor_lang_v2;
+extern crate self as anchor_lang;
 
 pub mod accounts;
 pub mod context;
@@ -141,11 +141,11 @@ pub type BorshConfig = wincode::config::Configuration<
 /// build` pipeline and will change without notice. The emitted impl body
 /// is gated on the **end-user crate's** local `idl-build` feature, so
 /// non-IDL builds pay nothing.
-pub use anchor_derive_accounts_v2::IdlType;
+pub use anchor_derive_accounts::IdlType;
 // ---------------------------------------------------------------------------
 // Client-side types — for building instructions off-chain (tests, CPI, SDK)
 // ---------------------------------------------------------------------------
-pub use anchor_derive_accounts_v2::{emit_cpi, event_cpi};
+pub use anchor_derive_accounts::{emit_cpi, event_cpi};
 #[doc(hidden)]
 pub use cpi::create_account_with_signers;
 /// **Opaque / unstable.** Re-exported so derive-emitted code in user
@@ -168,7 +168,7 @@ pub use idl_build::IdlAccountType;
 pub use solana_instruction::account_meta::AccountMeta;
 pub use {
     accounts::{AccountInitialize, SlabInit},
-    anchor_derive_accounts_v2::{
+    anchor_derive_accounts::{
         access_control, account, constant, declare_program, emit, error_code, event, pod_wrapper,
         program, Accounts, InitSpace, ToCpiAccounts,
     },
@@ -192,7 +192,7 @@ pub use {
 
 /// Re-export of the Solana SDK `Instruction` + `AccountMeta` types under a v1-
 /// compatible module path. Lets users write
-/// `use anchor_lang_v2::solana_program::instruction::{Instruction, AccountMeta}`
+/// `use anchor_lang::solana_program::instruction::{Instruction, AccountMeta}`
 /// without adding `solana-instruction` to their `Cargo.toml`.
 pub mod solana_program {
     pub mod clock {
@@ -436,7 +436,7 @@ macro_rules! err {
 ///
 /// # Example
 /// ```rust,no_run
-/// # use anchor_lang_v2::prelude::*;
+/// # use anchor_lang::prelude::*;
 /// fn check(amount: u64) -> Result<()> {
 ///     require!(amount > 0, ConstraintRaw);
 ///     require!(amount > 0, ProgramError::InvalidArgument);
@@ -467,7 +467,7 @@ macro_rules! require {
 ///
 /// # Example
 /// ```rust,no_run
-/// # use anchor_lang_v2::prelude::*;
+/// # use anchor_lang::prelude::*;
 /// fn check(count: u64) -> Result<()> {
 ///     require_eq!(count, 0);
 ///     require_eq!(count, 0, RequireEqViolated);
@@ -499,7 +499,7 @@ macro_rules! require_eq {
 ///
 /// # Example
 /// ```rust,no_run
-/// # use anchor_lang_v2::prelude::*;
+/// # use anchor_lang::prelude::*;
 /// fn check(count: u64) -> Result<()> {
 ///     require_neq!(count, 0);
 ///     require_neq!(count, 0, RequireNeqViolated);
@@ -539,7 +539,7 @@ macro_rules! require_neq {
 ///
 /// # Example
 /// ```rust,no_run
-/// # use anchor_lang_v2::prelude::*;
+/// # use anchor_lang::prelude::*;
 /// fn check(authority: Address) -> Result<()> {
 ///     require_keys_eq!(authority, authority);
 ///     require_keys_eq!(authority, authority, RequireKeysEqViolated);
@@ -570,7 +570,7 @@ macro_rules! require_keys_eq {
 ///
 /// # Example
 /// ```rust,no_run
-/// # use anchor_lang_v2::prelude::*;
+/// # use anchor_lang::prelude::*;
 /// fn check(authority: Address, other: Address) -> Result<()> {
 ///     require_keys_neq!(authority, other);
 ///     require_keys_neq!(authority, other, RequireKeysNeqViolated);
@@ -599,7 +599,7 @@ macro_rules! require_keys_neq {
 ///
 /// # Example
 /// ```rust,no_run
-/// # use anchor_lang_v2::prelude::*;
+/// # use anchor_lang::prelude::*;
 /// fn check(count: u64) -> Result<()> {
 ///     require_gt!(count, 0);
 ///     require_gt!(count, 0, RequireGtViolated);
@@ -637,7 +637,7 @@ macro_rules! require_gt {
 ///
 /// # Example
 /// ```rust,no_run
-/// # use anchor_lang_v2::prelude::*;
+/// # use anchor_lang::prelude::*;
 /// fn check(count: u64) -> Result<()> {
 ///     require_gte!(count, 1);
 ///     require_gte!(count, 1, RequireGteViolated);

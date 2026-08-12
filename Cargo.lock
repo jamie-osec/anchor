@@ -16,8 +16,8 @@ dependencies = [
 name = "account-address-constraints"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
- "anchor-spl-v2",
+ "anchor-lang",
+ "anchor-spl",
  "bytemuck",
  "pinocchio",
  "pinocchio-system",
@@ -29,7 +29,7 @@ dependencies = [
 name = "account-meta-signer-overrides"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "bytemuck",
  "pinocchio",
  "pinocchio-system",
@@ -40,7 +40,7 @@ dependencies = [
 name = "accounts-test"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "bytemuck",
  "foreign-borsh-account",
  "pinocchio",
@@ -219,7 +219,7 @@ checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 name = "alt-cpi"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "wincode 0.5.4",
 ]
 
@@ -290,11 +290,11 @@ dependencies = [
  "addr2line",
  "anchor-cli-macros",
  "anchor-client",
- "anchor-lang",
  "anchor-lang-idl",
  "anyhow",
  "base64 0.21.7",
  "bincode",
+ "borsh 1.6.1",
  "bs58",
  "cargo_metadata",
  "cargo_toml 0.22.3",
@@ -365,7 +365,7 @@ dependencies = [
 name = "anchor-client"
 version = "2.0.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "anyhow",
  "base64 0.22.1",
  "futures",
@@ -394,15 +394,6 @@ dependencies = [
 name = "anchor-derive-accounts"
 version = "2.0.0"
 dependencies = [
- "anchor-syn",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
-name = "anchor-derive-accounts-v2"
-version = "2.0.0"
-dependencies = [
  "anchor-lang-idl",
  "bs58",
  "curve25519-dalek",
@@ -412,6 +403,15 @@ dependencies = [
  "sha2 0.10.9",
  "solana-address 2.6.0",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "anchor-derive-accounts-v1"
+version = "2.0.0"
+dependencies = [
+ "anchor-syn",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -438,13 +438,56 @@ dependencies = [
 name = "anchor-lang"
 version = "2.0.0"
 dependencies = [
+ "anchor-derive-accounts",
+ "bytemuck",
+ "pinocchio",
+ "pinocchio-system",
+ "sha2 0.10.9",
+ "solana-address 2.6.0",
+ "solana-define-syscall 5.0.0",
+ "solana-instruction 3.4.0",
+ "solana-msg 3.1.0",
+ "solana-program-error 3.0.0",
+ "solana-program-log",
+ "solana-program-memory 3.1.0",
+ "solana-sha256-hasher 3.1.0",
+ "solana-system-interface 2.0.0",
+ "solana-sysvar 3.1.1",
+ "wincode 0.5.4",
+]
+
+[[package]]
+name = "anchor-lang-idl"
+version = "0.1.4"
+dependencies = [
+ "anchor-lang-idl-spec",
+ "anyhow",
+ "heck 0.3.3",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "anchor-lang-idl-spec"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+]
+
+[[package]]
+name = "anchor-lang-v1"
+version = "2.0.0"
+dependencies = [
  "anchor-attribute-access-control",
  "anchor-attribute-account",
  "anchor-attribute-constant",
  "anchor-attribute-error",
  "anchor-attribute-event",
  "anchor-attribute-program",
- "anchor-derive-accounts",
+ "anchor-derive-accounts-v1",
  "anchor-derive-serde",
  "anchor-derive-space",
  "anchor-lang-idl",
@@ -478,71 +521,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "anchor-lang-idl"
-version = "0.1.4"
-dependencies = [
- "anchor-lang-idl-spec",
- "anyhow",
- "heck 0.3.3",
- "regex",
- "serde",
- "serde_json",
- "sha2 0.10.9",
-]
-
-[[package]]
-name = "anchor-lang-idl-spec"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "serde",
-]
-
-[[package]]
-name = "anchor-lang-v2"
-version = "2.0.0"
-dependencies = [
- "anchor-derive-accounts-v2",
- "bytemuck",
- "pinocchio",
- "pinocchio-system",
- "sha2 0.10.9",
- "solana-address 2.6.0",
- "solana-define-syscall 5.0.0",
- "solana-instruction 3.4.0",
- "solana-msg 3.1.0",
- "solana-program-error 3.0.0",
- "solana-program-log",
- "solana-program-memory 3.1.0",
- "solana-sha256-hasher 3.1.0",
- "solana-system-interface 2.0.0",
- "solana-sysvar 3.1.1",
- "wincode 0.5.4",
-]
-
-[[package]]
 name = "anchor-spl"
 version = "2.0.0"
 dependencies = [
  "anchor-lang",
- "borsh 1.6.1",
- "mpl-token-metadata",
- "solana-stake-interface 2.0.2",
- "solana-sysvar 3.1.1",
- "spl-associated-token-account-interface",
- "spl-memo-interface",
- "spl-pod",
- "spl-token-2022-interface",
- "spl-token-group-interface",
- "spl-token-interface",
- "spl-token-metadata-interface",
-]
-
-[[package]]
-name = "anchor-spl-v2"
-version = "2.0.0"
-dependencies = [
- "anchor-lang-v2",
  "borsh 1.6.1",
  "bytemuck",
  "mpl-token-metadata",
@@ -554,6 +536,24 @@ dependencies = [
  "solana-program-error 3.0.0",
  "solana-program-pack 3.1.0",
  "solana-pubkey 3.0.0",
+ "spl-pod",
+ "spl-token-2022-interface",
+ "spl-token-group-interface",
+ "spl-token-interface",
+ "spl-token-metadata-interface",
+]
+
+[[package]]
+name = "anchor-spl-v1"
+version = "2.0.0"
+dependencies = [
+ "anchor-lang-v1",
+ "borsh 1.6.1",
+ "mpl-token-metadata",
+ "solana-stake-interface 2.0.2",
+ "solana-sysvar 3.1.1",
+ "spl-associated-token-account-interface",
+ "spl-memo-interface",
  "spl-pod",
  "spl-token-2022-interface",
  "spl-token-group-interface",
@@ -1285,7 +1285,7 @@ dependencies = [
 name = "borsh-realloc"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "pinocchio",
  "pinocchio-system",
  "solana-program-error 3.0.0",
@@ -1394,7 +1394,7 @@ dependencies = [
 name = "callee"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "bytemuck",
  "pinocchio",
  "pinocchio-system",
@@ -1406,7 +1406,7 @@ dependencies = [
 name = "caller"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "bytemuck",
  "callee",
  "pinocchio",
@@ -1623,7 +1623,7 @@ checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 name = "client-builders"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "bytemuck",
  "pinocchio",
  "pinocchio-system",
@@ -1772,8 +1772,8 @@ checksum = "3d52eff69cd5e647efe296129160853a42795992097e8af39800e1060caeea9b"
 name = "constraint-values"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
- "anchor-spl-v2",
+ "anchor-lang",
+ "anchor-spl",
  "bytemuck",
  "pinocchio",
  "pinocchio-system",
@@ -1785,8 +1785,8 @@ dependencies = [
 name = "constraints"
 version = "0.1.0"
 dependencies = [
+ "anchor-lang",
  "anchor-lang-idl-spec",
- "anchor-lang-v2",
  "bytemuck",
  "pinocchio",
  "pinocchio-system",
@@ -1969,7 +1969,7 @@ dependencies = [
 name = "custom-constraints"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "pinocchio",
  "pinocchio-system",
  "solana-program-error 3.0.0",
@@ -2074,14 +2074,14 @@ checksum = "d7a1e2f27636f116493b8b860f5546edb47c8d8f8ea73e1d2a20be88e28d1fea"
 name = "declare-program-constants"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
 ]
 
 [[package]]
 name = "declare-program-cpi"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "wincode 0.5.4",
 ]
 
@@ -2089,7 +2089,7 @@ dependencies = [
 name = "declare-program-errors"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "wincode 0.5.4",
 ]
 
@@ -2097,7 +2097,7 @@ dependencies = [
 name = "declare-program-events"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "wincode 0.5.4",
 ]
 
@@ -2105,7 +2105,7 @@ dependencies = [
 name = "declare-program-optional"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "wincode 0.5.4",
 ]
 
@@ -2113,7 +2113,7 @@ dependencies = [
 name = "declare-program-returns"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "wincode 0.5.4",
 ]
 
@@ -2121,7 +2121,7 @@ dependencies = [
 name = "declare-program-serialization"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "wincode 0.5.4",
 ]
 
@@ -2129,7 +2129,7 @@ dependencies = [
 name = "declare-program-surface"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "wincode 0.5.4",
 ]
 
@@ -2137,7 +2137,7 @@ dependencies = [
 name = "declare-program-types"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "wincode 0.5.4",
 ]
 
@@ -2195,7 +2195,7 @@ dependencies = [
 name = "derives-test"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "bytemuck",
  "pinocchio",
  "pinocchio-system",
@@ -2281,7 +2281,7 @@ dependencies = [
 name = "dispatch-remaining"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "bytemuck",
  "pinocchio",
  "pinocchio-system",
@@ -2327,7 +2327,7 @@ dependencies = [
 name = "dup-mut"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "bytemuck",
  "pinocchio",
  "pinocchio-system",
@@ -2488,7 +2488,7 @@ dependencies = [
 name = "equivalence-metadata-spy"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "wincode 0.5.4",
 ]
 
@@ -2496,16 +2496,16 @@ dependencies = [
 name = "equivalence-metadata-v1"
 version = "0.1.0"
 dependencies = [
- "anchor-lang",
- "anchor-spl",
+ "anchor-lang-v1",
+ "anchor-spl-v1",
 ]
 
 [[package]]
 name = "equivalence-metadata-v2"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
- "anchor-spl-v2",
+ "anchor-lang",
+ "anchor-spl",
  "wincode 0.5.4",
 ]
 
@@ -2517,16 +2517,16 @@ version = "0.1.0"
 name = "equivalence-spl-v1"
 version = "0.1.0"
 dependencies = [
- "anchor-lang",
- "anchor-spl",
+ "anchor-lang-v1",
+ "anchor-spl-v1",
 ]
 
 [[package]]
 name = "equivalence-spl-v2"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
- "anchor-spl-v2",
+ "anchor-lang",
+ "anchor-spl",
  "pinocchio",
  "solana-program-error 3.0.0",
  "wincode 0.5.4",
@@ -2552,7 +2552,7 @@ dependencies = [
 name = "event-cpi-test"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "bytemuck",
  "pinocchio",
  "pinocchio-system",
@@ -2585,7 +2585,7 @@ dependencies = [
 name = "external-cpi"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "wincode 0.5.4",
 ]
 
@@ -2727,7 +2727,7 @@ checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
 name = "foreign-borsh-account"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "wincode 0.5.4",
 ]
 
@@ -2984,7 +2984,7 @@ dependencies = [
 name = "hash-cpi"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "wincode 0.5.4",
 ]
 
@@ -3444,7 +3444,7 @@ dependencies = [
 name = "init-space-usability"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "pinocchio",
  "pinocchio-system",
  "solana-program-error 3.0.0",
@@ -3541,7 +3541,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 name = "ix-macro"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "bytemuck",
  "pinocchio",
  "pinocchio-system",
@@ -3923,7 +3923,7 @@ dependencies = [
 name = "min-ix-data-len"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "bytemuck",
  "pinocchio",
  "pinocchio-system",
@@ -4246,7 +4246,7 @@ checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
 name = "optional-accounts"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "bytemuck",
  "pinocchio",
  "pinocchio-system",
@@ -4258,7 +4258,7 @@ dependencies = [
 name = "optional-callee"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "wincode 0.5.4",
 ]
 
@@ -4341,7 +4341,7 @@ dependencies = [
 name = "pda-payer-test"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "bytemuck",
  "pinocchio",
  "pinocchio-system",
@@ -4553,7 +4553,7 @@ dependencies = [
 name = "program-interface"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "wincode 0.5.4",
 ]
 
@@ -5035,7 +5035,7 @@ dependencies = [
 name = "return-callee"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "wincode 0.5.4",
 ]
 
@@ -5043,7 +5043,7 @@ dependencies = [
 name = "return-spoof"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "wincode 0.5.4",
 ]
 
@@ -5385,7 +5385,7 @@ dependencies = [
 name = "seeds"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "bytemuck",
  "pinocchio",
  "pinocchio-system",
@@ -8766,7 +8766,7 @@ dependencies = [
 name = "space-annotation"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "bytemuck",
  "pinocchio",
  "pinocchio-system",
@@ -8807,8 +8807,8 @@ dependencies = [
 name = "spl-ata-test"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
- "anchor-spl-v2",
+ "anchor-lang",
+ "anchor-spl",
  "bytemuck",
  "pinocchio",
  "pinocchio-system",
@@ -8895,8 +8895,8 @@ dependencies = [
 name = "spl-test"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
- "anchor-spl-v2",
+ "anchor-lang",
+ "anchor-spl",
  "bytemuck",
  "pinocchio",
  "pinocchio-system",
@@ -9277,10 +9277,10 @@ dependencies = [
  "account-address-constraints",
  "account-meta-signer-overrides",
  "accounts-test",
+ "anchor-lang",
  "anchor-lang-idl",
  "anchor-lang-idl-spec",
- "anchor-lang-v2",
- "anchor-spl-v2",
+ "anchor-spl",
  "anyhow",
  "base64 0.22.1",
  "borsh-realloc",
@@ -9473,8 +9473,8 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 name = "token-2022-ext-cpi-guard"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
- "anchor-spl-v2",
+ "anchor-lang",
+ "anchor-spl",
  "solana-program-error 3.0.0",
  "wincode 0.5.4",
 ]
@@ -9483,8 +9483,8 @@ dependencies = [
 name = "token-2022-ext-default-account-state"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
- "anchor-spl-v2",
+ "anchor-lang",
+ "anchor-spl",
  "solana-program-error 3.0.0",
  "wincode 0.5.4",
 ]
@@ -9493,8 +9493,8 @@ dependencies = [
 name = "token-2022-ext-group-member-pointer"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
- "anchor-spl-v2",
+ "anchor-lang",
+ "anchor-spl",
  "solana-program-error 3.0.0",
  "wincode 0.5.4",
 ]
@@ -9503,8 +9503,8 @@ dependencies = [
 name = "token-2022-ext-group-pointer"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
- "anchor-spl-v2",
+ "anchor-lang",
+ "anchor-spl",
  "solana-program-error 3.0.0",
  "wincode 0.5.4",
 ]
@@ -9513,8 +9513,8 @@ dependencies = [
 name = "token-2022-ext-immutable-owner"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
- "anchor-spl-v2",
+ "anchor-lang",
+ "anchor-spl",
  "solana-program-error 3.0.0",
  "wincode 0.5.4",
 ]
@@ -9523,8 +9523,8 @@ dependencies = [
 name = "token-2022-ext-interest-bearing-mint"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
- "anchor-spl-v2",
+ "anchor-lang",
+ "anchor-spl",
  "solana-program-error 3.0.0",
  "wincode 0.5.4",
 ]
@@ -9533,8 +9533,8 @@ dependencies = [
 name = "token-2022-ext-memo-transfer"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
- "anchor-spl-v2",
+ "anchor-lang",
+ "anchor-spl",
  "solana-program-error 3.0.0",
  "wincode 0.5.4",
 ]
@@ -9543,8 +9543,8 @@ dependencies = [
 name = "token-2022-ext-metadata-pointer"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
- "anchor-spl-v2",
+ "anchor-lang",
+ "anchor-spl",
  "solana-program-error 3.0.0",
  "wincode 0.5.4",
 ]
@@ -9553,8 +9553,8 @@ dependencies = [
 name = "token-2022-ext-mint-close-authority"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
- "anchor-spl-v2",
+ "anchor-lang",
+ "anchor-spl",
  "solana-program-error 3.0.0",
  "wincode 0.5.4",
 ]
@@ -9563,8 +9563,8 @@ dependencies = [
 name = "token-2022-ext-non-transferable"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
- "anchor-spl-v2",
+ "anchor-lang",
+ "anchor-spl",
  "solana-program-error 3.0.0",
  "wincode 0.5.4",
 ]
@@ -9573,8 +9573,8 @@ dependencies = [
 name = "token-2022-ext-pausable"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
- "anchor-spl-v2",
+ "anchor-lang",
+ "anchor-spl",
  "solana-program-error 3.0.0",
  "wincode 0.5.4",
 ]
@@ -9583,8 +9583,8 @@ dependencies = [
 name = "token-2022-ext-permanent-delegate"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
- "anchor-spl-v2",
+ "anchor-lang",
+ "anchor-spl",
  "solana-program-error 3.0.0",
  "wincode 0.5.4",
 ]
@@ -9593,8 +9593,8 @@ dependencies = [
 name = "token-2022-ext-token-group"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
- "anchor-spl-v2",
+ "anchor-lang",
+ "anchor-spl",
  "solana-program-error 3.0.0",
  "wincode 0.5.4",
 ]
@@ -9603,8 +9603,8 @@ dependencies = [
 name = "token-2022-ext-token-metadata"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
- "anchor-spl-v2",
+ "anchor-lang",
+ "anchor-spl",
  "solana-program-error 3.0.0",
  "wincode 0.5.4",
 ]
@@ -9613,8 +9613,8 @@ dependencies = [
 name = "token-2022-ext-transfer-fee"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
- "anchor-spl-v2",
+ "anchor-lang",
+ "anchor-spl",
  "solana-program-error 3.0.0",
  "wincode 0.5.4",
 ]
@@ -9623,8 +9623,8 @@ dependencies = [
 name = "token-2022-ext-transfer-hook"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
- "anchor-spl-v2",
+ "anchor-lang",
+ "anchor-spl",
  "solana-program-error 3.0.0",
  "wincode 0.5.4",
 ]
@@ -9633,8 +9633,8 @@ dependencies = [
 name = "token-interface-test"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
- "anchor-spl-v2",
+ "anchor-lang",
+ "anchor-spl",
  "wincode 0.5.4",
 ]
 

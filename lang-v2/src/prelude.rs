@@ -1,4 +1,4 @@
-//! Prelude: import everything you need with `use anchor_lang_v2::prelude::*;`
+//! Prelude: import everything you need with `use anchor_lang::prelude::*;`
 
 #[cfg(feature = "compat")]
 pub use crate::solana_program::pubkey::Pubkey;

@@ -17,7 +17,7 @@
 //!    authoritative.
 
 use {
-    anchor_lang_v2::{
+    anchor_lang::{
         prelude::BorshAccount,
         testing::AccountBuffer,
         wincode::{SchemaRead, SchemaWrite},
@@ -575,7 +575,7 @@ fn stale_detection_fires_on_data_len_change() {
 
 #[test]
 fn codec_round_trip_advances_cursor() {
-    use anchor_lang_v2::accounts::{AnchorAccountSerialize, BorshSerializer};
+    use anchor_lang::accounts::{AnchorAccountSerialize, BorshSerializer};
 
     let mut buf = [0u8; 32];
     // Serialize: two Counter values back-to-back.

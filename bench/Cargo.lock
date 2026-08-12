@@ -145,6 +145,7 @@ name = "anchor-asm-v2"
 version = "0.1.0"
 dependencies = [
  "anchor-asm-v2-macros",
+ "anyhow",
  "quote",
  "syn 2.0.117",
 ]
@@ -227,7 +228,7 @@ name = "anchor-bench"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",
- "anchor-lang-v2",
+ "anchor-lang-v1",
  "anyhow",
  "hello-world",
  "hello-world-v2",
@@ -258,22 +259,24 @@ dependencies = [
 name = "anchor-derive-accounts"
 version = "2.0.0"
 dependencies = [
- "anchor-syn",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
-name = "anchor-derive-accounts-v2"
-version = "2.0.0"
-dependencies = [
+ "anchor-lang-idl",
  "bs58",
  "curve25519-dalek",
  "proc-macro2",
  "quote",
  "serde_json",
  "sha2 0.10.9",
+ "solana-address 2.6.0",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "anchor-derive-accounts-v1"
+version = "2.0.0"
+dependencies = [
+ "anchor-syn",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -300,13 +303,55 @@ dependencies = [
 name = "anchor-lang"
 version = "2.0.0"
 dependencies = [
+ "anchor-derive-accounts",
+ "bytemuck",
+ "pinocchio",
+ "pinocchio-system",
+ "sha2 0.10.9",
+ "solana-address 2.6.0",
+ "solana-define-syscall 5.0.0",
+ "solana-instruction",
+ "solana-msg",
+ "solana-program-error",
+ "solana-program-memory",
+ "solana-sha256-hasher",
+ "solana-system-interface 2.0.0",
+ "solana-sysvar",
+ "wincode",
+]
+
+[[package]]
+name = "anchor-lang-idl"
+version = "0.1.4"
+dependencies = [
+ "anchor-lang-idl-spec",
+ "anyhow",
+ "heck",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "anchor-lang-idl-spec"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+]
+
+[[package]]
+name = "anchor-lang-v1"
+version = "2.0.0"
+dependencies = [
  "anchor-attribute-access-control",
  "anchor-attribute-account",
  "anchor-attribute-constant",
  "anchor-attribute-error",
  "anchor-attribute-event",
  "anchor-attribute-program",
- "anchor-derive-accounts",
+ "anchor-derive-accounts-v1",
  "anchor-derive-serde",
  "anchor-derive-space",
  "anchor-lang-idl",
@@ -337,47 +382,6 @@ dependencies = [
  "solana-sysvar",
  "solana-sysvar-id",
  "thiserror 1.0.69",
-]
-
-[[package]]
-name = "anchor-lang-idl"
-version = "0.1.2"
-dependencies = [
- "anchor-lang-idl-spec",
- "anyhow",
- "heck",
- "regex",
- "serde",
- "serde_json",
- "sha2 0.10.9",
-]
-
-[[package]]
-name = "anchor-lang-idl-spec"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "serde",
-]
-
-[[package]]
-name = "anchor-lang-v2"
-version = "2.0.0"
-dependencies = [
- "anchor-derive-accounts-v2",
- "bytemuck",
- "pinocchio",
- "pinocchio-system",
- "sha2 0.10.9",
- "solana-address 2.6.0",
- "solana-cpi",
- "solana-define-syscall 5.0.0",
- "solana-instruction",
- "solana-msg",
- "solana-program-error",
- "solana-system-interface 2.0.0",
- "solana-sysvar",
- "wincode",
 ]
 
 [[package]]
@@ -1722,7 +1726,7 @@ dependencies = [
 name = "hello-world"
 version = "0.1.0"
 dependencies = [
- "anchor-lang",
+ "anchor-lang-v1",
  "anchor-v2-testing",
  "litesvm",
  "solana-account",
@@ -1733,7 +1737,7 @@ dependencies = [
 name = "hello-world-v2"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "anchor-v2-testing",
  "borsh",
  "bytemuck",
@@ -2137,7 +2141,7 @@ dependencies = [
 name = "multisig-v1"
 version = "0.1.0"
 dependencies = [
- "anchor-lang",
+ "anchor-lang-v1",
  "anchor-v2-testing",
  "litesvm",
  "solana-account",
@@ -2148,7 +2152,7 @@ dependencies = [
 name = "multisig-v2"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "anchor-v2-testing",
  "borsh",
  "litesvm",
@@ -2161,7 +2165,7 @@ dependencies = [
 name = "nested-v1"
 version = "0.1.0"
 dependencies = [
- "anchor-lang",
+ "anchor-lang-v1",
  "anchor-v2-testing",
  "litesvm",
  "solana-pubkey 3.0.0",
@@ -2171,7 +2175,7 @@ dependencies = [
 name = "nested-v2"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "anchor-v2-testing",
  "borsh",
  "bytemuck",
@@ -2514,7 +2518,7 @@ dependencies = [
 name = "prop-amm-v1"
 version = "0.1.0"
 dependencies = [
- "anchor-lang",
+ "anchor-lang-v1",
  "anchor-v2-testing",
  "litesvm",
  "solana-account",
@@ -2526,7 +2530,7 @@ version = "0.1.0"
 dependencies = [
  "anchor-asm-v2",
  "anchor-asm-v2-runtime",
- "anchor-lang-v2",
+ "anchor-lang",
  "anchor-v2-testing",
  "borsh",
  "bytemuck",
@@ -4578,7 +4582,7 @@ dependencies = [
 name = "vault-v1"
 version = "0.1.0"
 dependencies = [
- "anchor-lang",
+ "anchor-lang-v1",
  "anchor-v2-testing",
  "litesvm",
  "solana-account",
@@ -4589,7 +4593,7 @@ dependencies = [
 name = "vault-v2"
 version = "0.1.0"
 dependencies = [
- "anchor-lang-v2",
+ "anchor-lang",
  "anchor-v2-testing",
  "borsh",
  "bytemuck",

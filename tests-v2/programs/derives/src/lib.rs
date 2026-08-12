@@ -11,7 +11,7 @@
 
 extern crate alloc;
 
-use anchor_lang_v2::prelude::*;
+use anchor_lang::prelude::*;
 
 declare_id!("Der1111111111111111111111111111111111111111");
 
@@ -56,7 +56,7 @@ pub struct Profile {
 }
 
 pub mod qualified {
-    #[derive(anchor_lang_v2::IdlType)]
+    #[derive(anchor_lang::IdlType)]
     pub struct Inner {
         pub value: u64,
     }
@@ -68,7 +68,7 @@ pub mod limits {
 
 #[derive(IdlType)]
 pub struct QualifiedUserTypeHolder<const N: usize> {
-    pub authority: anchor_lang_v2::prelude::Address,
+    pub authority: anchor_lang::prelude::Address,
     pub pinocchio_authority: pinocchio::address::Address,
     pub inner: qualified::Inner,
     pub literal_expr: [u8; 1 + 1],

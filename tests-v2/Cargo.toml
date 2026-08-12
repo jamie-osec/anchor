@@ -20,7 +20,7 @@ name = "token_2022_extensions"
 path = "tests/token_2022_extensions/main.rs"
 
 [dependencies]
-anchor-lang-v2 = { path = "../lang-v2" }
+anchor-lang = { path = "../lang-v2" }
 account-address-constraints = { path = "programs/account-address-constraints" }
 account-meta-signer-overrides = { path = "programs/account-meta-signer-overrides" }
 borsh-realloc = { path = "programs/borsh-realloc", features = ["cpi"] }
@@ -71,7 +71,7 @@ anyhow = "1"
 
 [dev-dependencies]
 anchor-lang-idl = { path = "../idl", version = "0.1.2", features = ["convert"] }
-anchor-spl-v2 = { path = "../spl-v2" }
+anchor-spl = { path = "../spl-v2" }
 anchor-lang-idl-spec = { path = "../idl/spec", version = "0.1.0" }
 bytemuck = { version = "1", features = ["derive"] }
 proptest = "1"

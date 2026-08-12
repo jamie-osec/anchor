@@ -122,7 +122,7 @@ jobs:
 
       # Redirect every `git = ".../anchor.git"` dep in the generated
       # project to this PR's checkout so PR changes are exercised. Without
-      # this, `anchor init` resolves anchor-lang-v2 / anchor-client /
+      # this, `anchor init` resolves anchor-lang / anchor-client /
       # anchor-v2-testing from upstream `anchor-next`, masking any local
       # changes. Listed crates that the lockfile doesn't reference are
       # silently ignored (Cargo emits a warning, not an error). The rust
@@ -136,10 +136,10 @@ jobs:
             cat <<EOF >> "$1"
 
           [patch."https://github.com/otter-sec/anchor.git"]
-          anchor-lang-v2 = { path = "$REPO/lang-v2" }
-          anchor-derive-accounts-v2 = { path = "$REPO/lang-v2/derive" }
+          anchor-lang = { path = "$REPO/lang-v2" }
+          anchor-derive-accounts = { path = "$REPO/lang-v2/derive" }
           anchor-client = { path = "$REPO/client" }
-          anchor-spl-v2 = { path = "$REPO/spl-v2" }
+          anchor-spl = { path = "$REPO/spl-v2" }
           anchor-v2-testing = { path = "$REPO/v2-testing" }
           EOF
           }
@@ -251,10 +251,10 @@ jobs:
           cat <<EOF >> /tmp/my_program/Cargo.toml
 
           [patch."https://github.com/otter-sec/anchor.git"]
-          anchor-lang-v2 = { path = "$REPO/lang-v2" }
-          anchor-derive-accounts-v2 = { path = "$REPO/lang-v2/derive" }
+          anchor-lang = { path = "$REPO/lang-v2" }
+          anchor-derive-accounts = { path = "$REPO/lang-v2/derive" }
           anchor-client = { path = "$REPO/client" }
-          anchor-spl-v2 = { path = "$REPO/spl-v2" }
+          anchor-spl = { path = "$REPO/spl-v2" }
           anchor-v2-testing = { path = "$REPO/v2-testing" }
           EOF
 

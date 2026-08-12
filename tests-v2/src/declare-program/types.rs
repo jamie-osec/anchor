@@ -1,5 +1,5 @@
 use {
-    anchor_lang_v2::{Discriminator, Id, IdlAccountType, InstructionData},
+    anchor_lang::{Discriminator, Id, IdlAccountType, InstructionData},
     declare_program_types::weird_types,
     solana_pubkey::Pubkey,
 };
@@ -32,7 +32,7 @@ fn declared_weird_types_compile_and_serialize() {
     assert_idl_type::<weird_types::TransparentBytemuck>();
     assert_idl_type::<weird_types::AlignedBytemuck>();
     assert_idl_type::<weird_types::PodMode>();
-    assert_idl_type::<weird_types::PodVec<anchor_lang_v2::pod::PodU64, 4>>();
+    assert_idl_type::<weird_types::PodVec<anchor_lang::pod::PodU64, 4>>();
     assert_idl_type::<weird_types::PodWrapperOnly>();
     assert_idl_type::<weird_types::PodVecOnly>();
 
@@ -78,7 +78,7 @@ fn declared_weird_types_compile_and_serialize() {
 
 #[test]
 fn declared_weird_type_docs_and_repr_metadata_compile() {
-    fn assert_pod<T: anchor_lang_v2::bytemuck::Pod>() {}
+    fn assert_pod<T: anchor_lang::bytemuck::Pod>() {}
 
     assert_pod::<weird_types::PackedBytemuck>();
     assert_pod::<weird_types::TransparentBytemuck>();
@@ -94,18 +94,18 @@ fn declared_weird_type_docs_and_repr_metadata_compile() {
     assert_eq!(core::mem::size_of::<weird_types::AlignedBytemuck>(), 16);
     assert_eq!(core::mem::size_of::<weird_types::PodWrapperOnly>(), 1);
     assert_eq!(
-        core::mem::size_of::<weird_types::PodVec<anchor_lang_v2::pod::PodU64, 4>>(),
+        core::mem::size_of::<weird_types::PodVec<anchor_lang::pod::PodU64, 4>>(),
         34
     );
     assert_eq!(
-        core::mem::align_of::<weird_types::PodVec<anchor_lang_v2::pod::PodU64, 4>>(),
+        core::mem::align_of::<weird_types::PodVec<anchor_lang::pod::PodU64, 4>>(),
         1
     );
     assert_eq!(core::mem::size_of::<weird_types::PodVecOnly>(), 34);
     assert_eq!(core::mem::align_of::<weird_types::PodVecOnly>(), 1);
 
     let packed = weird_types::PackedBytemuck { wide: 7, tag: 9 };
-    assert_eq!(anchor_lang_v2::bytemuck::bytes_of(&packed).len(), 9);
+    assert_eq!(anchor_lang::bytemuck::bytes_of(&packed).len(), 9);
 
     let packed_type_def = <weird_types::PackedBytemuck as IdlAccountType>::__IDL_TYPE_DEF
         .expect("packed type should retain its IDL type definition");

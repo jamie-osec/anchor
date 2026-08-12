@@ -1,5 +1,5 @@
 use {
-    anchor_lang_v2::{Discriminator, InstructionData, ToAccountMetas},
+    anchor_lang::{Discriminator, InstructionData, ToAccountMetas},
     client_builders::{accounts, instruction},
     litesvm::{types::TransactionResult, LiteSVM},
     solana_keypair::Keypair,
@@ -42,7 +42,7 @@ fn setup() -> (LiteSVM, Keypair, Keypair) {
 
 fn send_ix(
     svm: &mut LiteSVM,
-    ix: anchor_lang_v2::solana_program::instruction::Instruction,
+    ix: anchor_lang::solana_program::instruction::Instruction,
     payer: &Keypair,
     extra_signers: &[&Keypair],
 ) -> TransactionResult {

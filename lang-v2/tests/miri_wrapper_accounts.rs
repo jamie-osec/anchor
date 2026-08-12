@@ -5,11 +5,11 @@
 //! These tests confirm the owner/signer/executable checks in each
 //! `load`/`load_mut` behave correctly and don't introduce UB.
 //!
-//! Run: `cargo +nightly miri test -p anchor-lang-v2 --test miri_wrapper_accounts`
+//! Run: `cargo +nightly miri test -p anchor-lang --test miri_wrapper_accounts`
 
-use anchor_lang_v2::testing::AccountBuffer;
+use anchor_lang::testing::AccountBuffer;
 
-use anchor_lang_v2::{
+use anchor_lang::{
     accounts::{SystemAccount, UncheckedAccount},
     prelude::{Program, Signer},
     programs::{System, Token},

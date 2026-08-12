@@ -1,5 +1,5 @@
 use {
-    anchor_lang_v2::accounts::SysvarId,
+    anchor_lang::accounts::SysvarId,
     pinocchio::sysvars::{clock::Clock, instructions::Instructions, rent::Rent},
 };
 
@@ -23,10 +23,10 @@ fn sysvar_idl_addresses_match_well_known_accounts() {
 fn instructions_sysvar_id_is_not_the_system_program() {
     assert_eq!(
         <Instructions<&'static [u8]> as SysvarId>::SYSVAR_ID,
-        anchor_lang_v2::address!("Sysvar1nstructions1111111111111111111111111")
+        anchor_lang::address!("Sysvar1nstructions1111111111111111111111111")
     );
     assert_ne!(
         <Instructions<&'static [u8]> as SysvarId>::SYSVAR_ID,
-        anchor_lang_v2::address!("11111111111111111111111111111111")
+        anchor_lang::address!("11111111111111111111111111111111")
     );
 }

@@ -1,4 +1,4 @@
-# anchor-lang-v2
+# anchor-lang
 
 v2 is a drop-in speedup for Anchor v1, but up to **94% smaller** and **3× faster or more** per instruction in the example programs below.
 
@@ -72,7 +72,7 @@ To help improve the migration for users, we've added an additional `compat` flag
 
 ```toml
 [dependencies]
-anchor-lang-v2 = { git = "...", branch = "anchor-next", features = ["compat"] }
+anchor-lang = { git = "...", branch = "anchor-next", features = ["compat"] }
 ```
 
 ## Optimizations
@@ -131,7 +131,7 @@ An important implication of our trait-based framework is: **you can write your o
 
 In v1, anything the macro didn't already support meant forking the derive. v2 moves much of the account behavior behind traits, so anyone can ship new behavior from a separate crate — no fork, no upstream PR.
 
-For example, [anchor-dynamic-account](https://github.com/chen-robert/anchor-dynamic-account) adds a brand-new primitive — zero-copy accounts with a `Vec<T>` / `String` tail that auto-reallocates to fit — behind a single `#[wrapped_account]` macro, with no changes to `anchor-lang-v2`:
+For example, [anchor-dynamic-account](https://github.com/chen-robert/anchor-dynamic-account) adds a brand-new primitive — zero-copy accounts with a `Vec<T>` / `String` tail that auto-reallocates to fit — behind a single `#[wrapped_account]` macro, with no changes to `anchor-lang`:
 
 ```rust
 #[wrapped_account]

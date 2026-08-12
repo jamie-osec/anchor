@@ -46,7 +46,7 @@
 //!    discriminator?
 
 use {
-    anchor_lang_v2::{
+    anchor_lang::{
         accounts::Slab,
         prelude::BorshAccount,
         testing::AccountBuffer,

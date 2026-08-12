@@ -9,10 +9,10 @@
 //! below the Slab's structural expectations. The Slab still holds its
 //! AccountView by value and reads live `data_len()` on every call.
 //!
-//! Run: `cargo test -p anchor-lang-v2 --test slab_resize_reproducers`
+//! Run: `cargo test -p anchor-lang --test slab_resize_reproducers`
 
 use {
-    anchor_lang_v2::{
+    anchor_lang::{
         accounts::{Account, Slab},
         testing::AccountBuffer,
         AccountRealloc, AnchorAccount, Discriminator, Owner, Space,
@@ -85,7 +85,7 @@ fn setup_counter_account() -> AccountBuffer<256> {
 }
 
 fn expected_min_lamports(space: usize) -> Result<u64, ProgramError> {
-    anchor_lang_v2::cpi::rent_exempt_lamports(space)
+    anchor_lang::cpi::rent_exempt_lamports(space)
 }
 
 #[test]

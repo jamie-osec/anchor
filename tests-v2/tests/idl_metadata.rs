@@ -1,6 +1,6 @@
 use {
     anchor_lang_idl_spec::{IdlInstructionAccount, IdlInstructionAccountItem, IdlSeed},
-    anchor_lang_v2::{programs::AssociatedToken, Id},
+    anchor_lang::{programs::AssociatedToken, Id},
     declare_program_surface::surface,
 };
 

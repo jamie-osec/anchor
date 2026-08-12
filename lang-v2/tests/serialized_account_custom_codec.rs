@@ -17,7 +17,7 @@
 //! here — it issues a real CPI that host tests cannot satisfy.
 
 use {
-    anchor_lang_v2::{
+    anchor_lang::{
         accounts::{AnchorAccountSerialize, SerializedAccount},
         testing::AccountBuffer,
         AnchorAccount, Discriminator, Owner,

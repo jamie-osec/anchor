@@ -1,7 +1,7 @@
 [package]
-name = "anchor-lang"
+name = "anchor-lang-v1"
 version.workspace = true
-publish = true
+publish = false
 authors = ["Anchor Maintainers <accounts@200ms.io>"]
 repository = "https://github.com/otter-sec/anchor"
 edition = "2021"
@@ -52,7 +52,7 @@ anchor-attribute-constant = { path = "./attribute/constant", version = "2.0.0" }
 anchor-attribute-error = { path = "./attribute/error", version = "2.0.0" }
 anchor-attribute-event = { path = "./attribute/event", version = "2.0.0" }
 anchor-attribute-program = { path = "./attribute/program", version = "2.0.0" }
-anchor-derive-accounts = { path = "./derive/accounts", version = "2.0.0" }
+anchor-derive-accounts = { package = "anchor-derive-accounts-v1", path = "./derive/accounts", version = "2.0.0" }
 anchor-derive-serde = { path = "./derive/serde", version = "2.0.0" }
 anchor-derive-space = { path = "./derive/space", version = "2.0.0" }
 
