@@ -2324,6 +2324,10 @@ pub fn parse_field(
         let inner_ty = extract_nested_inner_type(field_ty)
             .expect("is_nested_type was true but extract_nested_inner_type returned None");
         let nested_bumps = bump_cache_ident(field_name);
+        let assert_no_nested_ix_args = Ident::new(
+            &format!("__anchor_assert_no_nested_ix_args_{field_name}"),
+            field_name.span(),
+        );
         // Nested<Inner> — delegate to Inner::validate_accounts, which advances
         // the shared cursor by Inner::HEADER_SIZE without firing inner
         // update-hooks yet. The outer walk_n covers only direct
@@ -2340,7 +2344,7 @@ pub fn parse_field(
         // nested struct. A future optimization could pre-shift the bitvec
         // or use a wrapper that offsets transparently.
         let load = quote! {
-            let (__nested_inner, #nested_bumps, _) =
+            let (__nested_inner, #nested_bumps, __nested_ix_args) =
                 <#inner_ty as anchor_lang_v2::TryAccounts>::validate_accounts(
                     __program_id,
                     &__views[#offset_expr .. #offset_expr + <#inner_ty as anchor_lang_v2::TryAccounts>::HEADER_SIZE],
@@ -2348,6 +2352,13 @@ pub fn parse_field(
                     __base_offset + #offset_expr,
                     __ix_data,
                 )?;
+            // A nested Accounts type currently has no way to return its
+            // parsed arguments to handler dispatch. Reject such schemas at
+            // compile time instead of validating one interpretation of the
+            // bytes and letting the handler consume another.
+            #[inline(always)]
+            fn #assert_no_nested_ix_args(_: ()) {}
+            #assert_no_nested_ix_args(__nested_ix_args);
             let #field_name = anchor_lang_v2::Nested(__nested_inner);
         };
         let exit = Some(quote! {

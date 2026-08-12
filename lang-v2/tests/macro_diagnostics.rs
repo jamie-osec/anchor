@@ -507,6 +507,45 @@ pub struct Bad {
     miri,
     ignore = "spawns cargo and writes temporary workspaces; covered by normal cargo test"
 )]
+fn nested_accounts_reject_instruction_arguments() {
+    compile_fail_case(
+        "nested_instruction_args",
+        r#"
+use anchor_lang_v2::prelude::*;
+
+declare_id!("11111111111111111111111111111111");
+
+#[program]
+pub mod nested_instruction_args {
+    use super::*;
+
+    pub fn ix(_ctx: &mut Context<Outer>, amount: u64) -> Result<()> {
+        let _ = amount;
+        Ok(())
+    }
+}
+
+#[derive(Accounts)]
+#[instruction(amount: u8)]
+pub struct Inner {
+    #[account(constraint = amount == 0)]
+    pub data: UncheckedAccount,
+}
+
+#[derive(Accounts)]
+pub struct Outer {
+    pub inner: Nested<Inner>,
+}
+"#,
+        &["expected `()`, found `(u8,)`"],
+    );
+}
+
+#[test]
+#[cfg_attr(
+    miri,
+    ignore = "spawns cargo and writes temporary workspaces; covered by normal cargo test"
+)]
 fn cfg_gated_public_handlers_do_not_emit_missing_wrappers() {
     compile_pass_case(
         "cfg_gated_handler",
