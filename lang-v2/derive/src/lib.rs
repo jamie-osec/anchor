@@ -339,7 +339,7 @@ fn impl_to_cpi_accounts(input: &DeriveInput) -> TokenStream2 {
             __handles.extend(anchor_lang_v2::ToCpiAccounts::to_cpi_handles(&self.#ident));
         },
         CpiFieldKind::Readonly => quote! {
-            __handles.push(self.#ident);
+            __handles.push(self.#ident.into_readonly());
         },
         CpiFieldKind::Writable => quote! {
             __handles.push(self.#ident.into());

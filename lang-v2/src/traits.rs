@@ -106,6 +106,15 @@ impl<'a> CpiHandle<'a> {
         self.view.is_signer()
     }
 
+    /// Erase to a readonly CPI handle.
+    ///
+    /// Used by `#[account_meta(duplicate_readonly)]` so a `CpiHandle` or
+    /// `CpiHandleMut` field can emit a second readonly meta/handle pair.
+    #[inline(always)]
+    pub fn into_readonly(self) -> CpiHandle<'a> {
+        Self::readonly_with_flags(self.view, self.borrow_check, self.relax_readonly_borrow)
+    }
+
     /// Access the underlying `AccountView` for CPI account construction.
     ///
     /// Restricted to the crate so external code cannot extract the view
@@ -172,6 +181,15 @@ impl<'a> CpiHandleMut<'a> {
     #[inline(always)]
     pub fn is_signer(&self) -> bool {
         self.view.is_signer()
+    }
+
+    /// Erase to a readonly [`CpiHandle`].
+    ///
+    /// Used by `#[account_meta(duplicate_readonly)]` so a writable field can
+    /// still emit a second readonly meta/handle pair.
+    #[inline(always)]
+    pub fn into_readonly(self) -> CpiHandle<'a> {
+        CpiHandle::readonly_with_borrow_check(self.view, self.borrow_check)
     }
 }
 

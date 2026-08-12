@@ -19,6 +19,14 @@ struct EmptyCpi<'a> {
 }
 
 #[derive(ToCpiAccounts)]
+struct DuplicateReadonlyCpi<'a> {
+    #[account_meta(duplicate_readonly)]
+    readonly: CpiHandle<'a>,
+    #[account_meta(duplicate_readonly)]
+    writable: CpiHandleMut<'a>,
+}
+
+#[derive(ToCpiAccounts)]
 struct ManualCpi<'a> {
     readonly: CpiHandle<'a>,
     writable: CpiHandleMut<'a>,
@@ -126,4 +134,38 @@ fn derive_to_cpi_accounts_accepts_phantom_only_empty_structs() {
     assert!(accounts.to_instruction_accounts().is_empty());
     assert!(accounts.to_cpi_handles().is_empty());
     assert!(accounts.optional_account_sentinel_flags().is_empty());
+}
+
+#[test]
+fn derive_to_cpi_accounts_duplicate_readonly_erases_handle_mut() {
+    let readonly_buffer = account([1; 32], false, false);
+    let writable_buffer = account([2; 32], false, true);
+    let readonly_view = unsafe { readonly_buffer.view() };
+    let mut writable_view = unsafe { writable_buffer.view() };
+
+    let accounts = DuplicateReadonlyCpi {
+        readonly: readonly_view.to_cpi_handle(),
+        writable: writable_view.to_cpi_handle_mut(),
+    };
+
+    let metas = accounts.to_instruction_accounts();
+    assert_eq!(metas.len(), 4);
+    assert_eq!(*metas[0].address, Address::new_from_array([1; 32]));
+    assert!(!metas[0].is_writable);
+    assert_eq!(*metas[1].address, Address::new_from_array([1; 32]));
+    assert!(!metas[1].is_writable);
+    assert_eq!(*metas[2].address, Address::new_from_array([2; 32]));
+    assert!(!metas[2].is_writable);
+    assert_eq!(*metas[3].address, Address::new_from_array([2; 32]));
+    assert!(metas[3].is_writable);
+
+    let handles = accounts.to_cpi_handles();
+    assert_eq!(handles.len(), 4);
+    assert!(!handles[0].is_writable());
+    assert!(!handles[1].is_writable());
+    assert!(!handles[2].is_writable());
+    assert!(handles[3].is_writable());
+    assert_eq!(*handles[0].address(), Address::new_from_array([1; 32]));
+    assert_eq!(*handles[2].address(), Address::new_from_array([2; 32]));
+    assert_eq!(*handles[3].address(), Address::new_from_array([2; 32]));
 }
