@@ -1433,8 +1433,10 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
     // --- Client-side struct for off-chain usage (tests, CPI, SDK) ---
     //
     // The struct only contains fields the user must provide (Signer, raw
-    // accounts, etc.). Derivable fields (Program<T>, PDAs) are computed
-    // inside `to_account_metas()` so the user never has to fill them.
+    // accounts, optional Program/PDA presence, etc.). Non-optional derivable
+    // fields (Program<T>, PDAs) are computed inside `to_account_metas()` so
+    // the user never has to fill them. Optional Program/PDA stay on the
+    // struct as `Option<Address>` so `None` can emit the program-id sentinel.
     let client_mod_name = syn::Ident::new(
         &format!("__client_accounts_{}", name.to_string().to_lowercase()),
         name.span(),
@@ -1461,6 +1463,15 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
                 None => &f.ty,
             };
             let ty_name = parse::field_ty_str(base_ty);
+
+            // Optional Program<T> / seed PDAs must stay caller-provided on the
+            // *Resolved builder so `None` can emit the program-id sentinel.
+            // Auto-deriving them as `Some(address)` made that sentinel arm
+            // unreachable while the full (non-Resolved) builder could still
+            // represent absence.
+            if f.is_optional {
+                return (f, FieldKind::Required);
+            }
 
             if ty_name == "Program" {
                 if let Type::Path(tp) = base_ty {
@@ -1639,42 +1650,20 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         .filter_map(|&i| {
             let (f, kind) = &field_kinds[i];
             let ident = &f.name;
-            // When the field is `Option<Program<T>>` / `Option<...seeds...>`,
-            // the downstream `client_meta_entries` match expects the local
-            // binding to be `Option<Address>`, not a bare `Address`. Wrap
-            // the derived value in `Some(...)` in that case so the match
-            // arms type-check.
+            // Non-optional Program/PDA locals are bare Address values.
+            // Optional accounts never reach FieldKind::Program/Pda — they stay
+            // FieldKind::Required so callers can pass None for the sentinel.
             match kind {
-                FieldKind::Program(expr) => {
-                    let init = if f.is_optional {
-                        quote! { Some(#expr) }
-                    } else {
-                        quote! { #expr }
-                    };
-                    Some(quote! { let #ident = #init; })
-                }
+                FieldKind::Program(expr) => Some(quote! { let #ident = #expr; }),
                 FieldKind::Pda {
                     seed_exprs,
                     program_ref,
                     ..
-                } => {
-                    if f.is_optional {
-                        Some(quote! {
-                            let #ident = {
-                                let (__addr, _) = anchor_lang_v2::find_program_address(
-                                    &[#(#seed_exprs),*], #program_ref,
-                                );
-                                Some(__addr)
-                            };
-                        })
-                    } else {
-                        Some(quote! {
-                            let (#ident, _) = anchor_lang_v2::find_program_address(
-                                &[#(#seed_exprs),*], #program_ref,
-                            );
-                        })
-                    }
-                }
+                } => Some(quote! {
+                    let (#ident, _) = anchor_lang_v2::find_program_address(
+                        &[#(#seed_exprs),*], #program_ref,
+                    );
+                }),
                 _ => None,
             }
         })
