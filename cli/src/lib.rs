@@ -56,11 +56,15 @@ mod account;
 mod checks;
 pub mod codama;
 pub mod config;
+#[cfg(not(windows))]
 pub mod coverage;
+#[cfg(not(windows))]
 pub mod debugger;
+#[cfg(not(windows))]
 mod flamegraph;
 mod keygen;
 mod metadata;
+#[cfg(not(windows))]
 mod profile;
 mod program;
 pub mod rust_template;
@@ -247,6 +251,7 @@ pub enum Command {
         /// Validator type to use for local testing
         #[clap(value_enum, long, default_value = "surfpool")]
         validator: ValidatorType,
+        #[cfg(not(windows))]
         /// Profile each test: record per-test SBF register traces and
         /// render a flamegraph SVG per test under
         /// `target/anchor-v2-profile/`. Forces a debug build (DWARF is
@@ -273,6 +278,7 @@ pub enum Command {
         #[clap(long, action)]
         force: bool,
     },
+    #[cfg(not(windows))]
     /// Run tests under a foundry-style instruction-level debugger.
     ///
     /// Reuses the `anchor test --profile` trace pipeline: rebuilds with DWARF,
@@ -307,6 +313,7 @@ pub enum Command {
         #[clap(required = false, last = true)]
         cargo_args: Vec<String>,
     },
+    #[cfg(not(windows))]
     /// Generate source-level code coverage from SBF register traces.
     ///
     /// Builds programs with DWARF debug info, runs the test suite with
@@ -330,6 +337,7 @@ pub enum Command {
         #[clap(required = false, last = true)]
         cargo_args: Vec<String>,
     },
+    #[cfg(not(windows))]
     /// Filter host LCOV before merging it with SBF coverage.
     #[clap(name = "coverage-filter-host", hide = true)]
     CoverageFilterHost {
@@ -1364,28 +1372,35 @@ fn process_command(opts: Opts) -> Result<()> {
             detach,
             run,
             validator,
+            #[cfg(not(windows))]
             profile,
             args,
             env,
             cargo_args,
             skip_lint,
-        } => test(
-            &opts.cfg_override,
-            program_name,
-            skip_deploy,
-            skip_local_validator,
-            skip_build,
-            skip_lint,
-            no_idl,
-            detach,
-            run,
-            validator,
-            profile,
-            false, // gdb — only `anchor debugger --gdb` enables this
-            args,
-            env,
-            cargo_args,
-        ),
+        } => {
+            #[cfg(windows)]
+            let profile = false;
+
+            test(
+                &opts.cfg_override,
+                program_name,
+                skip_deploy,
+                skip_local_validator,
+                skip_build,
+                skip_lint,
+                no_idl,
+                detach,
+                run,
+                validator,
+                profile,
+                false, // gdb — only `anchor debugger --gdb` enables this
+                args,
+                env,
+                cargo_args,
+            )
+        }
+        #[cfg(not(windows))]
         Command::Debugger {
             test_name,
             skip_run,
@@ -1402,6 +1417,7 @@ fn process_command(opts: Opts) -> Result<()> {
             gdb,
             cargo_args,
         ),
+        #[cfg(not(windows))]
         Command::Coverage {
             skip_run,
             skip_build,
@@ -1416,6 +1432,7 @@ fn process_command(opts: Opts) -> Result<()> {
             &trace_dir,
             cargo_args,
         ),
+        #[cfg(not(windows))]
         Command::CoverageFilterHost {
             sbf_lcov,
             host_lcov,
@@ -3531,6 +3548,9 @@ fn test(
     env_vars: Vec<String>,
     cargo_args: Vec<String>,
 ) -> Result<()> {
+    #[cfg(windows)]
+    let _ = (profile, gdb);
+
     let test_paths = tests_to_run
         .iter()
         .map(|path| {
@@ -3552,8 +3572,11 @@ fn test(
 
         // --profile setup: clear stale traces + point `anchor-v2-testing`
         // at our profile directory before the child `cargo test` runs.
+        #[cfg(not(windows))]
         let workspace_root = cfg.path().parent().unwrap().to_owned();
+        #[cfg(not(windows))]
         let profile_dir = workspace_root.join(crate::profile::DEFAULT_PROFILE_DIR);
+        #[cfg(not(windows))]
         let _gdb_guard: Option<crate::debugger::gdb::GdbDriver> = if profile {
             let _ = fs::remove_dir_all(&profile_dir);
             std::env::set_var("ANCHOR_PROFILE_DIR", &profile_dir);
@@ -3727,6 +3750,7 @@ fn test(
         }
         cfg.run_hooks(HookType::PostTest)?;
 
+        #[cfg(not(windows))]
         if profile {
             render_profile(cfg, &profile_dir)?;
         }
@@ -3743,6 +3767,7 @@ fn test(
 /// `anchor test` phase and opens the TUI directly — useful when iterating
 /// on the TUI itself without paying for a rebuild each time.
 #[allow(clippy::too_many_arguments)]
+#[cfg(not(windows))]
 fn debugger(
     cfg_override: &ConfigOverride,
     test_name: Option<String>,
@@ -3794,6 +3819,7 @@ fn debugger(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(not(windows))]
 fn debugger_anchor_workspace(
     cfg_override: &ConfigOverride,
     test_name: Option<String>,
@@ -3863,6 +3889,7 @@ fn debugger_anchor_workspace(
 /// (clearing the trace dir, running cargo test) so the user gets a clear
 /// error early rather than a "no traces" mystery later.
 #[allow(clippy::too_many_arguments)]
+#[cfg(not(windows))]
 fn debugger_loose(
     _cfg_override: &ConfigOverride,
     test_name: Option<String>,
@@ -3987,6 +4014,7 @@ fn debugger_loose(
     )
 }
 
+#[cfg(not(windows))]
 fn run_coverage(
     _cfg_override: &ConfigOverride,
     skip_run: bool,
@@ -4094,6 +4122,7 @@ fn run_coverage(
 }
 
 /// Render path `p` as cwd-relative when possible, falling back to absolute.
+#[cfg(not(windows))]
 fn display_path_relative_to_cwd(p: &Path) -> String {
     std::env::current_dir()
         .ok()
@@ -4113,6 +4142,7 @@ fn display_path_relative_to_cwd(p: &Path) -> String {
 ///
 /// Returns `(pubkey_to_so, sources)` where `sources[pk]` is `"Anchor.toml"`
 /// or `"target/deploy"` for diagnostics.
+#[cfg(not(windows))]
 fn resolve_anchor_workspace_programs(
     cfg: &WithPath<Config>,
 ) -> (BTreeMap<String, PathBuf>, BTreeMap<String, &'static str>) {
@@ -4145,6 +4175,7 @@ fn resolve_anchor_workspace_programs(
 /// CPIs are symbolicated against the right ELF per invocation — a
 /// tx that calls into spl-token shows spl-token's frames alongside
 /// the program under test, not dropped or lumped under `[unknown]`.
+#[cfg(not(windows))]
 fn render_profile(cfg: &WithPath<Config>, profile_dir: &Path) -> Result<()> {
     let workspace_root = cfg.path().parent().unwrap().to_owned();
     let (pubkey_to_so, _sources) = resolve_anchor_workspace_programs(cfg);
