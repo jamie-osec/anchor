@@ -1,6 +1,6 @@
 ---
 title: SPL token basics
-description: Common SPL token workflows with anchor-spl-v2.
+description: Common SPL token workflows with anchor-spl.
 autoCards: false
 ---
 
@@ -13,7 +13,7 @@ The SPL surface mirrors Anchor's normal account model:
 - `Account<Mint>{:rs}` zero-copies SPL mint data
 - `Account<TokenAccount>{:rs}` zero-copies SPL token account data
 - `mint::*{:rs}` and `token::*{:rs}` constraints are downstream `AccountConstraint{:rs}` markers
-- CPI helpers come from `anchor_spl_v2::token{:rs}`
+- CPI helpers come from `anchor_spl::token{:rs}`
 - CPI account structs are built from `cpi_handle(){:rs}` and `cpi_handle_mut(){:rs}`
 
 <CardGrid>

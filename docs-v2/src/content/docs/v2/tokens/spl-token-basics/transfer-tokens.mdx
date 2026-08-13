@@ -5,7 +5,7 @@ description: Transfer SPL tokens between token accounts through CPI helpers.
 
 Transferring tokens moves units between two token accounts for the same mint. The source token account's authority must authorize the CPI, and both token accounts must be writable because their balances change.
 
-Anchor exposes transfer helpers under `anchor_spl_v2::token{:rs}`. Prefer `transfer_checked{:rs}` for user-facing transfers because it includes the mint account and verifies the mint decimals.
+Anchor exposes transfer helpers under `anchor_spl::token{:rs}`. Prefer `transfer_checked{:rs}` for user-facing transfers because it includes the mint account and verifies the mint decimals.
 
 ## Imports
 
@@ -13,8 +13,8 @@ Import the token CPI module and account wrappers:
 
 ```rust showLineNumbers=false
 use {
-    anchor_lang_v2::prelude::*,
-    anchor_spl_v2::{
+    anchor_lang::prelude::*,
+    anchor_spl::{
         mint::Mint,
         token::{self, TokenAccount},
     },

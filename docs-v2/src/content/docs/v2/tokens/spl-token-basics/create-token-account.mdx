@@ -5,7 +5,7 @@ description: Create and initialize SPL token accounts with token constraints and
 
 A token account stores one authority's balance for one mint. Each token account records a mint, an authority, an amount, and optional delegate, wrapped-SOL, and close-authority state.
 
-Anchor models the legacy SPL Token account as `Account<TokenAccount>{:rs}` from `anchor_spl_v2::token{:rs}`. Like `Account<Mint>{:rs}`, it is zero-copy over the Token Program layout and starts at byte offset `0` instead of using an Anchor discriminator.
+Anchor models the legacy SPL Token account as `Account<TokenAccount>{:rs}` from `anchor_spl::token{:rs}`. Like `Account<Mint>{:rs}`, it is zero-copy over the Token Program layout and starts at byte offset `0` instead of using an Anchor discriminator.
 
 ## Token account data
 
@@ -51,8 +51,8 @@ Import the mint and token account wrappers together:
 
 ```rust showLineNumbers=false
 use {
-    anchor_lang_v2::prelude::*,
-    anchor_spl_v2::{
+    anchor_lang::prelude::*,
+    anchor_spl::{
         associated_token::AssociatedToken,
         mint::Mint,
         token::{self, TokenAccount},
@@ -126,7 +126,7 @@ Swap `init{:rs}` for `init_if_needed{:rs}` to make the instruction idempotent.
 To validate an ATA created elsewhere instead of creating it, derive its address with `get_associated_token_address{:rs}` and check it with an `address = ...{:rs}` constraint:
 
 ```rust showLineNumbers=false
-use anchor_spl_v2::associated_token::get_associated_token_address;
+use anchor_spl::associated_token::get_associated_token_address;
 
 #[derive(Accounts)]
 pub struct UseAssociatedTokenAccount {
@@ -183,8 +183,8 @@ Later CPI calls can transfer or burn from the token account by signing with the 
 
 ```rust showLineNumbers=false
 use {
-    anchor_lang_v2::prelude::*,
-    anchor_spl_v2::token_interface::{Mint, TokenAccount},
+    anchor_lang::prelude::*,
+    anchor_spl::token_interface::{Mint, TokenAccount},
 };
 
 #[derive(Accounts)]
