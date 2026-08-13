@@ -15,10 +15,10 @@ Anchor's v2 CPI path keeps those pieces typed. `CpiContext<T>{:rs}` bundles the 
 
 ## System program CPI
 
-`anchor_lang_v2::system_program` provides typed wrappers for every System Program instruction. The wrappers take a `CpiContext{:rs}` whose accounts struct holds `CpiHandle<'a>{:rs}` values, so the call stays inside Anchor's borrow-tracked model.
+`anchor_lang::system_program` provides typed wrappers for every System Program instruction. The wrappers take a `CpiContext{:rs}` whose accounts struct holds `CpiHandle<'a>{:rs}` values, so the call stays inside Anchor's borrow-tracked model.
 
 ```rust showLineNumbers=false
-use anchor_lang_v2::system_program;
+use anchor_lang::system_program;
 
 #[derive(Accounts)]
 pub struct Deposit {
@@ -51,7 +51,7 @@ The module exposes typed wrappers for the System Program instructions:
 
 ## SPL token CPI
 
-`anchor-spl-v2` exposes account structs and helper functions for common SPL Token instructions. The example below transfers tokens with `transfer_checked{:rs}`.
+`anchor-spl` exposes account structs and helper functions for common SPL Token instructions. The example below transfers tokens with `transfer_checked{:rs}`.
 
 The instruction needs a source token account, mint, destination token account, authority, and token program:
 
@@ -75,7 +75,7 @@ pub struct TransferTokens {
 The handler builds the CPI accounts, wraps them in `CpiContext{:rs}`, then calls the SPL helper:
 
 ```rust showLineNumbers=false
-use anchor_spl_v2::token;
+use anchor_spl::token;
 
 pub fn transfer_tokens(
     ctx: &mut Context<TransferTokens>,

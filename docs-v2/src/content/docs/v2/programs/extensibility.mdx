@@ -19,8 +19,8 @@ The core trait surface that extensions implement is intentionally small:
 Implementing `AnchorAccount{:rs}` on a wrapper type is what makes it usable as a field in `#[derive(Accounts)]{:rs}`. The trait extends `Deref<Target = Self::Data>{:rs}`, so consumers can reach the inner data directly through `&*account{:rs}`. The required methods are `load{:rs}`, `account{:rs}`, and (optionally) `load_mut{:rs}`, `exit{:rs}`, and `close{:rs}`. `cpi_handle{:rs}` and `cpi_handle_mut{:rs}` come with default impls:
 
 ```rust title="my_wrapper.rs" showLineNumbers=false
-use anchor_lang_v2::prelude::*;
-use anchor_lang_v2::bytemuck::Pod;
+use anchor_lang::prelude::*;
+use anchor_lang::bytemuck::Pod;
 use core::ops::Deref;
 
 pub struct MyWrapper<T: Pod> {
@@ -96,7 +96,7 @@ pub trait AccountConstraint<A> {
 
 Once the impl is in scope, a constraint marker named `my_namespace::key{:rs}` becomes available as `#[account(my_namespace::key = value)]{:rs}` on any account field.
 
-The `anchor-spl-v2` crate is built on this pattern. It implements `token::*{:rs}` and `mint::*{:rs}` as a downstream crate rather than baking them into the core derive. Its `associated_token{:rs}` module currently exposes associated token address derivation helpers.
+The `anchor-spl` crate is built on this pattern. It implements `token::*{:rs}` and `mint::*{:rs}` as a downstream crate rather than baking them into the core derive. Its `associated_token{:rs}` module currently exposes associated token address derivation helpers.
 
 ## `Id{:rs}` for `Program<T: Id>{:rs}`
 
