@@ -36,7 +36,7 @@ export const DOCS: DocsConfig = {
   },
   announcement: {
     id: 'v2-alpha',
-    message: 'Anchor v2 alpha is here! Up to 95% smaller binaries, 3.0 to 50.4× fewer CU',
+    message: 'Anchor v2 alpha is here! Up to 94% smaller binaries, 2.8 to 50.4× fewer CU',
     href: '/docs/v2/',
   },
 }
