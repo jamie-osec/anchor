@@ -11,7 +11,7 @@ use {
 
 #[test]
 fn plain_arg_struct_emits_type_def() {
-    let json = <accounts_test::BumpArgs as IdlAccountType>::__IDL_TYPE_DEF
+    let json = <accounts_test::BumpArgs as IdlAccountType>::__idl_type_def()
         .expect("IdlType derive should set __IDL_TYPE_DEF");
     let type_def: IdlTypeDef = serde_json::from_str(json)
         .unwrap_or_else(|err| panic!("failed to parse type def JSON: {err}\njson: {json}"));
