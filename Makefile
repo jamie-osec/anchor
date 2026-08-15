@@ -109,6 +109,7 @@ build-anchor-debug:
 coverage-v2-host:
 	$(MAKE) coverage-v2-host-clean
 	$(MAKE) coverage-v2-host-derive
+	$(MAKE) coverage-v2-host-cli
 	$(MAKE) coverage-v2-host-lang
 	$(MAKE) coverage-v2-host-spl
 	$(MAKE) coverage-v2-host-tests
@@ -130,6 +131,12 @@ coverage-v2-host-derive:
 	# depending on them from anchor-lang does not compile that target with cfg(test).
 	CARGO_PROFILE_RELEASE_DEBUG=2 \
 	cargo llvm-cov --no-report -p anchor-derive-accounts
+
+.PHONY: coverage-v2-host-lang
+coverage-v2-host-cli:
+	# Keep the command-line surface in the same host report as the framework.
+	CARGO_PROFILE_RELEASE_DEBUG=2 \
+	cargo llvm-cov --no-report -p anchor-cli
 
 .PHONY: coverage-v2-host-lang
 coverage-v2-host-lang:

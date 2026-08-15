@@ -87,6 +87,8 @@ jobs:
         run: make coverage-v2-host-clean
       - name: v2 host coverage for account derive macro
         run: make coverage-v2-host-derive
+      - name: v2 host coverage for CLI
+        run: make coverage-v2-host-cli
       - name: v2 host coverage for anchor-lang
         run: make coverage-v2-host-lang
       - name: v2 host coverage for anchor-spl
