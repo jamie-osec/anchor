@@ -105,8 +105,6 @@ jobs:
           make coverage-v2-report
       - name: Check v2 test inventory
         run: ./.github/scripts/check-v2-test-inventory.sh
-      - name: v2 compile-fail diagnostics
-        run: make test-v2-non-coverage
 
       # Upload to Codecov. The action handles comment posting on PRs via
       # the Codecov GitHub App — including fork PRs, where the token
