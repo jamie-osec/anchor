@@ -6,7 +6,12 @@
   "redirects": [
     {
       "source": "/",
-      "destination": "/docs/",
+      "destination": "/docs/v1/",
+      "permanent": false
+    },
+    {
+      "source": "/docs",
+      "destination": "/docs/v1/",
       "permanent": false
     }
   ]
