@@ -54,7 +54,7 @@ solana-sha256-hasher = { version = "3.1", features = ["sha2"] }
 solana-system-interface = { version = "2.0", features = ["bincode"] }
 solana-sysvar = "3.1.1"
 bytemuck = { version = "1", features = ["derive"] }
-wincode = { version = "0.5", features = ["derive"] }
+wincode = { version = "0.6", features = ["derive"] }
 
 [target.'cfg(target_os = "solana")'.dependencies]
 solana-define-syscall = "5.0"
