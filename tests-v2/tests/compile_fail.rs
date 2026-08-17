@@ -2294,7 +2294,7 @@ pub struct Resize {
     .expect_pass();
 }
 
-// otter-sec/anchor#4850 — a plain arg struct with only the wincode schema
+// otter-sec/anchor#4850 — a plain arg struct with only Anchor's serialization
 // derives has no `IdlAccountType` impl, so idl-build compilation must fail
 // with a diagnostic that points at `#[derive(IdlType)]` (the old message
 // suggested `#[account]`, which drags in Pod/discriminator baggage).
