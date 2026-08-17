@@ -29,6 +29,40 @@ pub fn derive_accounts(input: TokenStream) -> TokenStream {
     TokenStream::from(impl_accounts(&input))
 }
 
+/// Derive a wincode schema writer through Anchor's public re-export.
+///
+/// The generated duplicate item is erased after wincode emits the impl so a
+/// downstream crate does not need a direct `wincode` dependency or its
+/// `#[wincode(crate = ...)]` escape hatch.
+#[proc_macro_derive(AnchorSerialize, attributes(wincode))]
+pub fn anchor_serialize(input: TokenStream) -> TokenStream {
+    derive_wincode_schema(input, quote!(anchor_lang::wincode::SchemaWrite))
+}
+
+/// Derive a wincode schema reader through Anchor's public re-export.
+#[proc_macro_derive(AnchorDeserialize, attributes(wincode))]
+pub fn anchor_deserialize(input: TokenStream) -> TokenStream {
+    derive_wincode_schema(input, quote!(anchor_lang::wincode::SchemaRead))
+}
+
+fn derive_wincode_schema(input: TokenStream, schema_derive: TokenStream2) -> TokenStream {
+    let input = TokenStream2::from(input);
+    quote! {
+        #[derive(#schema_derive)]
+        #[wincode(crate = "anchor_lang::wincode")]
+        #[anchor_lang::__erase]
+        #input
+    }
+    .into()
+}
+
+/// Removes the duplicate item emitted by the schema-derive wrappers.
+#[doc(hidden)]
+#[proc_macro_attribute]
+pub fn __erase(_: TokenStream, _: TokenStream) -> TokenStream {
+    TokenStream::new()
+}
+
 // ---------------------------------------------------------------------------
 // #[derive(ToCpiAccounts)]
 // ---------------------------------------------------------------------------
@@ -881,7 +915,7 @@ fn emit_args_deser(args: &[(&Ident, &Type)], struct_name: &str, inline_error: bo
             }
         };
         quote! {
-            #[derive(anchor_lang::wincode::SchemaRead)]
+            #[derive(anchor_lang::AnchorDeserialize)]
             struct #struct_ident #lt_decl { #(#names: #arg_types,)* }
             let __args: #struct_ident #lt_use = #error_handling;
             #(let #names = __args.#names;)*
@@ -2252,7 +2286,9 @@ pub fn account(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let (struct_attrs, pod_impls) = if is_borsh {
         (
-            quote! { #[derive(anchor_lang::wincode::SchemaWrite, anchor_lang::wincode::SchemaRead)] },
+            quote! {
+                #[derive(anchor_lang::AnchorSerialize, anchor_lang::AnchorDeserialize)]
+            },
             quote! {},
         )
     } else {
@@ -3394,7 +3430,7 @@ fn gen_declare_program_types(idl: &serde_json::Value) -> syn::Result<Vec<TokenSt
                     DeclareTypeFields::Named { fields, .. } => quote! {
                         #(#docs)*
                         #repr
-                        #[derive(Clone, anchor_lang::wincode::SchemaRead, anchor_lang::wincode::SchemaWrite)]
+                        #[derive(Clone, anchor_lang::AnchorDeserialize, anchor_lang::AnchorSerialize)]
                         pub struct #ident #impl_generics {
                             #(#fields)*
                         }
@@ -3415,7 +3451,7 @@ fn gen_declare_program_types(idl: &serde_json::Value) -> syn::Result<Vec<TokenSt
                     DeclareTypeFields::Tuple { fields, .. } => quote! {
                         #(#docs)*
                         #repr
-                        #[derive(Clone, anchor_lang::wincode::SchemaRead, anchor_lang::wincode::SchemaWrite)]
+                        #[derive(Clone, anchor_lang::AnchorDeserialize, anchor_lang::AnchorSerialize)]
                         pub struct #ident #impl_generics(#(#fields),*);
                         #discriminator_impl
                         #account_deserialize_impl
@@ -3434,7 +3470,7 @@ fn gen_declare_program_types(idl: &serde_json::Value) -> syn::Result<Vec<TokenSt
                     DeclareTypeFields::Unit => quote! {
                         #(#docs)*
                         #repr
-                        #[derive(Clone, anchor_lang::wincode::SchemaRead, anchor_lang::wincode::SchemaWrite)]
+                        #[derive(Clone, anchor_lang::AnchorDeserialize, anchor_lang::AnchorSerialize)]
                         pub struct #ident #impl_generics;
                         #discriminator_impl
                         #account_deserialize_impl
@@ -3498,7 +3534,7 @@ fn gen_declare_program_types(idl: &serde_json::Value) -> syn::Result<Vec<TokenSt
                 out.push(quote! {
                     #(#docs)*
                     #repr
-                    #[derive(Clone, anchor_lang::wincode::SchemaRead, anchor_lang::wincode::SchemaWrite)]
+                    #[derive(Clone, anchor_lang::AnchorDeserialize, anchor_lang::AnchorSerialize)]
                     pub enum #ident #impl_generics {
                         #(#variant_tokens)*
                     }
@@ -4958,7 +4994,7 @@ fn process_handler(
     };
     let instruction_struct = quote! {
         #(#handler_cfg_attrs)*
-        #[derive(anchor_lang::wincode::SchemaWrite)]
+        #[derive(anchor_lang::AnchorSerialize)]
         pub struct #ix_struct_name #ix_lt_decl {
             #(pub #extra_arg_names: #extra_arg_types,)*
         }
@@ -5821,7 +5857,7 @@ pub fn event(attr: TokenStream, item: TokenStream) -> TokenStream {
             // No `repr(C)` — wincode is layout-agnostic (it walks the derived
             // schema, not the in-memory byte layout) so the compiler is free
             // to pick whichever Rust layout is best.
-            #[derive(anchor_lang::wincode::SchemaWrite)]
+            #[derive(anchor_lang::AnchorSerialize)]
             #(#attrs)*
             #vis struct #name #fields
 

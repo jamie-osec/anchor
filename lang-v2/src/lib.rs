@@ -170,7 +170,7 @@ pub use {
     accounts::{AccountInitialize, SlabInit},
     anchor_derive_accounts::{
         access_control, account, constant, declare_program, emit, error_code, event, pod_wrapper,
-        program, Accounts, InitSpace, ToCpiAccounts,
+        program, Accounts, AnchorDeserialize, AnchorSerialize, InitSpace, ToCpiAccounts, __erase,
     },
     bytemuck,
     context::{Bumps, Context, MutMask},

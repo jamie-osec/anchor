@@ -90,7 +90,6 @@ publish = false
 
 [dependencies]
 anchor-lang = {{ path = "{}" }}
-wincode = {{ version = "0.5", features = ["derive"] }}
 {}
 
 [features]
@@ -457,7 +456,7 @@ fn namespaced_constraints_accept_qualified_constants_as_values() {
         r#"
 use anchor_lang::prelude::*;
 
-#[derive(Default, wincode::SchemaRead, wincode::SchemaWrite)]
+#[derive(Default, anchor_lang::AnchorDeserialize, anchor_lang::AnchorSerialize)]
 pub struct Counter {
     pub value: u64,
 }
@@ -2268,7 +2267,7 @@ fn realloc_on_borsh_account_alias_compiles() {
         r#"
 use anchor_lang::prelude::*;
 
-#[derive(wincode::SchemaRead, wincode::SchemaWrite, Default)]
+#[derive(anchor_lang::AnchorDeserialize, anchor_lang::AnchorSerialize, Default)]
 pub struct Data {
     pub value: u64,
 }
@@ -2330,7 +2329,7 @@ pub mod defined_args {
 #[test]
 fn idl_build_rejects_arg_struct_without_idl_type_derive() {
     let source =
-        DEFINED_ARGS_PROGRAM.replace("DERIVE_LIST", "wincode::SchemaRead, wincode::SchemaWrite");
+        DEFINED_ARGS_PROGRAM.replace("DERIVE_LIST", "anchor_lang::AnchorDeserialize, anchor_lang::AnchorSerialize");
     CompileCase::new("idl_build_arg_struct_missing_idl_type", &source)
         .features(&["idl-build"])
         .check_tests()
@@ -2344,7 +2343,7 @@ fn idl_build_rejects_arg_struct_without_idl_type_derive() {
 fn idl_build_accepts_arg_struct_with_idl_type_derive() {
     let source = DEFINED_ARGS_PROGRAM.replace(
         "DERIVE_LIST",
-        "IdlType, wincode::SchemaRead, wincode::SchemaWrite",
+        "IdlType, anchor_lang::AnchorDeserialize, anchor_lang::AnchorSerialize",
     );
     CompileCase::new("idl_build_arg_struct_with_idl_type", &source)
         .features(&["idl-build"])
