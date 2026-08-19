@@ -125,14 +125,16 @@ fn gen_id(idl: &Idl) -> proc_macro2::TokenStream {
 
     quote! {
         #[doc = #doc]
-        pub static ID: Pubkey = __ID;
+        pub static ID: anchor_lang::prelude::Pubkey = __ID;
 
         /// Const version of `ID`
-        pub const ID_CONST: Pubkey = __ID_CONST;
+        pub const ID_CONST: anchor_lang::prelude::Pubkey = __ID_CONST;
 
         /// The name is intentionally prefixed with `__` in order to reduce to possibility of name
         /// clashes with the crate's `ID`.
-        static __ID: Pubkey = Pubkey::from_str_const(#address);
-        const __ID_CONST : Pubkey = Pubkey::from_str_const(#address);
+        static __ID: anchor_lang::prelude::Pubkey =
+            anchor_lang::prelude::Pubkey::from_str_const(#address);
+        const __ID_CONST: anchor_lang::prelude::Pubkey =
+            anchor_lang::prelude::Pubkey::from_str_const(#address);
     }
 }

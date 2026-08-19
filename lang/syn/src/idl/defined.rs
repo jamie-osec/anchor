@@ -423,6 +423,21 @@ pub fn gen_idl_type(
             .unwrap_or_default()
     }
 
+    fn path_is(path: &syn::TypePath, segments: &[&str]) -> bool {
+        path.path.segments.len() == segments.len()
+            && path
+                .path
+                .segments
+                .iter()
+                .zip(segments.iter())
+                .all(|(segment, expected)| segment.ident == *expected)
+    }
+
+    fn path_is_builtin(path: &syn::TypePath, simple: &str, qualified: &[&[&str]]) -> bool {
+        the_only_segment_is(path, simple)
+            || qualified.iter().any(|segments| path_is(path, segments))
+    }
+
     fn get_angle_bracketed_type_args(seg: &syn::PathSegment) -> Result<Vec<&syn::Type>> {
         match &seg.arguments {
             syn::PathArguments::AngleBracketed(ab) => Ok(ab
@@ -496,24 +511,39 @@ pub fn gen_idl_type(
             Ok((quote! { #idl::IdlType::I128 }, vec![]))
         }
         syn::Type::Path(path)
-            if the_only_segment_is(path, "String") || the_only_segment_is(path, "str") =>
+            if path_is_builtin(path, "String", &[&["std", "string", "String"]])
+                || the_only_segment_is(path, "str") =>
         {
             Ok((quote! { #idl::IdlType::String }, vec![]))
         }
-        syn::Type::Path(path) if the_only_segment_is(path, "Pubkey") => {
+        syn::Type::Path(path)
+            if path_is_builtin(path, "Pubkey", &[&["anchor_lang", "prelude", "Pubkey"]]) =>
+        {
             Ok((quote! { #idl::IdlType::Pubkey }, vec![]))
         }
-        syn::Type::Path(path) if the_only_segment_is(path, "Option") => {
-            let segment = get_first_segment(path)?;
+        syn::Type::Path(path)
+            if path_is_builtin(
+                path,
+                "Option",
+                &[&["core", "option", "Option"], &["std", "option", "Option"]],
+            ) =>
+        {
+            let segment = get_last_segment(path)?;
             let arg = get_first_type_arg(segment)?;
             let (inner, defined) = gen_idl_type(arg, generic_params)?;
             Ok((quote! { #idl::IdlType::Option(Box::new(#inner)) }, defined))
         }
-        syn::Type::Path(path) if the_only_segment_is(path, "Vec") => {
-            let segment = get_first_segment(path)?;
+        syn::Type::Path(path)
+            if path_is_builtin(
+                path,
+                "Vec",
+                &[&["std", "vec", "Vec"], &["alloc", "vec", "Vec"]],
+            ) =>
+        {
+            let segment = get_last_segment(path)?;
             let arg = get_first_type_arg(segment)?;
             match arg {
-                syn::Type::Path(path) if the_only_segment_is(path, "u8") => {
+                syn::Type::Path(path) if path_is_builtin(path, "u8", &[]) => {
                     return Ok((quote! {#idl::IdlType::Bytes}, vec![]));
                 }
                 _ => (),
@@ -521,8 +551,14 @@ pub fn gen_idl_type(
             let (inner, defined) = gen_idl_type(arg, generic_params)?;
             Ok((quote! { #idl::IdlType::Vec(Box::new(#inner)) }, defined))
         }
-        syn::Type::Path(path) if the_only_segment_is(path, "Box") => {
-            let segment = get_first_segment(path)?;
+        syn::Type::Path(path)
+            if path_is_builtin(
+                path,
+                "Box",
+                &[&["std", "boxed", "Box"], &["alloc", "boxed", "Box"]],
+            ) =>
+        {
+            let segment = get_last_segment(path)?;
             let arg = get_first_type_arg(segment)?;
             gen_idl_type(arg, generic_params)
         }
@@ -793,5 +829,13 @@ fn get_first_segment(type_path: &syn::TypePath) -> Result<&syn::PathSegment> {
         .path
         .segments
         .first()
+        .ok_or_else(|| syn::Error::new_spanned(type_path, "Expected a non-empty type path"))
+}
+
+fn get_last_segment(type_path: &syn::TypePath) -> Result<&syn::PathSegment> {
+    type_path
+        .path
+        .segments
+        .last()
         .ok_or_else(|| syn::Error::new_spanned(type_path, "Expected a non-empty type path"))
 }
