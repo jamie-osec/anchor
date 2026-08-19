@@ -1,7 +1,7 @@
 import fs from "fs";
 import { spawnSync } from "child_process";
 
-describe("ambiguous-discriminator", () => {
+describe("zeroed-discriminator", () => {
   const anchorTomlPath = "Anchor.toml";
   const anchorToml = fs.readFileSync(anchorTomlPath, { encoding: "utf8" });
 
@@ -10,7 +10,7 @@ describe("ambiguous-discriminator", () => {
       anchorTomlPath,
       anchorToml.replace(
         'exclude = ["programs/ambiguous-discriminator", "programs/zeroed-discriminator"]',
-        'exclude = ["programs/zeroed-discriminator"]'
+        'exclude = ["programs/ambiguous-discriminator"]'
       )
     );
   });
@@ -19,25 +19,24 @@ describe("ambiguous-discriminator", () => {
     fs.writeFileSync(anchorTomlPath, anchorToml);
   });
 
-  it("Returns ambiguous discriminator error on builds", () => {
+  it("rejects zeroed account discriminators on no-idl builds", () => {
     const result = spawnSync("anchor", [
-      "idl",
       "build",
+      "--no-idl",
+      "--ignore-keys",
       "-p",
-      "ambiguous-discriminator",
+      "zeroed-discriminator",
     ]);
     if (result.status === 0) {
-      throw new Error("Ambiguous errors did not make building the IDL fail");
+      throw new Error("Zeroed discriminator build unexpectedly succeeded");
     }
 
     const output = result.output.toString();
     if (
-      !output.includes(
-        "Error: Ambiguous discriminators for accounts `AnotherAccount` and `SomeAccount`"
-      )
+      !output.includes("all-zero or empty discriminators are not supported")
     ) {
       throw new Error(
-        `Ambiguous discriminators did not return the expected error: "${output}"`
+        `Zeroed discriminator build did not return the expected error: "${output}"`
       );
     }
   });
