@@ -211,26 +211,15 @@ where
             continue;
         }
 
-        let _ = attr.parse_nested_meta(|meta| {
-            let has_bytemuck_segment = meta.path.segments.iter().any(|s| s.ident == "bytemuck");
-
-            if has_bytemuck_segment {
-                let has_unsafe_segment = meta
-                    .path
-                    .segments
-                    .iter()
-                    .any(|s| s.ident.to_string().to_ascii_lowercase().contains("unsafe"));
-
-                let is_pod = meta.path.segments.last().is_some_and(|s| s.ident == "Pod");
-
-                if has_unsafe_segment {
-                    saw_bytemuck_unsafe = true;
-                } else if is_pod {
-                    saw_bytemuck_pod = true;
-                }
+        attr.parse_nested_meta(|meta| {
+            if is_bytemuck_derive(&meta.path, "Unsafe") {
+                saw_bytemuck_unsafe = true;
+            } else if is_bytemuck_derive(&meta.path, "Pod") {
+                saw_bytemuck_pod = true;
             }
+
             Ok(())
-        });
+        })?;
     }
 
     let serialization = if saw_bytemuck_unsafe {
@@ -336,6 +325,16 @@ where
         },
         defined,
     ))
+}
+
+fn is_bytemuck_derive(path: &syn::Path, expected_leaf: &str) -> bool {
+    let mut segments = path.segments.iter();
+
+    matches!(
+        (segments.next(), segments.next(), segments.next()),
+        (Some(first), Some(second), None)
+            if first.ident == "bytemuck" && second.ident == expected_leaf
+    )
 }
 
 fn trim_attr_start(value: &str) -> &str {
