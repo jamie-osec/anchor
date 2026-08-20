@@ -118,6 +118,8 @@ pub enum PlatformToolsSource {
     },
     /// Project did not pin Solana → use the map's hardcoded fallback.
     Fallback,
+    /// Directly requested with `avm platform-tools resolve --solana-version`.
+    ExplicitSolana { solana: Version, below_map: bool },
 }
 
 impl PlatformToolsSource {
@@ -135,6 +137,16 @@ impl PlatformToolsSource {
                 solana_source.describe()
             ),
             Self::Fallback => "fallback (no Solana version pinned)".to_string(),
+            Self::ExplicitSolana {
+                solana,
+                below_map: false,
+            } => {
+                format!("explicit Solana {solana} → map")
+            }
+            Self::ExplicitSolana {
+                solana,
+                below_map: true,
+            } => format!("explicit Solana {solana} predates map; using earliest entry"),
         }
     }
 }
@@ -158,6 +170,40 @@ pub fn resolve_platform_tools(start: &Path) -> Result<PlatformToolsResolution> {
     match resolve_solana_version(start)? {
         Some(solana_res) => resolve_for_project_solana(&solana_res, required_rust.as_ref()),
         None => resolve_fallback(required_rust.as_ref()),
+    }
+}
+
+/// Resolve platform-tools for an explicit Solana CLI version.
+///
+/// Unlike [`resolve_platform_tools`], this does not inspect the project or
+/// consider its Cargo dependency Rust-version requirements.
+pub fn resolve_platform_tools_for_solana_version(solana: &Version) -> PlatformToolsResolution {
+    let entries = &MAP.entries;
+    match entries.iter().rposition(|entry| entry.solana <= *solana) {
+        Some(idx) => {
+            let entry = &entries[idx];
+            PlatformToolsResolution {
+                version: entry.platform_tools.clone(),
+                rustc: entry.rustc.clone(),
+                source: PlatformToolsSource::ExplicitSolana {
+                    solana: solana.clone(),
+                    below_map: false,
+                },
+            }
+        }
+        None => {
+            let earliest = entries
+                .first()
+                .expect("platform-tools map must have at least one entry");
+            PlatformToolsResolution {
+                version: earliest.platform_tools.clone(),
+                rustc: earliest.rustc.clone(),
+                source: PlatformToolsSource::ExplicitSolana {
+                    solana: solana.clone(),
+                    below_map: true,
+                },
+            }
+        }
     }
 }
 
@@ -862,6 +908,32 @@ mod tests {
         assert_eq!(lookup_for_solana_version(&v("4.5.0")).unwrap(), "v1.54");
         // Below earliest → error from this lower-level helper.
         assert!(lookup_for_solana_version(&v("0.1.0")).is_err());
+    }
+
+    #[test]
+    fn explicit_solana_resolution_uses_the_map_without_project_metadata() {
+        let mapped = resolve_platform_tools_for_solana_version(&v("3.1.10"));
+        assert_eq!(mapped.version, "v1.52");
+        assert!(matches!(
+            mapped.source,
+            PlatformToolsSource::ExplicitSolana {
+                solana,
+                below_map: false,
+            } if solana == v("3.1.10")
+        ));
+
+        let below_map = resolve_platform_tools_for_solana_version(&v("1.0.0"));
+        assert_eq!(
+            below_map.version,
+            MAP.entries.first().unwrap().platform_tools
+        );
+        assert!(matches!(
+            below_map.source,
+            PlatformToolsSource::ExplicitSolana {
+                below_map: true,
+                ..
+            }
+        ));
     }
 
     // ── Rust-version aware resolution ───────────────────────────────────────
