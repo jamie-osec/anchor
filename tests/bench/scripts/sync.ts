@@ -13,10 +13,10 @@ import {
   BENCHMARK_VERSION_ENV,
   BenchData,
   LockFile,
+  PlatformToolsVersion,
   Toml,
   Version,
   VersionManager,
-  getPlatformToolsVersion,
   spawn,
   usesLegacyIdl,
   usesLegacyIdlFormat,
@@ -50,9 +50,30 @@ const LEGACY_IDL_PATH = path.join("target", "bench-legacy-idl.json");
     // Reopen the benchmark data because previous iterations update it in a
     // separate test process.
     const currentBench = await BenchData.open();
-    const platformToolsVersion = await getPlatformToolsVersion(
-      currentBench.get(version).solanaVersion
+    const solanaVersion = currentBench.get(version).solanaVersion;
+    const platformToolsResult = spawn(
+      "avm",
+      [
+        "platform-tools",
+        "resolve",
+        "--solana-version",
+        solanaVersion,
+        "--output",
+        "version",
+      ],
+      {
+        throwOnError: {
+          msg: `Failed to resolve platform-tools for Solana ${solanaVersion}.`,
+        },
+      }
     );
+    const platformToolsOutput = platformToolsResult.stdout.toString().trim();
+    if (!/^v\d+\.\d+$/.test(platformToolsOutput)) {
+      throw new Error(
+        `AVM returned an invalid platform-tools version: ${platformToolsOutput}.`
+      );
+    }
+    const platformToolsVersion = platformToolsOutput as PlatformToolsVersion;
     currentBench.setPlatformToolsVersion(version, platformToolsVersion);
     await currentBench.save();
 

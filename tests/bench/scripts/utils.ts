@@ -573,44 +573,6 @@ export const usesLegacyIdl = (version: Version) =>
 export const usesLegacyIdlFormat = (version: Version) =>
   ["0.27.0", "0.28.0", "0.29.0"].includes(version);
 
-/** Resolve a Solana version using AVM's platform-tools floor lookup. */
-export const getPlatformToolsVersion = async (solanaVersion: Version) => {
-  const map = await fs.readFile(
-    path.join("..", "..", "avm", "platform-tools-map.toml"),
-    "utf8"
-  );
-  const entries = [
-    ...map.matchAll(
-      /\[\[entries\]\]\s+solana\s*=\s*"([^"]+)"\s+platform_tools\s*=\s*"(v\d+\.\d+)"/g
-    ),
-  ].map(([, solana, platformTools]) => ({
-    solana: solana.split(".").map(Number),
-    platformTools: platformTools as PlatformToolsVersion,
-  }));
-  if (!entries.length) {
-    throw new Error("AVM's platform-tools map has no entries.");
-  }
-
-  const requested = solanaVersion.split(".").map(Number);
-  const compare = (a: number[], b: number[]) => {
-    for (let i = 0; i < Math.max(a.length, b.length); i++) {
-      const difference = (a[i] ?? 0) - (b[i] ?? 0);
-      if (difference) return difference;
-    }
-    return 0;
-  };
-
-  // Match AVM's behavior for versions below the map by starting with the
-  // earliest known platform-tools release.
-  let platformToolsVersion = entries[0].platformTools;
-  for (const entry of entries) {
-    if (compare(entry.solana, requested) > 0) break;
-    platformToolsVersion = entry.platformTools;
-  }
-
-  return platformToolsVersion;
-};
-
 /** Spawn a blocking process. */
 export const spawn = (
   cmd: string,
