@@ -18,7 +18,7 @@ import {
   Version,
   VersionManager,
   spawn,
-  usesLegacyIdl,
+  usesLegacyIdlGeneration,
 } from "./utils";
 
 const CARGO_LOCK_PATH = "Cargo.lock";
@@ -81,7 +81,7 @@ const CURRENT_IDL_PATH = path.join("target", "bench-current-idl.json");
     VersionManager.setSolanaVersion(currentBench.get(version).solanaVersion);
 
     cargoToml.replaceValue("idl-build", () => {
-      return usesLegacyIdl(version)
+      return usesLegacyIdlGeneration(version)
         ? "[]"
         : '["anchor-lang/idl-build", "anchor-spl/idl-build"]';
     });

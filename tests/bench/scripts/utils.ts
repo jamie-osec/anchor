@@ -566,7 +566,7 @@ export const getVersionFromArgs = () => {
 };
 
 /** Whether the version predates IDL generation through the `idl-build` feature. */
-export const usesLegacyIdl = (version: Version) =>
+export const usesLegacyIdlGeneration = (version: Version) =>
   ["0.27.0", "0.28.0"].includes(version);
 
 /** Spawn a blocking process. */
