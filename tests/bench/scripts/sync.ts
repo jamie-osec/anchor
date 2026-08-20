@@ -19,7 +19,6 @@ import {
   VersionManager,
   spawn,
   usesLegacyIdl,
-  usesLegacyIdlFormat,
 } from "./utils";
 
 const CARGO_LOCK_PATH = "Cargo.lock";
@@ -27,7 +26,6 @@ const PROGRAM_MANIFEST_PATH = path.join("programs", "bench", "Cargo.toml");
 const ANCHOR_TOML_PATH = path.join(__dirname, "..", "Anchor.toml");
 const IDL_PATH = path.join("target", "idl", "bench.json");
 const CURRENT_IDL_PATH = path.join("target", "bench-current-idl.json");
-const LEGACY_IDL_PATH = path.join("target", "bench-legacy-idl.json");
 (async () => {
   const bench = await BenchData.open();
 
@@ -122,11 +120,6 @@ const LEGACY_IDL_PATH = path.join("target", "bench-legacy-idl.json");
       throw new Error("Failed to build the current benchmark program.");
     }
     await fs.copyFile(IDL_PATH, CURRENT_IDL_PATH);
-    spawn(
-      "anchor",
-      ["idl", "convert", IDL_PATH, "--out", LEGACY_IDL_PATH, "--to-legacy"],
-      { throwOnError: { msg: "Failed to generate the legacy benchmark IDL." } }
-    );
 
     for (const version of versions) {
       console.log(`Updating '${version}'...`);
@@ -190,15 +183,8 @@ const LEGACY_IDL_PATH = path.join("target", "bench-legacy-idl.json");
         );
       }
 
-      // Give the selected Anchor CLI an IDL in the format it understands. The
-      // test suite loads the current format from BENCHMARK_IDL_ENV.
-      await fs.copyFile(
-        usesLegacyIdlFormat(version) ? LEGACY_IDL_PATH : CURRENT_IDL_PATH,
-        IDL_PATH
-      );
-
       // Ensure the instrumented build replaces any artifact left by the
-      // initial IDL build or the previous iteration.
+      // initial current-IDL build or the previous iteration.
       await fs.rm(path.join("target", "deploy", "bench.so"), { force: true });
       const buildResult = spawn(
         "cargo-build-sbf",
@@ -229,7 +215,6 @@ const LEGACY_IDL_PATH = path.join("target", "bench-legacy-idl.json");
     spawn("anchor", ["run", "sync-markdown"]);
   } finally {
     await fs.rm(CURRENT_IDL_PATH, { force: true });
-    await fs.rm(LEGACY_IDL_PATH, { force: true });
     await setProjectVersion("unreleased");
   }
 })();

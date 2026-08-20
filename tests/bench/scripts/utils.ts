@@ -569,10 +569,6 @@ export const getVersionFromArgs = () => {
 export const usesLegacyIdl = (version: Version) =>
   ["0.27.0", "0.28.0"].includes(version);
 
-/** Whether the version uses the legacy IDL format. */
-export const usesLegacyIdlFormat = (version: Version) =>
-  ["0.27.0", "0.28.0", "0.29.0"].includes(version);
-
 /** Spawn a blocking process. */
 export const spawn = (
   cmd: string,
