@@ -108,6 +108,8 @@ Solana version: 3.1.10
 
 ### Notable changes
 
+- Update platform-tools to `v1.56`, reducing compute-unit usage across the benchmark suite by 1.29% to 28.24%.
+
 ---
 
 ## [1.1.2]

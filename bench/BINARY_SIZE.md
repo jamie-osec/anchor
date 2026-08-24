@@ -22,6 +22,8 @@ Solana version: 3.1.10
 
 ### Notable changes
 
+- Update platform-tools to `v1.56`, reducing the benchmark program binary by 108,728 bytes (11.65%).
+
 ---
 
 ## [1.1.2]
