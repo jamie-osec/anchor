@@ -1,6 +1,6 @@
 import * as fs from "fs/promises";
 import path from "path";
-import { execSync, spawnSync } from "child_process";
+import { spawnSync } from "child_process";
 
 /** Version that is used in bench data file */
 export type Version = "unreleased" | (`${number}.${number}.${number}` & {});
@@ -58,9 +58,6 @@ export const ANCHOR_VERSION_ARG = "--anchor-version";
 
 /** Environment variable containing the benchmark result version. */
 export const BENCHMARK_VERSION_ENV = "ANCHOR_BENCHMARK_VERSION";
-
-/** Environment variable containing the current-format benchmark IDL path. */
-export const BENCHMARK_IDL_ENV = "ANCHOR_BENCHMARK_IDL";
 
 /** Utility class to handle benchmark data related operations */
 export class BenchData {
@@ -510,45 +507,6 @@ export class LockFile {
   }
 }
 
-/** Utility class to manage versions */
-export class VersionManager {
-  /** Install and set the active Solana version. */
-  static setSolanaVersion(version: Version) {
-    const activeVersion = this.#getSolanaVersion();
-    if (activeVersion === version) return;
-
-    const [major, minor] = version.split(".").map(Number);
-    const isSolanaLabs = major === 1 && minor < 18;
-    const repo = isSolanaLabs ? "solana-labs/solana" : "anza-xyz/agave";
-    const installer = isSolanaLabs ? "solana" : "agave";
-    const installUrl = `https://raw.githubusercontent.com/${repo}/v${version}/install/${installer}-install-init.sh`;
-    spawn(
-      "sh",
-      [
-        "-c",
-        'curl -sSfL "$1" | sh -s -- --no-modify-path "$2"',
-        "sh",
-        installUrl,
-        version,
-      ],
-      {
-        env: { ...process.env, SOLANA_RELEASE: `v${version}` },
-        logOutput: true,
-        throwOnError: { msg: `Failed to set Solana version to ${version}` },
-      }
-    );
-  }
-
-  /** Get the active Solana version. */
-  static #getSolanaVersion() {
-    // `solana-cli 1.14.16 (src:0fb2ffda; feat:3488713414)\n`
-    const result = execSync("solana --version");
-    const output = Buffer.from(result.buffer).toString();
-    const solanaVersion = /(\d\.\d{1,3}\.\d{1,3})/.exec(output)![1].trim();
-    return solanaVersion as Version;
-  }
-}
-
 /**
  * Get Anchor version from the passed arguments.
  *
@@ -564,10 +522,6 @@ export const getVersionFromArgs = () => {
     ? "unreleased"
     : (args[anchorVersionArgIndex + 1] as Version);
 };
-
-/** Whether the version predates IDL generation through the `idl-build` feature. */
-export const usesLegacyIdlGeneration = (version: Version) =>
-  ["0.27.0", "0.28.0"].includes(version);
 
 /** Spawn a blocking process. */
 export const spawn = (

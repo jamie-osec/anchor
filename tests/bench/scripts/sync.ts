@@ -9,23 +9,19 @@ import * as fs from "fs/promises";
 import path from "path";
 
 import {
-  BENCHMARK_IDL_ENV,
   BENCHMARK_VERSION_ENV,
   BenchData,
   LockFile,
   PlatformToolsVersion,
   Toml,
   Version,
-  VersionManager,
   spawn,
-  usesLegacyIdlGeneration,
 } from "./utils";
 
 const CARGO_LOCK_PATH = "Cargo.lock";
 const PROGRAM_MANIFEST_PATH = path.join("programs", "bench", "Cargo.toml");
 const ANCHOR_TOML_PATH = path.join(__dirname, "..", "Anchor.toml");
 const IDL_PATH = path.join("target", "idl", "bench.json");
-const CURRENT_IDL_PATH = path.join("target", "bench-current-idl.json");
 (async () => {
   const bench = await BenchData.open();
 
@@ -35,9 +31,6 @@ const CURRENT_IDL_PATH = path.join("target", "bench-current-idl.json");
   const originalAnchorToml = await fs.readFile(ANCHOR_TOML_PATH, "utf8");
 
   const versions = bench.getVersions();
-  const unreleased = bench.get("unreleased");
-  VersionManager.setSolanaVersion(unreleased.solanaVersion);
-
   const buildEnv = {
     ...process.env,
     RUSTC_BOOTSTRAP: "1",
@@ -78,14 +71,6 @@ const CURRENT_IDL_PATH = path.join("target", "bench-current-idl.json");
     const isUnreleased = version === "unreleased";
 
     await LockFile.replace(version);
-    VersionManager.setSolanaVersion(currentBench.get(version).solanaVersion);
-
-    cargoToml.replaceValue("idl-build", () => {
-      return usesLegacyIdlGeneration(version)
-        ? "[]"
-        : '["anchor-lang/idl-build", "anchor-spl/idl-build"]';
-    });
-
     for (const dependency of ["lang", "spl"]) {
       cargoToml.replaceValue(`anchor-${dependency}`, () => {
         return isUnreleased
@@ -97,9 +82,9 @@ const CURRENT_IDL_PATH = path.join("target", "bench-current-idl.json");
 
     await fs.writeFile(
       ANCHOR_TOML_PATH,
-      isUnreleased
-        ? originalAnchorToml
-        : `${originalAnchorToml.trimEnd()}\n\n[toolchain]\nanchor_version = "${version}"\n`
+      `${originalAnchorToml.trimEnd()}\n\n[toolchain]\n${
+        isUnreleased ? "" : `anchor_version = "${version}"\n`
+      }solana_version = "${solanaVersion}"\n`
     );
 
     if (!isUnreleased) {
@@ -107,11 +92,15 @@ const CURRENT_IDL_PATH = path.join("target", "bench-current-idl.json");
         throwOnError: { msg: `Failed to install Anchor CLI ${version}.` },
       });
     }
+    spawn("avm", ["solana", "install"], {
+      throwOnError: { msg: `Failed to install Solana ${solanaVersion}.` },
+    });
 
     return platformToolsVersion;
   };
 
   try {
+    await setProjectVersion("unreleased");
     // The current TypeScript client needs the current IDL format, including
     // when a historical CLI is responsible for starting the validator.
     await fs.rm(IDL_PATH, { force: true });
@@ -119,7 +108,6 @@ const CURRENT_IDL_PATH = path.join("target", "bench-current-idl.json");
     if (buildResult.status !== 0) {
       throw new Error("Failed to build the current benchmark program.");
     }
-    await fs.copyFile(IDL_PATH, CURRENT_IDL_PATH);
 
     for (const version of versions) {
       console.log(`Updating '${version}'...`);
@@ -200,7 +188,6 @@ const CURRENT_IDL_PATH = path.join("target", "bench-current-idl.json");
       const result = spawn("anchor", ["test", "--skip-lint", "--skip-build"], {
         env: {
           ...buildEnv,
-          [BENCHMARK_IDL_ENV]: path.resolve(CURRENT_IDL_PATH),
           [BENCHMARK_VERSION_ENV]: version,
         },
       });
@@ -214,7 +201,7 @@ const CURRENT_IDL_PATH = path.join("target", "bench-current-idl.json");
 
     spawn("anchor", ["run", "sync-markdown"]);
   } finally {
-    await fs.rm(CURRENT_IDL_PATH, { force: true });
     await setProjectVersion("unreleased");
+    await fs.writeFile(ANCHOR_TOML_PATH, originalAnchorToml);
   }
 })();
