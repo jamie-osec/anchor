@@ -108,6 +108,41 @@ jobs:
 
       - uses: ./.github/actions/git-diff/
 
+  test-benchmark-sync:
+    needs: setup-anchor-cli
+    name: Benchmark Sync
+    runs-on: ubuntu-20.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup/
+      - uses: ./.github/actions/setup-ts/
+      - uses: ./.github/actions/setup-solana/
+        env:
+          SOLANA_VERSION: 3.1.10
+
+      - uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3
+        if: ${{ env.CACHE != 'false' }}
+        name: Cache Cargo registry + index
+        id: cache-avm
+        with:
+          path: ${{ env.CARGO_CACHE_PATH }}
+          key: cargo-${{ runner.os }}-${{ env.CARGO_PROFILE }}-avm-${{ hashFiles('**/Cargo.lock') }}
+
+      - run: cargo install --path avm --locked --force
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ${{ env.ANCHOR_BINARY_NAME }}
+          path: ~/.cargo/bin/
+      - run: chmod +x ~/.cargo/bin/anchor
+
+      - run: cd tests/bench && anchor run sync
+
+      - uses: ./.github/actions/git-diff/
+
   test-examples:
     needs: setup-anchor-cli
     name: Examples Test
