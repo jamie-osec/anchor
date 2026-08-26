@@ -343,12 +343,22 @@ pub fn entry(opts: Cli) -> Result<()> {
 
 fn anchor_proxy() -> Result<()> {
     let args = std::env::args().skip(1).collect::<Vec<String>>();
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
     if avm::ensure_nightly_active()?.is_some() {
-        return spawn_anchor(avm::nightly_anchor_binary_path(), args, false);
+        prepend_solana_bin_to_path()?;
+        let platform_tools_guard = ensure_resolved_solana(&cwd, None)?
+            .map(|solana| ensure_resolved_platform_tools(&cwd, &solana))
+            .transpose()?;
+        return spawn_anchor(
+            avm::nightly_anchor_binary_path(),
+            args,
+            platform_tools_guard
+                .as_ref()
+                .is_some_and(|guard| guard.enable_next_lockfile_bump),
+        );
     }
 
-    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let resolution = avm::resolve_anchor_version(&cwd)?.ok_or_else(|| {
         anyhow!(
             "Anchor version not set. Pin `[toolchain] anchor_version` in `Anchor.toml`, declare \
@@ -358,7 +368,7 @@ fn anchor_proxy() -> Result<()> {
 
     let binary_path = ensure_resolved_binary(&resolution)?;
     prepend_solana_bin_to_path()?;
-    let platform_tools_guard = ensure_resolved_solana(&cwd, &resolution)?
+    let platform_tools_guard = ensure_resolved_solana(&cwd, Some(&resolution))?
         .map(|solana| ensure_resolved_platform_tools(&cwd, &solana))
         .transpose()?;
 
@@ -542,10 +552,13 @@ fn prepend_solana_bin_to_path() -> Result<()> {
 /// before spawning the resolved Anchor binary.
 fn ensure_resolved_solana(
     cwd: &Path,
-    resolution: &Resolution,
+    anchor_resolution: Option<&Resolution>,
 ) -> Result<Option<avm::SolanaCliResolution>> {
-    let Some(solana) = avm::solana::resolve_solana_cli_for_anchor_resolution(cwd, resolution)?
-    else {
+    let solana = match anchor_resolution {
+        Some(resolution) => avm::solana::resolve_solana_cli_for_anchor_resolution(cwd, resolution)?,
+        None => avm::resolve_solana_cli(cwd)?,
+    };
+    let Some(solana) = solana else {
         return Ok(None);
     };
 

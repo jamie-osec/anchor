@@ -644,6 +644,7 @@ fn nightly_stub_takes_precedence_after_installer_bootstrap() {
     let fixture = Fixture::new();
     let project = fixture.project("nightly");
     fixture.install_anchor("1.0.2");
+    fixture.install_fake_solana("3.1.10");
     fixture.install_nightly_anchor_via_script();
     fs::write(
         project.join("Anchor.toml"),
@@ -656,7 +657,10 @@ fn nightly_stub_takes_precedence_after_installer_bootstrap() {
     let log = fixture.anchor_log();
     assert!(log.contains("version=nightly"), "{log}");
     assert!(log.contains("args=build"), "{log}");
-    assert!(!fixture.solana_log_path.exists());
+    assert_eq!(
+        fs::read_to_string(&fixture.solana_log_path).unwrap(),
+        "--version\n"
+    );
 }
 
 #[test]
