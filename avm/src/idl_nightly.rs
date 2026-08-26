@@ -339,6 +339,14 @@ mod tests {
     }
 
     #[test]
+    fn mixed_legacy_and_current_proc_macro2_versions_use_common_nightly() {
+        let dir = TempDir::new().unwrap();
+        write_lock(dir.path(), &["0.4.30", "1.0.86"]);
+        let resolution = resolve_idl_nightly(dir.path()).unwrap();
+        assert_eq!(resolution.version, "nightly-2025-04-15");
+    }
+
+    #[test]
     fn mixed_incompatible_proc_macro2_versions_error() {
         let dir = TempDir::new().unwrap();
         write_lock(dir.path(), &["1.0.94", "1.0.95"]);
