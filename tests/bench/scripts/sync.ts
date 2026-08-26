@@ -28,6 +28,7 @@ const IDL_PATH = path.join("target", "idl", "bench.json");
   const cargoToml = await Toml.open(
     path.join("..", "programs", "bench", "Cargo.toml")
   );
+  const anchorToml = await Toml.open(path.join("..", "Anchor.toml"));
   const originalAnchorToml = await fs.readFile(ANCHOR_TOML_PATH, "utf8");
 
   const versions = bench.getVersions();
@@ -78,14 +79,22 @@ const IDL_PATH = path.join("target", "idl", "bench.json");
           : `"${version}"`;
       });
     }
+    cargoToml.replaceValue("idl-build", () =>
+      ["0.27.0", "0.28.0"].includes(version)
+        ? "[]"
+        : '["anchor-lang/idl-build", "anchor-spl/idl-build"]'
+    );
     await cargoToml.save();
 
-    await fs.writeFile(
-      ANCHOR_TOML_PATH,
-      `${originalAnchorToml.trimEnd()}\n\n[toolchain]\n${
-        isUnreleased ? "" : `anchor_version = "${version}"\n`
-      }solana_version = "${solanaVersion}"\n`
+    anchorToml.replaceValue(
+      "anchor_version",
+      () => (isUnreleased ? "1.1.2" : version),
+      { insideQuotes: true }
     );
+    anchorToml.replaceValue("solana_version", () => solanaVersion, {
+      insideQuotes: true,
+    });
+    await anchorToml.save();
 
     if (!isUnreleased) {
       spawn("avm", ["install", version], {
@@ -95,8 +104,6 @@ const IDL_PATH = path.join("target", "idl", "bench.json");
     spawn("avm", ["solana", "install"], {
       throwOnError: { msg: `Failed to install Solana ${solanaVersion}.` },
     });
-
-    return platformToolsVersion;
   };
 
   try {
@@ -112,24 +119,7 @@ const IDL_PATH = path.join("target", "idl", "bench.json");
     for (const version of versions) {
       console.log(`Updating '${version}'...`);
 
-      const expectedPlatformToolsVersion = await setProjectVersion(version);
-
-      const cargoBuildSbfVersionResult = spawn(
-        "cargo-build-sbf",
-        ["--version"],
-        {
-          throwOnError: { msg: "Failed to read the platform-tools version." },
-        }
-      );
-      const actualPlatformToolsVersion =
-        /(?:sbf|platform)-tools (v\d+\.\d+)/.exec(
-          cargoBuildSbfVersionResult.stdout.toString()
-        )?.[1];
-      if (actualPlatformToolsVersion !== expectedPlatformToolsVersion) {
-        throw new Error(
-          `Expected platform-tools ${expectedPlatformToolsVersion}, found ${actualPlatformToolsVersion}.`
-        );
-      }
+      await setProjectVersion(version);
 
       // Resolve path dependencies in the cached lockfile before using the
       // version's Cargo. Keep the original lockfile format for old Cargo
@@ -172,13 +162,12 @@ const IDL_PATH = path.join("target", "idl", "bench.json");
       }
 
       // Ensure the instrumented build replaces any artifact left by the
-      // initial current-IDL build or the previous iteration.
+      // initial current-IDL build or the previous iteration. Each selected
+      // Anchor CLI chooses its own historical build command.
       await fs.rm(path.join("target", "deploy", "bench.so"), { force: true });
-      const buildResult = spawn(
-        "cargo-build-sbf",
-        ["--manifest-path", PROGRAM_MANIFEST_PATH, "--", "--locked"],
-        { env: buildEnv }
-      );
+      const buildResult = spawn("anchor", ["build", "--skip-lint"], {
+        env: buildEnv,
+      });
       if (buildResult.status !== 0) {
         console.error("Please fix the error and re-run this command.");
         process.exitCode = 1;
@@ -201,7 +190,10 @@ const IDL_PATH = path.join("target", "idl", "bench.json");
 
     spawn("anchor", ["run", "sync-markdown"]);
   } finally {
-    await setProjectVersion("unreleased");
-    await fs.writeFile(ANCHOR_TOML_PATH, originalAnchorToml);
+    try {
+      await setProjectVersion("unreleased");
+    } finally {
+      await fs.writeFile(ANCHOR_TOML_PATH, originalAnchorToml);
+    }
   }
 })();
