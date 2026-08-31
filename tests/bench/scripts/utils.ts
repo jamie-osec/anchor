@@ -11,6 +11,12 @@ export type PlatformToolsVersion = `v${number}.${number}`;
 /** Persistent benchmark data(mapping of `Version -> Data`) */
 type Bench = {
   [key: string]: {
+    /** 
+     * Whether to skip syncing this historical benchmark version.
+     * These versions are no longer supported, and syncing them
+     * can cause CI issues.
+     */
+    disabled?: boolean;
     /**
      * Storing Solana version used in the release to:
      * - Be able to build older versions

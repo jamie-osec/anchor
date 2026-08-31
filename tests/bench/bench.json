@@ -1,5 +1,6 @@
 {
   "0.27.0": {
+    "disabled": true,
     "solanaVersion": "1.14.16",
     "platformToolsVersion": "v1.29",
     "result": {
@@ -187,6 +188,7 @@
     }
   },
   "0.28.0": {
+    "disabled": true,
     "solanaVersion": "1.16.0",
     "platformToolsVersion": "v1.37",
     "result": {

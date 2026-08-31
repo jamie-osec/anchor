@@ -31,7 +31,9 @@ const IDL_PATH = path.join("target", "idl", "bench.json");
   const anchorToml = await Toml.open(path.join("..", "Anchor.toml"));
   const originalAnchorToml = await fs.readFile(ANCHOR_TOML_PATH, "utf8");
 
-  const versions = bench.getVersions();
+  const versions = bench
+    .getVersions()
+    .filter((version) => !bench.get(version).disabled);
   const buildEnv = {
     ...process.env,
     RUSTC_BOOTSTRAP: "1",
