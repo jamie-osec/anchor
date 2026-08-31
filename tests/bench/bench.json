@@ -376,6 +376,7 @@
     }
   },
   "0.29.0": {
+    "disabled": true,
     "solanaVersion": "1.17.0",
     "platformToolsVersion": "v1.37",
     "result": {
@@ -563,6 +564,7 @@
     }
   },
   "0.30.0": {
+    "disabled": true,
     "solanaVersion": "1.18.8",
     "platformToolsVersion": "v1.41",
     "result": {
@@ -750,6 +752,7 @@
     }
   },
   "0.30.1": {
+    "disabled": true,
     "solanaVersion": "1.18.17",
     "platformToolsVersion": "v1.41",
     "result": {
