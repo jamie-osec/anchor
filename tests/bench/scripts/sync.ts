@@ -167,7 +167,14 @@ const IDL_PATH = path.join("target", "idl", "bench.json");
       // initial current-IDL build or the previous iteration. Each selected
       // Anchor CLI chooses its own historical build command.
       await fs.rm(path.join("target", "deploy", "bench.so"), { force: true });
-      const buildResult = spawn("anchor", ["build", "--skip-lint"], {
+      const buildArgs = ["build", "--skip-lint"];
+      // Program ID checks were added in v1.0.0. Historical benchmark builds
+      // use a generated keypair, so they must not require it to match the
+      // fixed benchmark program ID.
+      if (version === "unreleased" || version >= "1.0.0") {
+        buildArgs.push("--ignore-keys");
+      }
+      const buildResult = spawn("anchor", buildArgs, {
         env: buildEnv,
       });
       if (buildResult.status !== 0) {
