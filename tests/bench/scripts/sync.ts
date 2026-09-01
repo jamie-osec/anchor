@@ -183,7 +183,13 @@ const IDL_PATH = path.join("target", "idl", "bench.json");
         return;
       }
 
-      const result = spawn("anchor", ["test", "--skip-lint", "--skip-build"], {
+      const testArgs = ["test", "--skip-lint", "--skip-build"];
+      // v1.0.0 introduced Surfpool as the default validator. The benchmark
+      // suite uses the legacy validator, which is also configured in Anchor.toml.
+      if (version === "unreleased" || version >= "1.0.0") {
+        testArgs.push("--validator", "legacy");
+      }
+      const result = spawn("anchor", testArgs, {
         env: {
           ...buildEnv,
           [BENCHMARK_VERSION_ENV]: version,
