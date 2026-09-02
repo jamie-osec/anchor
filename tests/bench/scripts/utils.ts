@@ -90,7 +90,10 @@ export class BenchData {
 
   /** Save the benchmark data file. */
   async save() {
-    await fs.writeFile(BenchData.#PATH, JSON.stringify(this.#data, null, 2));
+    await fs.writeFile(
+      BenchData.#PATH,
+      `${JSON.stringify(this.#data, null, 2)}\n`
+    );
   }
 
   /** Get the stored results based on version. */
@@ -118,6 +121,7 @@ export class BenchData {
     changeCb,
     noChangeCb,
     treshold = 0,
+    throwOnChange = true,
   }: {
     /** New bench result */
     newResult: BenchResult[K];
@@ -133,6 +137,8 @@ export class BenchData {
     noChangeCb?: (args: { name: string; value: number }) => void;
     /** Change threshold percentage(maximum allowed difference between results) */
     treshold?: number;
+    /** Whether changes should fail when running in CI */
+    throwOnChange?: boolean;
   }) {
     let needsUpdate = false;
     const executeChangeCb = (...args: Parameters<typeof changeCb>) => {
@@ -189,7 +195,7 @@ export class BenchData {
         absDelta > newMaximumAllowedDelta
       ) {
         // Throw in CI
-        if (process.env.CI) {
+        if (process.env.CI && throwOnChange) {
           throw new Error(
             [
               `Key '${name}' has changed more than ${treshold}% but is not saved.`,
