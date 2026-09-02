@@ -21,6 +21,12 @@ import {
   simulateTransaction,
   SuccessfulTxSimulationResponse,
 } from "./utils/rpc.js";
+import {
+  signerFromLegacyKeypair,
+  signTransaction as signV1Transaction,
+  toTransaction as toV1Transaction,
+  V1TransactionConfig,
+} from "./utils/v1.js";
 
 export default interface Provider {
   readonly connection: Connection;
@@ -34,6 +40,12 @@ export default interface Provider {
   ): Promise<TransactionSignature>;
   sendAndConfirm?(
     tx: Transaction | VersionedTransaction,
+    signers?: Signer[],
+    opts?: ConfirmOptionsWithBlockhash
+  ): Promise<TransactionSignature>;
+  sendV1?(
+    tx: Transaction,
+    transactionConfig: V1TransactionConfig,
     signers?: Signer[],
     opts?: ConfirmOptionsWithBlockhash
   ): Promise<TransactionSignature>;
@@ -184,21 +196,72 @@ export class AnchorProvider implements Provider {
             ? tx.signatures?.[0] || new Uint8Array()
             : tx.signature ?? new Uint8Array()
         );
-        const maxVer = isVersionedTransaction(tx) ? 0 : undefined;
         const failedTx = await this.connection.getTransaction(txSig, {
           commitment: "confirmed",
-          maxSupportedTransactionVersion: maxVer,
+          maxSupportedTransactionVersion: 1,
         });
         if (!failedTx) {
           throw err;
         } else {
           const logs = failedTx.meta?.logMessages;
-          throw !logs ? err : new SendTransactionError(err.message, logs);
+          throw !logs
+            ? err
+            : createSendTransactionError(txSig, err.message, logs);
         }
       } else {
         throw err;
       }
     }
+  }
+
+  /**
+   * Sends an Anchor transaction using Solana's transaction-v1 message format.
+   *
+   * This leaves the existing transaction and RPC APIs unchanged. The caller
+   * supplies v1's message-level resource configuration; the provider supplies
+   * any missing fee payer and recent blockhash before compiling and signing.
+   */
+  async sendV1(
+    tx: Transaction,
+    transactionConfig: V1TransactionConfig,
+    signers?: Signer[],
+    opts?: ConfirmOptionsWithBlockhash
+  ): Promise<TransactionSignature> {
+    const options = opts ?? this.opts;
+    const payerKey = tx.feePayer ?? this.wallet.publicKey;
+    const recentBlockhash =
+      tx.recentBlockhash &&
+      tx.recentBlockhash !== "11111111111111111111111111111111"
+        ? tx.recentBlockhash
+        : (
+            await this.connection.getLatestBlockhash(
+              options.preflightCommitment
+            )
+          ).blockhash;
+
+    const v1Transaction = toV1Transaction(tx, {
+      payerKey,
+      recentBlockhash,
+      transactionConfig,
+    });
+    const legacySigners =
+      signers ?? (this.wallet.payer ? [this.wallet.payer] : undefined);
+
+    if (!legacySigners) {
+      throw new Error(
+        "sendV1 requires signers when the provider wallet has no Keypair payer"
+      );
+    }
+
+    const v1Signers = await Promise.all(
+      legacySigners.map(signerFromLegacyKeypair)
+    );
+    await signV1Transaction(v1Transaction, v1Signers);
+    return await sendAndConfirmRawTransaction(
+      this.connection,
+      v1Transaction.serialize(),
+      options
+    );
   }
 
   /**
@@ -282,16 +345,17 @@ export class AnchorProvider implements Provider {
               ? tx.signatures?.[0] || new Uint8Array()
               : tx.signature ?? new Uint8Array()
           );
-          const maxVer = isVersionedTransaction(tx) ? 0 : undefined;
           const failedTx = await this.connection.getTransaction(txSig, {
             commitment: "confirmed",
-            maxSupportedTransactionVersion: maxVer,
+            maxSupportedTransactionVersion: 1,
           });
           if (!failedTx) {
             throw err;
           } else {
             const logs = failedTx.meta?.logMessages;
-            throw !logs ? err : new SendTransactionError(err.message, logs);
+            throw !logs
+              ? err
+              : createSendTransactionError(txSig, err.message, logs);
           }
         } else {
           throw err;
@@ -470,6 +534,21 @@ class ConfirmError extends Error {
   constructor(message?: string) {
     super(message);
   }
+}
+
+function createSendTransactionError(
+  signature: TransactionSignature,
+  transactionMessage: string,
+  logs: string[]
+): SendTransactionError {
+  const error = new SendTransactionError({
+    action: "send",
+    signature,
+    transactionMessage,
+    logs,
+  });
+  error.message = transactionMessage;
+  return error;
 }
 
 /**
