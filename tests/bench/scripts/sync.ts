@@ -40,7 +40,7 @@ const IDL_PATH = path.join("target", "idl", "bench.json");
     // programs. Keep its artifacts compatible with historical measurements.
     ANCHOR_BUILD_SBF_ARCH: "v2",
     RUSTC_BOOTSTRAP: "1",
-    RUSTFLAGS: "-Z emit-stack-sizes",
+    CARGO_TARGET_SBPFV2_SOLANA_SOLANA_RUSTFLAGS: "-Z emit-stack-sizes",
   };
 
   const setProjectVersion = async (version: Version) => {
