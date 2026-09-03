@@ -41,9 +41,7 @@ describe("Stack memory", () => {
 
     // Rust v0 mangling records the account struct's byte length immediately
     // before its name, followed by the `try_accounts` method.
-    const v0Match = /Cs\w+_5benchNtB\w+?_(\d+)([\w]+)E12try_accounts$/.exec(
-      fn
-    );
+    const v0Match = /Cs\w+_5benchNtB\w+?_(\d+)([\w]+)E12try_accounts$/.exec(fn);
     if (!v0Match) return;
 
     const [, nameLength, encodedName] = v0Match;
@@ -192,9 +190,7 @@ describe("Stack memory", () => {
         Object.entries(process.env).filter(
           ([key]) =>
             key === "RUSTFLAGS" ||
-            /^CARGO_TARGET_(?:SBF|SBPFV?\d*)_SOLANA_SOLANA_RUSTFLAGS$/.test(
-              key
-            )
+            /^CARGO_TARGET_(?:SBF|SBPFV?\d*)_SOLANA_SOLANA_RUSTFLAGS$/.test(key)
         )
       );
       console.error(
