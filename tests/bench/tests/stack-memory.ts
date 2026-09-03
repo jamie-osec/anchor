@@ -171,6 +171,29 @@ describe("Stack memory", () => {
     );
 
     if (!Object.keys(parsedStackMemory).length) {
+      const sectionHeadersResult = spawn(llvmObjdumpPath, ["-h", programPath]);
+      const rustFlags = Object.fromEntries(
+        Object.entries(process.env).filter(
+          ([key]) =>
+            key === "RUSTFLAGS" ||
+            /^CARGO_TARGET_(?:SBF|SBPFV?\d*)_SOLANA_SOLANA_RUSTFLAGS$/.test(
+              key
+            )
+        )
+      );
+      console.error(
+        [
+          "Stack-size diagnostics:",
+          `  benchmark version: ${version}`,
+          `  platform tools: ${platformToolsVersion}`,
+          `  program: ${programPath}`,
+          `  rust flags: ${JSON.stringify(rustFlags)}`,
+          "  section headers:",
+          sectionHeadersResult.stdout.toString(),
+          "  stack-size section:",
+          stackSizeResult.stdout.toString(),
+        ].join("\n")
+      );
       throw new Error(`No stack size metadata was found in ${programPath}.`);
     }
 
