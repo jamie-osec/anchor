@@ -247,8 +247,8 @@ pub enum Command {
         #[clap(long, default_value = DEFAULT_TOOLS_VERSION)]
         tools_version: String,
         /// SBPF architecture to pass to `cargo build-sbf`.
-        #[clap(long)]
-        arch: Option<String>,
+        #[clap(long, default_value_t = default_build_arch())]
+        arch: String,
         /// Docker image to use. For --verifiable builds only.
         #[clap(short, long)]
         docker_image: Option<String>,
@@ -3009,31 +3009,30 @@ const BUILD_SUBCOMMAND: &str = "build-sbf";
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BuildSbfOptions {
     tools_version: String,
-    arch: Option<String>,
+    arch: String,
 }
 
 impl BuildSbfOptions {
-    fn new(tools_version: String, arch: Option<String>) -> Self {
+    fn new(tools_version: String, arch: String) -> Self {
         Self {
             tools_version,
-            arch: arch.filter(|arch| !arch.is_empty()),
+            arch,
         }
     }
 
-    fn from_build_command(tools_version: String, arch: Option<String>) -> Self {
-        Self::new(tools_version, arch.or_else(Self::default_arch))
-    }
-
-    fn default_arch() -> Option<String> {
-        Some(std::env::var(BUILD_ARCH_ENV).unwrap_or_else(|_| DEFAULT_BUILD_ARCH.to_owned()))
-            .filter(|arch| !arch.is_empty())
+    fn from_build_command(tools_version: String, arch: String) -> Self {
+        Self::new(tools_version, arch)
     }
 }
 
 impl Default for BuildSbfOptions {
     fn default() -> Self {
-        Self::new(DEFAULT_TOOLS_VERSION.to_owned(), Self::default_arch())
+        Self::new(DEFAULT_TOOLS_VERSION.to_owned(), default_build_arch())
     }
+}
+
+fn default_build_arch() -> String {
+    std::env::var(BUILD_ARCH_ENV).unwrap_or_else(|_| DEFAULT_BUILD_ARCH.to_owned())
 }
 
 fn validator_type_from_env() -> Result<Option<ValidatorType>> {
@@ -3053,10 +3052,8 @@ fn build_sbf_base_args(build_sbf_options: &BuildSbfOptions) -> Vec<String> {
     let mut args = vec![BUILD_SUBCOMMAND.to_owned()];
     args.push("--tools-version".to_owned());
     args.push(build_sbf_options.tools_version.clone());
-    if let Some(arch) = &build_sbf_options.arch {
-        args.push("--arch".to_owned());
-        args.push(arch.clone());
-    }
+    args.push("--arch".to_owned());
+    args.push(build_sbf_options.arch.clone());
     args
 }
 
@@ -7412,13 +7409,30 @@ mod tests {
         };
 
         assert_eq!(tools_version, "v1.57");
-        assert_eq!(arch.as_deref(), Some("v2"));
+        assert_eq!(arch, "v2");
         assert_eq!(cargo_args, ["--features", "extra"].map(str::to_string));
     }
 
     #[test]
-    fn build_sbf_args_appends_extra_args_without_special_handling() {
-        let build_sbf_options = BuildSbfOptions::new("v1.57".to_string(), Some("v2".to_string()));
+    fn test_build_uses_default_build_sbf_options() {
+        let opts = Opts::try_parse_from(["anchor", "build"]).unwrap();
+
+        let Command::Build {
+            tools_version,
+            arch,
+            ..
+        } = opts.command
+        else {
+            panic!("expected build command");
+        };
+
+        assert_eq!(tools_version, DEFAULT_TOOLS_VERSION);
+        assert_eq!(arch, default_build_arch());
+    }
+
+    #[test]
+    fn build_sbf_args_appends_forwarded_args_unchanged() {
+        let build_sbf_options = BuildSbfOptions::new("v1.57".to_string(), "v2".to_string());
         let extra_args = vec![
             "--tools-version".to_string(),
             "v1.53".to_string(),
@@ -7446,15 +7460,12 @@ mod tests {
     }
 
     #[test]
-    fn build_sbf_options_from_build_command_uses_default_arch() {
-        let default_arch = BuildSbfOptions::default_arch();
-        let build_sbf_options = BuildSbfOptions::from_build_command("v1.57".to_string(), None);
-        let mut expected = ["build-sbf", "--tools-version", "v1.57"]
+    fn build_sbf_options_from_build_command_uses_explicit_options() {
+        let build_sbf_options =
+            BuildSbfOptions::from_build_command("v1.57".to_string(), "v2".to_string());
+        let expected = ["build-sbf", "--tools-version", "v1.57", "--arch", "v2"]
             .map(str::to_string)
             .to_vec();
-        if let Some(default_arch) = default_arch {
-            expected.extend(["--arch".to_string(), default_arch]);
-        }
 
         assert_eq!(build_sbf_base_args(&build_sbf_options), expected);
     }
