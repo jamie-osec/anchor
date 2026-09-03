@@ -37,7 +37,11 @@ const IDL_PATH = path.join("target", "idl", "bench.json");
   const buildEnv = {
     ...process.env,
     RUSTC_BOOTSTRAP: "1",
-    RUSTFLAGS: "-Z emit-stack-sizes",
+    CARGO_TARGET_SBF_SOLANA_SOLANA_RUSTFLAGS: "-Z emit-stack-sizes",
+    CARGO_TARGET_SBPF_SOLANA_SOLANA_RUSTFLAGS: "-Z emit-stack-sizes",
+    CARGO_TARGET_SBPFV1_SOLANA_SOLANA_RUSTFLAGS: "-Z emit-stack-sizes",
+    CARGO_TARGET_SBPFV2_SOLANA_SOLANA_RUSTFLAGS: "-Z emit-stack-sizes",
+    CARGO_TARGET_SBPFV3_SOLANA_SOLANA_RUSTFLAGS: "-Z emit-stack-sizes",
   };
 
   const setProjectVersion = async (version: Version) => {
