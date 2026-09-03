@@ -79,7 +79,7 @@ pub const DOCKER_BUILDER_VERSION: &str = VERSION;
 /// Default RPC port
 pub const DEFAULT_RPC_PORT: u16 = 8899;
 const DEFAULT_FAUCET_PORT: u16 = 9900;
-const DEFAULT_TOOLS_VERSION: &str = "v1.56";
+const DEFAULT_TOOLS_VERSION: &str = "v1.57";
 const DEFAULT_BUILD_ARCH: &str = "v3";
 const BUILD_ARCH_ENV: &str = "ANCHOR_BUILD_SBF_ARCH";
 
@@ -7392,7 +7392,7 @@ mod tests {
             "anchor",
             "build",
             "--tools-version",
-            "v1.56",
+            "v1.57",
             "--arch",
             "v2",
             "--",
@@ -7411,14 +7411,14 @@ mod tests {
             panic!("expected build command");
         };
 
-        assert_eq!(tools_version, "v1.56");
+        assert_eq!(tools_version, "v1.57");
         assert_eq!(arch.as_deref(), Some("v2"));
         assert_eq!(cargo_args, ["--features", "extra"].map(str::to_string));
     }
 
     #[test]
     fn build_sbf_args_appends_extra_args_without_special_handling() {
-        let build_sbf_options = BuildSbfOptions::new("v1.56".to_string(), Some("v2".to_string()));
+        let build_sbf_options = BuildSbfOptions::new("v1.57".to_string(), Some("v2".to_string()));
         let extra_args = vec![
             "--tools-version".to_string(),
             "v1.53".to_string(),
@@ -7433,7 +7433,7 @@ mod tests {
             [
                 "build-sbf",
                 "--tools-version",
-                "v1.56",
+                "v1.57",
                 "--arch",
                 "v2",
                 "--tools-version",
@@ -7448,8 +7448,8 @@ mod tests {
     #[test]
     fn build_sbf_options_from_build_command_uses_default_arch() {
         let default_arch = BuildSbfOptions::default_arch();
-        let build_sbf_options = BuildSbfOptions::from_build_command("v1.56".to_string(), None);
-        let mut expected = ["build-sbf", "--tools-version", "v1.56"]
+        let build_sbf_options = BuildSbfOptions::from_build_command("v1.57".to_string(), None);
+        let mut expected = ["build-sbf", "--tools-version", "v1.57"]
             .map(str::to_string)
             .to_vec();
         if let Some(default_arch) = default_arch {
