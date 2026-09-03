@@ -1219,16 +1219,34 @@ fn override_toolchain(cfg_override: &ConfigOverride) -> Result<RestoreToolchainC
                         }
                     }
 
-                    let output = std::process::Command::new(cmd_name).arg("list").output()?;
-                    if !output.status.success() {
-                        return Err(anyhow!("Failed to list installed `solana` versions"));
-                    }
-
-                    // Hide the installation progress if the version is already installed
-                    let is_installed = std::str::from_utf8(&output.stdout)?
-                        .lines()
-                        .filter_map(parse_version)
-                        .any(|line_version| line_version == version);
+                    // Hide the installation progress if the version is already installed.
+                    // Some installer versions cannot list releases after switching between
+                    // Solana and Agave. `init` remains able to install the requested version,
+                    // so continue with visible output instead of failing before the command.
+                    let is_installed =
+                        match std::process::Command::new(cmd_name).arg("list").output() {
+                            Ok(output) if output.status.success() => {
+                                String::from_utf8_lossy(&output.stdout)
+                                    .lines()
+                                    .filter_map(parse_version)
+                                    .any(|line_version| line_version == version)
+                            }
+                            Ok(output) => {
+                                eprintln!(
+                                    "Failed to list installed Solana versions with `{cmd_name}`; \
+                                     continuing with installation:\n{}",
+                                    String::from_utf8_lossy(&output.stderr).trim()
+                                );
+                                false
+                            }
+                            Err(err) => {
+                                eprintln!(
+                                    "Failed to list installed Solana versions with `{cmd_name}`; \
+                                     continuing with installation: {err}"
+                                );
+                                false
+                            }
+                        };
                     let (stderr, stdout) = if is_installed {
                         (Stdio::null(), Stdio::null())
                     } else {
