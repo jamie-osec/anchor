@@ -529,7 +529,8 @@ jobs:
             path: tests/anchor-cli-legacy-idl
           - cmd: cd tests/anchor-cli-account && anchor test --skip-lint
             path: tests/anchor-cli-account
-          - cmd: cd tests/bench && ./test.sh
+          # Temporary: write and print Linux benchmark measurements for review.
+          - cmd: cd tests/bench && CI= ./test.sh && git diff -- bench.json ../../bench/STACK_MEMORY.md && exit 1
             path: tests/bench
           - cmd: cd tests/idl && ./test.sh
             path: tests/idl
