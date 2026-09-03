@@ -90,7 +90,7 @@ const IDL_PATH = path.join("target", "idl", "bench.json");
 
     anchorToml.replaceValue(
       "anchor_version",
-      () => (isUnreleased ? "1.1.2" : version),
+      () => (isUnreleased ? "" : version),
       { insideQuotes: true }
     );
     anchorToml.replaceValue("solana_version", () => solanaVersion, {
