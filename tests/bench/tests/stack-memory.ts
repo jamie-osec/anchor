@@ -132,12 +132,29 @@ describe("Stack memory", () => {
     const platformToolsMinor = Number(platformToolsVersion.split(".")[1]);
     const platformToolsDirectory =
       platformToolsMinor < 37 ? "sbf-tools" : "platform-tools";
-    const programPath = path.join(
-      "target",
-      `${platformToolsMinor < 44 ? "sbf" : "sbpf"}-solana-solana`,
-      "release",
-      "bench.so"
+    const programPaths = ["sbpfv3", "sbpf", "sbf"].map((target) =>
+      path.join("target", `${target}-solana-solana`, "release", "bench.so")
     );
+    const programPath = (
+      await Promise.all(
+        programPaths.map(async (candidate) => {
+          try {
+            await fs.access(candidate);
+            return candidate;
+          } catch {
+            return;
+          }
+        })
+      )
+    ).find((candidate) => candidate !== undefined);
+
+    if (!programPath) {
+      throw new Error(
+        `Could not find the compiled benchmark program in: ${programPaths.join(
+          ", "
+        )}`
+      );
+    }
     const llvmObjdumpPath = path.join(
       os.homedir(),
       ".cache",
