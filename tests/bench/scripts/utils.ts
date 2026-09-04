@@ -465,7 +465,7 @@ export class Toml {
     cb: (previous: string) => string,
     opts?: { insideQuotes: boolean }
   ) {
-    const valuePattern = opts?.insideQuotes ? '"([^\"]*)"' : "(.*)";
+    const valuePattern = opts?.insideQuotes ? '"([^"]*)"' : "(.*)";
     this.#text = this.#text.replace(
       new RegExp(`(${key}\\s*=\\s*)${valuePattern}`),
       (_line, prefix, value) =>
@@ -498,9 +498,9 @@ export class LockFile {
     try {
       await fs.rename(this.#CARGO_LOCK, this.#getLockPath(version));
     } catch {
-      // Lock file doesn't exist
-      // Run the tests to create the lock file
-      const result = runAnchorTest();
+      // Lock file doesn't exist. Use the benchmark test script so the build
+      // emits the stack-size metadata required by its tests.
+      const result = spawn("./test.sh", []);
 
       // Check failure
       if (result.status !== 0) {
@@ -566,9 +566,6 @@ export const spawn = (
 
   return result;
 };
-
-/** Run `anchor test` command. */
-export const runAnchorTest = () => spawn("anchor", ["test", "--skip-lint"]);
 
 /** Format number with `en-US` locale. */
 export const formatNumber = (number: number) => number.toLocaleString("en-US");
