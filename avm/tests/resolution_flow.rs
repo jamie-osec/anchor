@@ -431,12 +431,12 @@ fn anchor_stub_prefers_anchor_toml_and_sets_launcher_env() {
     );
     assert_eq!(
         fs::read_to_string(&fixture.cargo_log_path).unwrap(),
-        "--help\nbuild-sbf --install-only --tools-version v1.52\n"
+        "--help\nbuild-sbf --install-only --tools-version v1.56\n"
     );
     let rustup_log = fs::read_to_string(&fixture.rustup_log_path).unwrap();
     assert!(rustup_log.contains("toolchain list -v\n"), "{rustup_log}");
     assert!(
-        rustup_log.contains("toolchain link 1.89.0-sbpf-solana-v1.52"),
+        rustup_log.contains("toolchain link 1.89.0-sbpf-solana-v1.56"),
         "{rustup_log}"
     );
 }
@@ -445,9 +445,9 @@ fn anchor_stub_prefers_anchor_toml_and_sets_launcher_env() {
 fn anchor_stub_falls_back_to_anchorversion_cargo_and_global_sources() {
     let fixture = Fixture::new();
     fixture.install_legacy_build_sbf();
-    fixture.cache_platform_tools("v1.48");
-    fixture.cache_platform_tools("v1.43");
-    fixture.cache_platform_tools("v1.41");
+    fixture.cache_platform_tools("v1.51.1");
+    fixture.cache_platform_tools("v1.46.1");
+    fixture.cache_platform_tools("v1.42.1");
     fixture.install_anchor("0.32.1");
     fixture.install_anchor("0.31.1");
     fixture.install_anchor("0.30.1");
@@ -500,12 +500,12 @@ fn anchor_stub_pins_only_unversioned_nightly_cargo_invocations() {
 
     assert_eq!(
         fs::read_to_string(&fixture.cargo_log_path).unwrap(),
-        "--help\nbuild-sbf --install-only --tools-version v1.54\nbuild-sbf\n+nightly-2026-06-10 \
+        "--help\nbuild-sbf --install-only --tools-version v1.56\nbuild-sbf\n+nightly-2026-06-10 \
          test idl\n+nightly-2026-07-01 test already-pinned\n"
     );
     let rustup_log = fs::read_to_string(&fixture.rustup_log_path).unwrap();
     assert!(
-        rustup_log.contains("toolchain link 1.89.0-sbpf-solana-v1.54"),
+        rustup_log.contains("toolchain link 1.89.0-sbpf-solana-v1.56"),
         "{rustup_log}"
     );
 }
@@ -514,7 +514,7 @@ fn anchor_stub_pins_only_unversioned_nightly_cargo_invocations() {
 fn anchor_stub_uses_legacy_idl_nightly_for_locked_proc_macro2() {
     let fixture = Fixture::new();
     fixture.install_legacy_build_sbf();
-    fixture.cache_platform_tools("v1.41");
+    fixture.cache_platform_tools("v1.42.1");
     let project = fixture.project("legacy-cargo-proxy");
     fixture.install_anchor_with_cargo_calls("0.30.1");
     fixture.install_fake_solana("1.18.17");
@@ -546,7 +546,7 @@ fn anchor_stub_uses_legacy_idl_nightly_for_locked_proc_macro2() {
 fn anchor_stub_enables_v4_lockfile_for_compatible_legacy_cargo() {
     let fixture = Fixture::new();
     fixture.install_legacy_build_sbf();
-    fixture.cache_platform_tools("v1.41");
+    fixture.cache_platform_tools("v1.42.1");
     fixture.install_anchor("0.30.1");
     fixture.install_fake_solana("1.18.17");
     let project = fixture.project("legacy-v4-lockfile");
@@ -567,7 +567,7 @@ fn anchor_stub_enables_v4_lockfile_for_compatible_legacy_cargo() {
 fn anchor_stub_does_not_enable_v4_opt_in_for_native_cargo() {
     let fixture = Fixture::new();
     fixture.install_legacy_build_sbf();
-    fixture.cache_platform_tools("v1.43");
+    fixture.cache_platform_tools("v1.46.1");
     fixture.install_anchor("0.31.1");
     fixture.install_fake_solana("2.1.0");
     let project = fixture.project("native-v4-lockfile");
@@ -588,7 +588,7 @@ fn anchor_stub_does_not_enable_v4_opt_in_for_native_cargo() {
 fn anchor_stub_uses_versioned_link_for_early_agave_three() {
     let fixture = Fixture::new();
     fixture.install_legacy_build_sbf();
-    fixture.cache_platform_tools("v1.51");
+    fixture.cache_platform_tools("v1.51.1");
     fixture.install_anchor("1.0.2");
     fixture.install_fake_solana("3.0.0");
     let project = fixture.project("early-agave-three");
@@ -602,7 +602,7 @@ fn anchor_stub_uses_versioned_link_for_early_agave_three() {
 
     let rustup_log = fs::read_to_string(&fixture.rustup_log_path).unwrap();
     assert!(
-        rustup_log.contains("toolchain link 1.84.1-sbpf-solana-v1.51"),
+        rustup_log.contains("toolchain link 1.84.1-sbpf-solana-v1.51.1"),
         "{rustup_log}"
     );
     assert!(
@@ -686,7 +686,7 @@ fn avm_subcommands_resolve_solana_and_platform_tools_from_project() {
     assert_success(&platform_tools);
     let platform_tools_stdout = command_stdout(platform_tools);
     assert!(
-        platform_tools_stdout.contains("platform-tools v1.48"),
+        platform_tools_stdout.contains("platform-tools v1.51.1"),
         "{platform_tools_stdout}"
     );
     assert!(

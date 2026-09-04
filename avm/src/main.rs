@@ -592,7 +592,12 @@ fn ensure_resolved_platform_tools(
         avm::platform_tools::solana_cache_platform_tools_path(&resolution.version)?;
 
     if !avm::platform_tools::platform_tools_are_installed_at(&platform_tools_path) {
-        if cargo_build_sbf_supports_install_only()? {
+        if avm::platform_tools::uses_ci_artifact(&resolution.version) {
+            avm::platform_tools::install_platform_tools_in_solana_cache(
+                &resolution.version,
+                false,
+            )?;
+        } else if cargo_build_sbf_supports_install_only()? {
             let status = Command::new("cargo")
                 .args([
                     "build-sbf",
