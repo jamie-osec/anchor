@@ -40,11 +40,7 @@ const IDL_PATH = path.join("target", "idl", "bench.json");
     // programs. Keep its artifacts compatible with historical measurements.
     ANCHOR_BUILD_SBF_ARCH: "v2",
     RUSTC_BOOTSTRAP: "1",
-    CARGO_TARGET_SBF_SOLANA_SOLANA_RUSTFLAGS: "-Z emit-stack-sizes",
-    CARGO_TARGET_SBPF_SOLANA_SOLANA_RUSTFLAGS: "-Z emit-stack-sizes",
-    CARGO_TARGET_SBPFV1_SOLANA_SOLANA_RUSTFLAGS: "-Z emit-stack-sizes",
-    CARGO_TARGET_SBPFV2_SOLANA_SOLANA_RUSTFLAGS: "-Z emit-stack-sizes",
-    CARGO_TARGET_SBPFV3_SOLANA_SOLANA_RUSTFLAGS: "-Z emit-stack-sizes",
+    RUSTFLAGS: "-Z emit-stack-sizes",
   };
 
   const setProjectVersion = async (version: Version) => {
@@ -117,12 +113,10 @@ const IDL_PATH = path.join("target", "idl", "bench.json");
 
   try {
     await setProjectVersion("unreleased");
-    // The current TypeScript client needs the current IDL format, including
-    // when a historical CLI is responsible for starting the validator.
+    // Build the IDL once with the current CLI. The TypeScript tests use this
+    // format even when a historical CLI starts the validator.
     await fs.rm(IDL_PATH, { force: true });
-    const buildResult = spawn("anchor", ["build", "--skip-lint"], {
-      env: buildEnv,
-    });
+    const buildResult = spawn("anchor", ["build", "--skip-lint"]);
     if (buildResult.status !== 0) {
       throw new Error("Failed to build the current benchmark program.");
     }
@@ -176,7 +170,7 @@ const IDL_PATH = path.join("target", "idl", "bench.json");
       // initial current-IDL build or the previous iteration. Each selected
       // Anchor CLI chooses its own historical build command.
       await fs.rm(path.join("target", "deploy", "bench.so"), { force: true });
-      const buildArgs = ["build", "--skip-lint"];
+      const buildArgs = ["build", "--skip-lint", "--no-idl"];
       // Program ID checks were added in v1.0.0. Historical benchmark builds
       // use a generated keypair, so they must not require it to match the
       // fixed benchmark program ID.
