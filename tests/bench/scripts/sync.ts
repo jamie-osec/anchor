@@ -36,9 +36,6 @@ const IDL_PATH = path.join("target", "idl", "bench.json");
     .filter((version) => !bench.get(version).disabled);
   const buildEnv = {
     ...process.env,
-    // The benchmark suite runs on a legacy validator that cannot load v3
-    // programs. Keep its artifacts compatible with historical measurements.
-    ANCHOR_BUILD_SBF_ARCH: "v2",
     RUSTC_BOOTSTRAP: "1",
     RUSTFLAGS: "-Z emit-stack-sizes",
   };
@@ -186,13 +183,7 @@ const IDL_PATH = path.join("target", "idl", "bench.json");
         return;
       }
 
-      const testArgs = ["test", "--skip-lint", "--skip-build"];
-      // v1.0.0 introduced Surfpool as the default validator. The benchmark
-      // suite uses the legacy validator, which is also configured in Anchor.toml.
-      if (version === "unreleased" || version >= "1.0.0") {
-        testArgs.push("--validator", "legacy");
-      }
-      const result = spawn("anchor", testArgs, {
+      const result = spawn("anchor", ["test", "--skip-lint", "--skip-build"], {
         env: {
           ...buildEnv,
           [BENCHMARK_VERSION_ENV]: version,
