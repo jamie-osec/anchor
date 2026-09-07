@@ -1,4 +1,4 @@
-# Static map from Solana release → bundled `platform-tools` version.
+# Static map from Solana release → corresponding `platform-tools` version.
 #
 # Source of truth: `DEFAULT_PLATFORM_TOOLS_VERSION` (or its predecessors, the
 # `platform_tools_version` / `sbf_tools_version` literals) in cargo-build-sbf:
@@ -8,6 +8,9 @@
 #                   (then platform-tools-sdk/cargo-build-sbf/src/main.rs from 2.2)
 #   3.0.x+ : anza-xyz/agave, platform-tools-sdk/cargo-build-sbf/src/toolchain.rs
 #
+# In some cases, we override to a different `platform-tools` version due to issues
+# with specific toolchains.
+# 
 # Resolution: given a requested Solana version `S`, pick the entry with the
 # largest `solana` key that is `<= S`. Entries MUST be ordered by `solana` so
 # the resolver can stop at the first key that exceeds the request.
