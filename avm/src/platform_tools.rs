@@ -153,8 +153,7 @@ impl PlatformToolsSource {
 
 #[derive(Debug, Clone)]
 pub struct PlatformToolsResolution {
-    /// e.g. `"v1.57"`. Kept as a string because upstream uses the `v`-prefixed
-    /// form everywhere (release tags, archive names, the `DEFAULT_…` constant).
+    /// `"v"`-prefixed version (e.g. `"v1.0.0"`).
     pub version: String,
     /// Rust compiler bundled in this platform-tools release.
     pub rustc: Version,
@@ -547,7 +546,7 @@ pub fn get_platform_tools_dir_path() -> PathBuf {
     AVM_HOME.join("platform-tools")
 }
 
-/// Path where the given platform-tools `version` (e.g. `"v1.57"`) is installed.
+/// Path where the given platform-tools `version` (e.g. `"v1.11"`) is installed.
 pub fn platform_tools_version_path(version: &str) -> PathBuf {
     get_platform_tools_dir_path().join(version)
 }
