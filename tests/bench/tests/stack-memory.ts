@@ -33,21 +33,13 @@ describe("Stack memory", () => {
     fn: string,
     instructionAccountsStructs: Map<string, string>
   ) => {
-    const legacyMatch =
+    const match =
       /_\$LT\$bench\.\.(\w+)\$u20\$as\$u20\$anchor_lang\.\.Accounts(?:\$LT\$bench\.\.\w+Bumps\$GT\$)?\$GT\$12try_accounts17h/.exec(
         fn
       );
-    if (legacyMatch) return instructionAccountsStructs.get(legacyMatch[1]);
+    if (!match) return;
 
-    // Rust v0 mangling records the account struct's byte length immediately
-    // before its name, followed by the `try_accounts` method.
-    const v0Match = /Cs\w+_5benchNtB\w+?_(\d+)([\w]+)E12try_accounts$/.exec(fn);
-    if (!v0Match) return;
-
-    const [, nameLength, encodedName] = v0Match;
-    return instructionAccountsStructs.get(
-      encodedName.slice(0, Number(nameLength))
-    );
+    return instructionAccountsStructs.get(match[1]);
   };
 
   const parseStackSizeSection = (output: string) => {
@@ -140,15 +132,9 @@ describe("Stack memory", () => {
     const platformToolsMinor = Number(platformToolsVersion.split(".")[1]);
     const platformToolsDirectory =
       platformToolsMinor < 37 ? "sbf-tools" : "platform-tools";
-    const programTarget =
-      version === "unreleased"
-        ? "sbpfv2"
-        : platformToolsMinor < 44
-        ? "sbf"
-        : "sbpf";
     const programPath = path.join(
       "target",
-      `${programTarget}-solana-solana`,
+      `${platformToolsMinor < 44 ? "sbf" : "sbpf"}-solana-solana`,
       "release",
       "bench.so"
     );
@@ -185,27 +171,6 @@ describe("Stack memory", () => {
     );
 
     if (!Object.keys(parsedStackMemory).length) {
-      const sectionHeadersResult = spawn(llvmObjdumpPath, ["-h", programPath]);
-      const rustFlags = Object.fromEntries(
-        Object.entries(process.env).filter(
-          ([key]) =>
-            key === "RUSTFLAGS" ||
-            /^CARGO_TARGET_(?:SBF|SBPFV?\d*)_SOLANA_SOLANA_RUSTFLAGS$/.test(key)
-        )
-      );
-      console.error(
-        [
-          "Stack-size diagnostics:",
-          `  benchmark version: ${version}`,
-          `  platform tools: ${platformToolsVersion}`,
-          `  program: ${programPath}`,
-          `  rust flags: ${JSON.stringify(rustFlags)}`,
-          "  section headers:",
-          sectionHeadersResult.stdout.toString(),
-          "  stack-size section:",
-          stackSizeResult.stdout.toString(),
-        ].join("\n")
-      );
       throw new Error(`No stack size metadata was found in ${programPath}.`);
     }
 
