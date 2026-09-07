@@ -145,14 +145,7 @@ jobs:
           EOF
 
       - name: anchor test
-        if: matrix.test_template != 'litesvm'
         working-directory: /tmp/my_program
-        run: anchor test
-      - name: anchor test
-        if: matrix.test_template == 'litesvm'
-        working-directory: /tmp/my_program
-        env:
-          ANCHOR_BUILD_SBF_ARCH: "v2"
         run: anchor test
 
   # JS-based test templates: cross-product over template x language x

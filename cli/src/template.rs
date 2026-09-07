@@ -602,11 +602,34 @@ solana-sdk-ids = "3"
         Some(TestTemplate::Litesvm) => {
             r#"
 [dev-dependencies]
-litesvm = "0.10.0"
-solana-message = "3.0.1"
-solana-transaction = "3.0.2"
-solana-signer = "3.0.0"
-solana-keypair = "3.0.1"
+# LiteSVM 0.15 by default resolves dependencies with incompatible Rust versions.
+# Pin these manually to ensure they can compile.
+litesvm = "0.15.0"
+solana-account = "=4.3.1"
+solana-address = "=2.6.1"
+solana-clock = "=3.1.1"
+solana-epoch-rewards = "=3.1.0"
+solana-epoch-schedule = "=3.2.0"
+solana-fee-calculator = "=3.2.2"
+solana-hash = "=4.5.0"
+solana-loader-v3-interface = "=8.0.1"
+solana-last-restart-slot = "=3.1.0"
+solana-message = "=4.3.0"
+solana-nonce = "=3.2.0"
+solana-packet = "=4.2.0"
+solana-pubkey = "=4.2.0"
+solana-rent = "=4.3.0"
+solana-short-vec = "=3.2.2"
+solana-signature = "=3.4.1"
+solana-slot-hashes = "=3.1.0"
+solana-slot-history = "=3.1.0"
+solana-stake-history = "=1.0.0"
+solana-syscalls = "=4.1.2"
+solana-sysvar = "=4.1.0"
+solana-transaction = "=4.1.5"
+wincode = "=0.5.5"
+solana-signer = "=3.0.1"
+solana-keypair = "=3.1.2"
 "#
         }
         _ => "",
@@ -2145,7 +2168,7 @@ mod tests {
     fn v1_templates_keep_legacy_anchor_lang_shape() {
         let manifest = cargo_toml("counter", Some(&TestTemplate::Litesvm), AnchorVersion::V1);
         assert!(manifest.contains("anchor-lang ="));
-        assert!(manifest.contains("litesvm = \"0.10.0\""));
+        assert!(manifest.contains("litesvm = \"0.15.0\""));
         assert!(!manifest.contains("anchor-lang-v2"));
 
         let test = ts_mocha("counter", AnchorVersion::V1);
