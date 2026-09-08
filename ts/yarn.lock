@@ -1037,10 +1037,10 @@
     chalk "5.6.2"
     commander "14.0.2"
 
-"@solana/web3.js@1.99.0-beta.0":
-  version "1.99.0-beta.0"
-  resolved "https://registry.yarnpkg.com/@solana/web3.js/-/web3.js-1.99.0-beta.0.tgz#3ba31a978f78a0239b6ee775011f11eb0532c16a"
-  integrity sha512-hvDoGOocYkrg0YXLHmZe8TOtG2ojJYWJRUCaiQWFH9wmRXLdkALqukqhVRfhN/WFhsLi6Yj+7qPhn/iMipN5vw==
+"@solana/web3.js@1.99.0":
+  version "1.99.0"
+  resolved "https://registry.yarnpkg.com/@solana/web3.js/-/web3.js-1.99.0.tgz#864ce3fefe03b258c430e31e6672b422426821f7"
+  integrity sha512-QZYQ2T1z6xWisoyALPq25i/QZTsRlM02BABtAsfaQ1p8wX4SdTfxrKTRue/ZZqrhNVh5oL7T/DUFiTS9DRgxow==
   dependencies:
     "@babel/runtime" "^7.29.7"
     "@noble/curves" "^1.9.7"
