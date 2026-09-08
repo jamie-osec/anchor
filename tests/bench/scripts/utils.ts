@@ -196,9 +196,6 @@ export class BenchData {
       ) {
         // Throw in CI
         if (process.env.CI && throwOnChange) {
-          console.error(
-            `Benchmark change: '${name}' (${oldValue} -> ${newValue})`
-          );
           throw new Error(
             [
               `Key '${name}' has changed more than ${treshold}% but is not saved.`,

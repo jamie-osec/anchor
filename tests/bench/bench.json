@@ -3335,7 +3335,7 @@
         "boxed_interface_account_mint1": 192,
         "boxed_interface_account_mint2": 192,
         "boxed_interface_account_mint4": 192,
-        "boxed_interface_account_mint8": 256,
+        "boxed_interface_account_mint8": 320,
         "boxed_interface_account_token1": 256,
         "boxed_interface_account_token2": 256,
         "boxed_interface_account_token4": 256,

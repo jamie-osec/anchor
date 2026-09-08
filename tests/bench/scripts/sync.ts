@@ -34,7 +34,7 @@ const IDL_PATH = path.join("target", "idl", "bench.json");
   const versions = bench
     .getVersions()
     .filter((version) => !bench.get(version).disabled);
-  const buildEnv = {
+  const buildEnv: NodeJS.ProcessEnv = {
     ...process.env,
     RUSTC_BOOTSTRAP: "1",
     RUSTFLAGS: "-Z emit-stack-sizes",
