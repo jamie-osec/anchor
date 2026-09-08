@@ -188,12 +188,7 @@ export class AnchorProvider implements Provider {
           const logs = failedTx.meta?.logMessages;
           throw !logs
             ? err
-            : new SendTransactionError({
-                action: "send",
-                signature: txSig,
-                transactionMessage: err.message,
-                logs,
-              });
+            : createSendTransactionError(txSig, err.message, logs);
         }
       } else {
         throw err;
@@ -278,12 +273,7 @@ export class AnchorProvider implements Provider {
             const logs = failedTx.meta?.logMessages;
             throw !logs
               ? err
-              : new SendTransactionError({
-                  action: "send",
-                  signature: txSig,
-                  transactionMessage: err.message,
-                  logs,
-                });
+              : createSendTransactionError(txSig, err.message, logs);
           }
         } else {
           throw err;
@@ -458,6 +448,21 @@ class ConfirmError extends Error {
   constructor(message?: string) {
     super(message);
   }
+}
+
+function createSendTransactionError(
+  signature: TransactionSignature,
+  transactionMessage: string,
+  logs: string[]
+): SendTransactionError {
+  const error = new SendTransactionError({
+    action: "send",
+    signature,
+    transactionMessage,
+    logs,
+  });
+  error.message = transactionMessage;
+  return error;
 }
 
 /**
