@@ -75,7 +75,7 @@ Solana version: 3.1.10
 | boxed_interface_account_mint1  | 192          | 🔴 **+64 (50.00%)**    |
 | boxed_interface_account_mint2  | 192          | 🔴 **+64 (50.00%)**    |
 | boxed_interface_account_mint4  | 192          | -                      |
-| boxed_interface_account_mint8  | 256          | 🟢 **-64 (20.00%)**    |
+| boxed_interface_account_mint8  | 320          | -                      |
 | boxed_interface_account_token1 | 256          | -                      |
 | boxed_interface_account_token2 | 256          | -                      |
 | boxed_interface_account_token4 | 256          | -                      |

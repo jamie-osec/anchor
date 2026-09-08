@@ -18,7 +18,7 @@ Solana version: 3.1.10
 
 | Program | Binary Size | -   |
 | ------- | ----------- | --- |
-| bench   | 891,144     | -   |
+| bench   | 932,048     | -   |
 
 ---
 
@@ -38,9 +38,9 @@ Solana version: 3.1.10
 
 Solana version: 3.1.10
 
-| Program | Binary Size | -                      |
-| ------- | ----------- | ---------------------- |
-| bench   | 891,144     | 🟢 **-41,848 (4.49%)** |
+| Program | Binary Size | -                   |
+| ------- | ----------- | ------------------- |
+| bench   | 932,048     | 🟢 **-944 (0.10%)** |
 
 ### Notable changes
 
