@@ -10,7 +10,7 @@
 #
 # In some cases, we override to a different `platform-tools` version due to issues
 # with specific toolchains.
-# 
+#
 # Resolution: given a requested Solana version `S`, pick the entry with the
 # largest `solana` key that is `<= S`. Entries MUST be ordered by `solana` so
 # the resolver can stop at the first key that exceeds the request.
