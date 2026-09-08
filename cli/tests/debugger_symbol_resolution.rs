@@ -67,7 +67,13 @@ fn build_fixture() -> Option<PathBuf> {
 
     let fixture = fixture_dir();
     let spawn = Command::new("cargo")
-        .args(["build-sbf", "--tools-version", TOOLS_VERSION])
+        .args([
+            "build-sbf",
+            "--tools-version",
+            TOOLS_VERSION,
+            "--arch",
+            "v2",
+        ])
         .env("CARGO_PROFILE_RELEASE_DEBUG", "2")
         .current_dir(&fixture)
         .status();
@@ -85,7 +91,7 @@ fn build_fixture() -> Option<PathBuf> {
     );
 
     let unstripped = fixture
-        .join("target/sbpf-solana-solana/release")
+        .join("target/sbpfv2-solana-solana/release")
         .join(FIXTURE_SO_NAME);
     assert!(
         unstripped.exists(),

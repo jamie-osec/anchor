@@ -83,6 +83,40 @@ const DEFAULT_TOOLS_VERSION: &str = "v1.57";
 const DEFAULT_BUILD_ARCH: &str = "v3";
 const BUILD_ARCH_ENV: &str = "ANCHOR_BUILD_SBF_ARCH";
 
+/// Rust target triple used by `cargo build-sbf` for an SBPF architecture.
+pub(crate) fn rust_target_triple(arch: &str) -> Option<&'static str> {
+    match arch {
+        "v0" => Some("sbf-solana-solana"),
+        "v1" => Some("sbpfv1-solana-solana"),
+        "v2" => Some("sbpfv2-solana-solana"),
+        "v3" => Some("sbpfv3-solana-solana"),
+        _ => None,
+    }
+}
+
+/// Cargo target triples to search for unstripped program artifacts.
+///
+/// Prefer the configured architecture, then retain support for artifacts from
+/// older platform-tools releases and previous explicit architecture choices.
+pub(crate) fn sbpf_target_triples() -> Vec<&'static str> {
+    let mut triples = Vec::with_capacity(5);
+    if let Some(triple) = rust_target_triple(&default_build_arch()) {
+        triples.push(triple);
+    }
+    for triple in [
+        "sbpfv3-solana-solana",
+        "sbpfv2-solana-solana",
+        "sbpfv1-solana-solana",
+        "sbpf-solana-solana",
+        "sbf-solana-solana",
+    ] {
+        if !triples.contains(&triple) {
+            triples.push(triple);
+        }
+    }
+    triples
+}
+
 /// WebSocket port offset for solana-test-validator (RPC port + 1)
 pub const WEBSOCKET_PORT_OFFSET: u16 = 1;
 
