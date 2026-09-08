@@ -39,6 +39,8 @@ const IDL_PATH = path.join("target", "idl", "bench.json");
     RUSTC_BOOTSTRAP: "1",
     RUSTFLAGS: "-Z emit-stack-sizes",
   };
+  // Sync intentionally records changed measurements, unlike the CI test job.
+  delete buildEnv.CI;
 
   const setProjectVersion = async (version: Version) => {
     // Reopen the benchmark data because previous iterations update it in a
