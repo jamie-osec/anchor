@@ -142,7 +142,7 @@ describe("Stack memory", () => {
       platformToolsMinor < 37 ? "sbf-tools" : "platform-tools";
     const programTarget =
       version === "unreleased"
-        ? "sbpfv2"
+        ? "sbpfv3"
         : platformToolsMinor < 44
         ? "sbf"
         : "sbpf";
