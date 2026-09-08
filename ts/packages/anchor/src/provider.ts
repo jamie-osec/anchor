@@ -174,10 +174,9 @@ export class AnchorProvider implements Provider {
             ? tx.signatures?.[0] || new Uint8Array()
             : tx.signature ?? new Uint8Array()
         );
-        const maxVer = isVersionedTransaction(tx) ? 1 : undefined;
         const failedTx = await this.connection.getTransaction(txSig, {
           commitment: "confirmed",
-          maxSupportedTransactionVersion: maxVer,
+          maxSupportedTransactionVersion: 1,
         });
         if (!failedTx) {
           throw err;
@@ -265,10 +264,9 @@ export class AnchorProvider implements Provider {
               ? tx.signatures?.[0] || new Uint8Array()
               : tx.signature ?? new Uint8Array()
           );
-          const maxVer = isVersionedTransaction(tx) ? 1 : undefined;
           const failedTx = await this.connection.getTransaction(txSig, {
             commitment: "confirmed",
-            maxSupportedTransactionVersion: maxVer,
+            maxSupportedTransactionVersion: 1,
           });
           if (!failedTx) {
             throw err;
