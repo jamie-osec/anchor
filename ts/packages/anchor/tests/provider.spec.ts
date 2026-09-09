@@ -56,4 +56,58 @@ describe("AnchorProvider", () => {
       commitment: undefined,
     });
   });
+
+  it("looks up failed version 1 transactions with version 1 support", async () => {
+    const transaction = VersionedTransaction.deserialize(
+      new Uint8Array([
+        0x81,
+        2,
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        ...new Array(32).fill(10),
+        1,
+        2,
+        ...new Array(32).fill(11),
+        ...new Array(32).fill(12),
+        1,
+        1,
+        3,
+        0,
+        0,
+        1,
+        2,
+        3,
+        ...new Array(128).fill(0),
+      ])
+    );
+    jest.spyOn(transaction, "serialize").mockReturnValue(new Uint8Array());
+    const signature = "mocked-signature";
+    const connection = {
+      commitment: "processed",
+      sendRawTransaction: jest.fn().mockResolvedValue(signature),
+      confirmTransaction: jest.fn().mockResolvedValue({
+        value: { err: { InstructionError: [0, "Custom"] } },
+      }),
+      getTransaction: jest.fn().mockResolvedValue({
+        meta: { logMessages: ["Program failed"] },
+      }),
+    } as unknown as Connection;
+    const wallet = {
+      publicKey: PublicKey.default,
+      signTransaction: jest.fn().mockImplementation(async (tx) => tx),
+    } as unknown as Wallet;
+    const provider = new AnchorProvider(connection, wallet);
+
+    await expect(provider.sendAndConfirm(transaction)).rejects.toThrow(
+      `Raw transaction ${signature} failed`
+    );
+    expect(connection.getTransaction).toHaveBeenCalledWith(expect.any(String), {
+      commitment: "confirmed",
+      maxSupportedTransactionVersion: 1,
+    });
+  });
 });
