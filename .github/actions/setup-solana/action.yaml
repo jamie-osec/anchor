@@ -28,5 +28,5 @@ runs:
       shell: bash
     # The SBF toolchain bundled with Solana 2.1 uses Cargo 1.79. Pin each
     # independent test workspace to this release's compatible resolution.
-    - run: find . -name Anchor.toml -exec sh -c 'cp "$GITHUB_WORKSPACE/Cargo.lock" "$(dirname "$1")/Cargo.lock"' _ {} \;
+    - run: find . -name Anchor.toml -exec sh -c 'dir="$(dirname "$1")"; [ "$(git -C "$dir" rev-parse --show-toplevel)" = "$GITHUB_WORKSPACE" ] && cp "$GITHUB_WORKSPACE/Cargo.lock" "$dir/Cargo.lock"' _ {} \;
       shell: bash
