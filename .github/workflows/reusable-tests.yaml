@@ -492,6 +492,14 @@ jobs:
           path: ${{ matrix.node.path }}/target
           key: cargo-${{ runner.os }}-${{ matrix.node.path }}-${{ env.ANCHOR_VERSION }}-${{ env.SOLANA_CLI_VERSION }}-${{ hashFiles('**/Cargo.lock') }}
 
+      # Solana 1.14's bundled BPF cargo requires OpenSSL 1.1, which is not
+      # present on current Ubuntu runners.
+      - name: Install OpenSSL 1.1 for swap
+        if: matrix.node.path == 'tests/swap'
+        run: |
+          curl --fail --location --silent --show-error --output /tmp/libssl1.1.deb https://security.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2.24_amd64.deb
+          sudo dpkg --install /tmp/libssl1.1.deb
+
       - run: ${{ matrix.node.cmd }}
         name: ${{ matrix.node.path }} program test
 
