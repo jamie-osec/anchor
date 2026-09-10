@@ -38,11 +38,6 @@ runs:
       shell: bash
     - run: solana config set --url localhost
       shell: bash
-    # v0.30's IDL builder injects `procmacro2_semver_exempt` through RUSTFLAGS.
-    # Cargo's encoded form takes precedence and keeps that unstable cfg out of
-    # Solana 1.18's older SBF toolchain.
-    - run: echo 'CARGO_ENCODED_RUSTFLAGS=-Awarnings' >> "$GITHUB_ENV"
-      shell: bash
     # Solana 1.18's SBF toolchain bundles Cargo 1.79. Seed independent
     # release-owned test workspaces with this release's compatible resolution.
     - run: find . -name Anchor.toml -exec sh -c 'dir="$(dirname "$1")"; [ "$(git -C "$dir" rev-parse --show-toplevel)" = "$GITHUB_WORKSPACE" ] && [ ! -e "$dir/Cargo.lock" ] && cp "$GITHUB_WORKSPACE/Cargo.lock" "$dir/Cargo.lock"' _ {} \;

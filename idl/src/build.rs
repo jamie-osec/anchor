@@ -61,9 +61,11 @@ pub fn build_idl(
 /// Build IDL.
 fn build(program_path: &Path, resolution: bool, skip_lint: bool, no_docs: bool) -> Result<Idl> {
     // `nightly` toolchain is currently required for building the IDL.
+    // v0.30's lockfile still enables ahash's removed `stdsimd` feature, so use
+    // a compatible pinned nightly for this release's dependency graph by default.
     let toolchain = std::env::var("RUSTUP_TOOLCHAIN")
         .map(|toolchain| format!("+{}", toolchain))
-        .unwrap_or_else(|_| "+nightly".to_string());
+        .unwrap_or_else(|_| "+nightly-2024-01-30".to_string());
 
     install_toolchain_if_needed(&toolchain)?;
 
