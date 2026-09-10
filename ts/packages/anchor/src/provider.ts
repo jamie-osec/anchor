@@ -151,7 +151,9 @@ export class AnchorProvider implements Provider {
     } else {
       tx.feePayer = tx.feePayer ?? this.wallet.publicKey;
       tx.recentBlockhash = (
-        await this.connection.getLatestBlockhash(opts.preflightCommitment)
+        await this.connection.getLatestBlockhash(
+          opts.preflightCommitment ?? opts.commitment
+        )
       ).blockhash;
 
       if (signers) {
@@ -214,7 +216,9 @@ export class AnchorProvider implements Provider {
       opts = this.opts;
     }
     const recentBlockhash = (
-      await this.connection.getLatestBlockhash(opts.preflightCommitment)
+      await this.connection.getLatestBlockhash(
+        opts.preflightCommitment ?? opts.commitment
+      )
     ).blockhash;
 
     let txs = txWithSigners.map((r) => {

@@ -803,7 +803,7 @@ pub struct _TestValidator {
     pub upgradeable: Option<bool>,
 }
 
-pub const STARTUP_WAIT: i32 = 5000;
+pub const STARTUP_WAIT: i32 = 15000;
 pub const SHUTDOWN_WAIT: i32 = 2000;
 
 impl From<_TestValidator> for TestValidator {
