@@ -9,7 +9,8 @@ tmp_dir=$(mktemp -d)
 pushd $tmp_dir
 cargo new external-ci
 pushd external-ci
-cargo add anchor-lang
+cargo add anchor-lang@0.30.1
+cp "$GITHUB_WORKSPACE/Cargo.lock" Cargo.lock
 cargo b
 popd
 popd
