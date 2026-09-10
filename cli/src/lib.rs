@@ -3378,6 +3378,11 @@ fn stream_logs(config: &WithPath<Config>, rpc_url: &str) -> Result<Vec<std::proc
     Ok(handles)
 }
 
+// A validator can answer `getLatestBlockhash` before its forwarding stage is
+// ready to accept transactions. Starting test scripts at that point can drop
+// their first transaction, particularly with Solana 2.x validators.
+const MINIMUM_TEST_VALIDATOR_BLOCK_HEIGHT: u64 = 25;
+
 fn start_test_validator(
     cfg: &Config,
     test_validator: &Option<TestValidator>,
@@ -3442,8 +3447,11 @@ fn start_test_validator(
         .map(|test| test.startup_wait)
         .unwrap_or(STARTUP_WAIT);
     while count < ms_wait {
-        let r = client.get_latest_blockhash();
-        if r.is_ok() {
+        let latest_blockhash = client.get_latest_blockhash();
+        let block_height = client.get_block_height();
+        if latest_blockhash.is_ok()
+            && matches!(block_height, Ok(height) if height >= MINIMUM_TEST_VALIDATOR_BLOCK_HEIGHT)
+        {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(100));

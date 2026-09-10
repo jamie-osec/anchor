@@ -1,8 +1,57 @@
-import { Connection, PublicKey, VersionedTransaction } from "@solana/web3.js";
+import {
+  Connection,
+  PublicKey,
+  Transaction,
+  VersionedTransaction,
+} from "@solana/web3.js";
 import { AnchorProvider, Wallet } from "../src/provider";
 import { isVersionedTransaction } from "../src/utils/common";
 
 describe("AnchorProvider", () => {
+  it("fetches legacy transaction blockhashes at the preflight commitment", async () => {
+    const transaction = new Transaction();
+    jest.spyOn(transaction, "serialize").mockReturnValue(Buffer.alloc(0));
+    const connection = {
+      commitment: "processed",
+      getLatestBlockhash: jest.fn().mockResolvedValue({
+        blockhash: PublicKey.default.toBase58(),
+      }),
+      sendRawTransaction: jest.fn().mockResolvedValue("mocked-signature"),
+      confirmTransaction: jest.fn().mockResolvedValue({ value: { err: null } }),
+    } as unknown as Connection;
+    const wallet = {
+      publicKey: PublicKey.default,
+      signTransaction: jest.fn().mockImplementation(async (tx) => tx),
+    } as unknown as Wallet;
+    const provider = new AnchorProvider(connection, wallet);
+
+    await provider.sendAndConfirm(transaction, [], { commitment: "confirmed" });
+
+    expect(connection.getLatestBlockhash).toHaveBeenCalledWith("confirmed");
+  });
+
+  it("fetches batched legacy transaction blockhashes at the preflight commitment", async () => {
+    const transaction = new Transaction();
+    jest.spyOn(transaction, "serialize").mockReturnValue(Buffer.alloc(0));
+    const connection = {
+      commitment: "processed",
+      getLatestBlockhash: jest.fn().mockResolvedValue({
+        blockhash: PublicKey.default.toBase58(),
+      }),
+      sendRawTransaction: jest.fn().mockResolvedValue("mocked-signature"),
+      confirmTransaction: jest.fn().mockResolvedValue({ value: { err: null } }),
+    } as unknown as Connection;
+    const wallet = {
+      publicKey: PublicKey.default,
+      signAllTransactions: jest.fn().mockImplementation(async (txs) => txs),
+    } as unknown as Wallet;
+    const provider = new AnchorProvider(connection, wallet);
+
+    await provider.sendAll([{ tx: transaction }], { commitment: "confirmed" });
+
+    expect(connection.getLatestBlockhash).toHaveBeenCalledWith("confirmed");
+  });
+
   it("processes deserialized version 1 transactions", async () => {
     // A v1 message containing two accounts and one instruction. Version 1
     // transactions place their signatures after the message.
