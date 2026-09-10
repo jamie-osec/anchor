@@ -19,7 +19,11 @@ runs:
         max_attempts: 10
         retry_on: error
         shell: bash
-        command: sh -c "$(curl -sSfL https://release.anza.xyz/v${{ env.SOLANA_CLI_VERSION }}/install)"
+        command: |
+          curl -sSfL -o "$RUNNER_TEMP/solana-install-init" \
+            "https://github.com/solana-labs/solana/releases/download/v${{ env.SOLANA_CLI_VERSION }}/solana-install-init-x86_64-unknown-linux-gnu"
+          chmod +x "$RUNNER_TEMP/solana-install-init"
+          "$RUNNER_TEMP/solana-install-init" "${{ env.SOLANA_CLI_VERSION }}"
     - uses: nick-fields/retry@v2
       if: steps.cache-solana.outputs.cache-hit != 'true'
       with:
