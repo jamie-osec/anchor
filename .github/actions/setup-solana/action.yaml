@@ -38,3 +38,7 @@ runs:
       shell: bash
     - run: solana config set --url localhost
       shell: bash
+    # Solana 1.18's SBF toolchain bundles Cargo 1.79. Seed independent
+    # release-owned test workspaces with this release's compatible resolution.
+    - run: find . -name Anchor.toml -exec sh -c 'dir="$(dirname "$1")"; [ "$(git -C "$dir" rev-parse --show-toplevel)" = "$GITHUB_WORKSPACE" ] && [ ! -e "$dir/Cargo.lock" ] && cp "$GITHUB_WORKSPACE/Cargo.lock" "$dir/Cargo.lock"' _ {} \;
+      shell: bash
