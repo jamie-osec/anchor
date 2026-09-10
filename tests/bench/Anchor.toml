@@ -8,6 +8,9 @@ bench = "Bench11111111111111111111111111111111111111"
 [workspace]
 members = ["programs/bench"]
 
+[test]
+startup_wait = 20000
+
 [scripts]
 test = "yarn run ts-mocha -t 1000000 -p ./tsconfig.json tests/**/*.ts"
 sync = "yarn run ts-node scripts/sync.ts"
