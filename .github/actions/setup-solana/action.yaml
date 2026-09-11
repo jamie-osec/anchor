@@ -3,15 +3,15 @@ description: "Setup Solana"
 runs:
   using: "composite"
   steps:
-    - uses: actions/cache@v3
+    - uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3
       name: Cache Solana Tool Suite
       id: cache-solana
       with:
         path: |
           ~/.cache/solana/
           ~/.local/share/solana/
-        key: solana-${{ runner.os }}-v0000-${{ env.SOLANA_CLI_VERSION }}-${{ env.SOLANG_VERSION }}
-    - uses: nick-fields/retry@v2
+        key: solana-${{ runner.os }}-v0000-${{ env.SOLANA_VERSION }}
+    - uses: nick-fields/retry@14672906e672a08bd6eeb15720e9ed3ce869cdd4 # v2
       if: steps.cache-solana.outputs.cache-hit != 'true'
       with:
         retry_wait_seconds: 300
@@ -19,14 +19,16 @@ runs:
         max_attempts: 10
         retry_on: error
         shell: bash
-        command: sh -c "$(curl -sSfL https://release.anza.xyz/v${{ env.SOLANA_CLI_VERSION }}/install)"
+        # Pipe (not `$(...)`) so curl failures propagate to the retry action.
+        command: |
+          set -euo pipefail
+          curl -sSfL https://release.anza.xyz/v${{ env.SOLANA_VERSION }}/install | sh
     - run: echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+      shell: bash
+    - name: Verify Solana install
+      run: command -v solana-keygen || { echo "Solana install failed - solana-keygen not on PATH"; exit 1; }
       shell: bash
     - run: solana-keygen new --no-bip39-passphrase
       shell: bash
     - run: solana config set --url localhost
-      shell: bash
-    # Solana 2.3's bundled SBF Cargo cannot parse current Edition 2024 crates.
-    # Preserve this release's dependency resolution for each independent test workspace.
-    - run: find . -name Anchor.toml -exec sh -c 'dir="$(dirname "$1")"; [ "$(git -C "$dir" rev-parse --show-toplevel)" = "$GITHUB_WORKSPACE" ] && [ ! -e "$dir/Cargo.lock" ] && cp "$GITHUB_WORKSPACE/Cargo.lock" "$dir/Cargo.lock"' _ {} \;
       shell: bash
