@@ -469,9 +469,19 @@ export class LockFile {
 
   /** Cache the current Cargo.lock in `./locks`. */
   static async cache(version: Version) {
+    let bootstrapLock = false;
     try {
-      await fs.access(this.#CARGO_LOCK);
+      // Solana 1.18's cargo-build-sbf supports lockfile format 3, while a
+      // current host Cargo can leave a format-4 lockfile in this directory.
+      // Treat the latter like a missing lockfile and bootstrap from a known
+      // compatible cache below.
+      const lockFile = await fs.readFile(this.#CARGO_LOCK, "utf8");
+      bootstrapLock = !/^version = 3$/m.test(lockFile);
     } catch {
+      bootstrapLock = true;
+    }
+
+    if (bootstrapLock) {
       // Bootstrap from the prior lock to retain dependency versions supported
       // by v0.30's cargo-build-sbf toolchain. A fresh resolution can create a
       // lockfile that the legacy platform tools cannot read.
