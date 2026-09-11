@@ -543,7 +543,7 @@ export const spawn = (
   opts?: { logOutput?: boolean; throwOnError?: { msg: string } }
 ) => {
   const result = spawnSync(cmd, args);
-  if (opts?.logOutput) {
+  if (opts?.logOutput || result.status !== 0) {
     console.log(result.output.toString());
   }
 
