@@ -147,8 +147,8 @@ impl<'info> PullStrings<'info> {
 We can verify that everything works as expected by replacing the contents of the `puppet.ts` file with:
 
 ```ts
-import * as anchor from '@coral-xyz/anchor'
-import { Program } from '@coral-xyz/anchor'
+import * as anchor from '@anchor-lang/core'
+import { Program } from '@anchor-lang/core'
 import { Keypair } from '@solana/web3.js'
 import { expect } from 'chai'
 import { Puppet } from '../target/types/puppet'
@@ -286,8 +286,8 @@ impl<'info> PullStrings<'info> {
 Finally, change the test:
 
 ```ts
-import * as anchor from '@coral-xyz/anchor'
-import { Program } from '@coral-xyz/anchor'
+import * as anchor from '@anchor-lang/core'
+import { Program } from '@anchor-lang/core'
 import { Keypair } from '@solana/web3.js'
 import { Puppet } from '../target/types/puppet'
 import { PuppetMaster } from '../target/types/puppet_master'
