@@ -3184,8 +3184,8 @@
     }
   },
   "unreleased": {
-    "solanaVersion": "3.1.10",
-    "platformToolsVersion": "v1.52",
+    "solanaVersion": "4.2.0",
+    "platformToolsVersion": "v1.57",
     "result": {
       "binarySize": {
         "bench": 891144
