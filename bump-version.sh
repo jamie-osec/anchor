@@ -169,10 +169,22 @@ popd
 if [[ "$is_prerelease" -eq 0 ]]; then
     # Bump benchmark files
     pushd tests/bench
-    # Solana 1.18's cargo-build-sbf supports Cargo.lock format 3. Keep the
-    # benchmark run on the same Cargo version used to build the legacy CLI so
-    # a current host toolchain does not rewrite the cached lockfile to format 4.
-    RUSTUP_TOOLCHAIN=1.79.0 anchor run bump-version -- --anchor-version $version
+    # Solana 1.18's cargo-build-sbf supports Cargo.lock format 3. Use Cargo
+    # 1.79 for that subcommand, while allowing Anchor's IDL generator to use
+    # its own pinned nightly toolchain.
+    cargo_bin=$(command -v cargo)
+    cargo_shim_dir=$(mktemp -d)
+    cat > "$cargo_shim_dir/cargo" <<EOF
+#!/usr/bin/env bash
+if [[ "\$1" == "build-sbf" ]]; then
+    exec "$cargo_bin" +1.79.0 "\$@"
+fi
+exec "$cargo_bin" "\$@"
+EOF
+    chmod +x "$cargo_shim_dir/cargo"
+    PATH="$cargo_shim_dir:$PATH" anchor run bump-version -- --anchor-version $version
+    rm "$cargo_shim_dir/cargo"
+    rmdir "$cargo_shim_dir"
     popd
 fi
 
