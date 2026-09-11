@@ -287,7 +287,11 @@ fn debugger_session_orders_invocations_top_down_and_filters_tests() {
         .expect("walk up to target/")
         .join("deploy")
         .join(FIXTURE_SO_NAME);
-    assert!(elf.exists(), "expected deploy artifact at {}", elf.display());
+    assert!(
+        elf.exists(),
+        "expected deploy artifact at {}",
+        elf.display()
+    );
 
     let dir = tempdir().unwrap();
     let wanted = dir.path().join("wanted_case");
