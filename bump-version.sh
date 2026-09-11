@@ -135,11 +135,11 @@ EOF
 fi
 
 # Potential for collisions in `package.json` files, handle those separately
-# Replace only matching "version": "x.xx.x" and "@coral-xyz/*": "x.xx.x"
+# Replace only matching "version": "x.xx.x" and "@anchor-lang/*": "x.xx.x"
 git grep -l "$old_version" -- "**/package.json" | \
     xargs sed -E "${sedi[@]}" \
     -e "s/\"version\": \"$old_version_regex\"/\"version\": \"$version\"/g" \
-    -e "s/@coral-xyz\/(.*)\": \"(.*)$old_version_regex\"/@coral-xyz\/\1\": \"\2$version\"/g"
+    -e "s/@anchor-lang\/(.*)\": \"(.*)$old_version_regex\"/@anchor-lang\/\1\": \"\2$version\"/g"
 
 # Insert version number into CHANGELOG
 sed "${sedi[@]}" -e \

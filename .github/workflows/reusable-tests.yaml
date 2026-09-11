@@ -367,7 +367,7 @@ jobs:
           anchor init --test-template ${{ matrix.template }} hello-anchor-${{ matrix.template }}
           cd hello-anchor-${{ matrix.template }}
           cp "$GITHUB_WORKSPACE/Cargo.lock" Cargo.lock
-          yarn link @coral-xyz/anchor
+          yarn link @anchor-lang/core
           yarn
           anchor test
           yarn lint:fix
