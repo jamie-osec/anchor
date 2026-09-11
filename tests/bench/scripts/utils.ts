@@ -470,19 +470,28 @@ export class LockFile {
   /** Cache the current Cargo.lock in `./locks`. */
   static async cache(version: Version) {
     try {
-      await fs.rename(this.#CARGO_LOCK, this.#getLockPath(version));
+      await fs.access(this.#CARGO_LOCK);
     } catch {
-      // Lock file doesn't exist
-      // Run the tests to create the lock file
-      const result = runAnchorTest();
-
-      // Check failure
-      if (result.status !== 0) {
-        throw new Error(`Failed to create ${this.#CARGO_LOCK}`);
+      // Bootstrap from the prior lock to retain dependency versions supported
+      // by v0.30's cargo-build-sbf toolchain. A fresh resolution can create a
+      // lockfile that the legacy platform tools cannot read.
+      const previousLock = (await fs.readdir("locks"))
+        .filter((file) => file.endsWith(".lock"))
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+        .pop();
+      if (!previousLock) {
+        throw new Error("No cached Cargo.lock available");
       }
-
-      await this.cache(version);
+      await fs.copyFile(path.join("locks", previousLock), this.#CARGO_LOCK);
     }
+
+    // Run the tests to update the lockfile for the current workspace.
+    const result = runAnchorTest();
+    if (result.status !== 0) {
+      throw new Error(`Failed to create ${this.#CARGO_LOCK}`);
+    }
+
+    await fs.rename(this.#CARGO_LOCK, this.#getLockPath(version));
   }
 
   /** Get the lock file path from the given version. */
