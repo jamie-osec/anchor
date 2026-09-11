@@ -3085,9 +3085,17 @@ fn validator_type_from_env() -> Result<Option<ValidatorType>> {
 fn build_sbf_base_args(build_sbf_options: &BuildSbfOptions) -> Vec<String> {
     let mut args = vec![BUILD_SUBCOMMAND.to_owned()];
     args.push("--tools-version".to_owned());
-    args.push(build_sbf_options.tools_version.clone());
+    // build-sbf requires a 'v' prefix to versions and arches
+    fn prefixed(version: &str) -> String {
+        if version.starts_with('v') {
+            version.to_owned()
+        } else {
+            format!("v{version}")
+        }
+    }
+    args.push(prefixed(&build_sbf_options.tools_version));
     args.push("--arch".to_owned());
-    args.push(build_sbf_options.arch.clone());
+    args.push(prefixed(&build_sbf_options.arch));
     args
 }
 
