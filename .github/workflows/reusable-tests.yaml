@@ -31,7 +31,6 @@ env:
   CARGO_PROFILE: ${{ inputs.cargo_profile }}
   ANCHOR_BINARY_NAME: ${{ inputs.anchor_binary_name }}
   SURFPOOL_CLI_VERSION: ${{ inputs.surfpool_cli_version }}
-  ANCHOR_TEST_VALIDATOR: "legacy"
   CARGO_CACHE_PATH: |
     ~/.cargo/registry/index/
     ~/.cargo/registry/cache/
@@ -425,9 +424,7 @@ jobs:
             path: tests/zero-copy
           - cmd: cd tests/chat && anchor test --skip-lint
             path: tests/chat
-          # Use `solana-test-validator` instead of `surfpool` to fix flakiness
-          # and increase code coverage
-          - cmd: cd tests/ido-pool && anchor test --skip-lint --validator legacy
+          - cmd: cd tests/ido-pool && anchor test --skip-lint
             path: tests/ido-pool
           - cmd: cd tests/auction-house && anchor test --skip-lint
             path: tests/auction-house
