@@ -50,7 +50,7 @@ pub fn create_program(
 ) -> Result<()> {
     let program_path = Path::new("programs").join(name);
     let lib_rs_path = program_path.join("src").join("lib.rs");
-    let common_files = vec![
+    let mut common_files = vec![
         ("Cargo.toml".into(), workspace_manifest()),
         ("rust-toolchain.toml".into(), rust_toolchain_toml()),
         (
@@ -63,6 +63,11 @@ pub fn create_program(
         (lib_rs_path.clone(), "".into()),
         // Note: Xargo.toml is no longer needed for modern Solana builds using SBF.
     ];
+
+    if anchor_version == AnchorVersion::V1 && matches!(test_template, Some(&TestTemplate::Litesvm))
+    {
+        common_files.push(("Cargo.lock".into(), litesvm_cargo_lock(name)));
+    }
 
     create_files(&common_files)?;
 
@@ -602,34 +607,12 @@ solana-sdk-ids = "3"
         Some(TestTemplate::Litesvm) => {
             r#"
 [dev-dependencies]
-# LiteSVM 0.15 by default resolves dependencies with incompatible Rust versions.
-# Pin these manually to ensure they can compile.
+# Cargo.lock pins LiteSVM's Rust-1.89-compatible dependency graph.
 litesvm = "0.15.0"
-solana-account = "=4.3.1"
-solana-address = "=2.6.1"
-solana-clock = "=3.1.1"
-solana-epoch-rewards = "=3.1.0"
-solana-epoch-schedule = "=3.2.0"
-solana-fee-calculator = "=3.2.2"
-solana-hash = "=4.5.0"
-solana-loader-v3-interface = "=8.0.1"
-solana-last-restart-slot = "=3.1.0"
-solana-message = "=4.3.0"
-solana-nonce = "=3.2.0"
-solana-packet = "=4.2.0"
-solana-pubkey = "=4.2.0"
-solana-rent = "=4.3.0"
-solana-short-vec = "=3.2.2"
-solana-signature = "=3.4.1"
-solana-slot-hashes = "=3.1.0"
-solana-slot-history = "=3.1.0"
-solana-stake-history = "=1.0.0"
-solana-syscalls = "=4.1.2"
-solana-sysvar = "=4.1.0"
-solana-transaction = "=4.1.5"
-wincode = "=0.5.5"
-solana-signer = "=3.0.1"
-solana-keypair = "=3.1.2"
+solana-message = "4"
+solana-transaction = "4"
+solana-signer = "3"
+solana-keypair = "3"
 "#
         }
         _ => "",
@@ -671,6 +654,10 @@ unexpected_cfgs = {{ level = "warn", check-cfg = ['cfg(target_os, values("solana
         VERSION,
         dev_dependencies,
     )
+}
+
+fn litesvm_cargo_lock(name: &str) -> String {
+    include_str!("../templates/litesvm/Cargo.lock").replace("anchor_litesvm_template", name)
 }
 
 fn cargo_toml_v2(name: &str, test_template: Option<&TestTemplate>) -> String {
