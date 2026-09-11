@@ -169,7 +169,10 @@ popd
 if [[ "$is_prerelease" -eq 0 ]]; then
     # Bump benchmark files
     pushd tests/bench
-    anchor run bump-version -- --anchor-version $version
+    # Solana 1.18's cargo-build-sbf supports Cargo.lock format 3. Keep the
+    # benchmark run on the same Cargo version used to build the legacy CLI so
+    # a current host toolchain does not rewrite the cached lockfile to format 4.
+    RUSTUP_TOOLCHAIN=1.79.0 anchor run bump-version -- --anchor-version $version
     popd
 fi
 
