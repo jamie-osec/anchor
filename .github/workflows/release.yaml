@@ -131,7 +131,7 @@ jobs:
           toolchain: nightly
 
       - name: Install cargo-release
-        run: cargo install cargo-release --version 1.1.1 --locked
+        run: cargo install cargo-release --version 0.25.18 --locked
 
       - name: Authenticate with crates.io
         id: auth

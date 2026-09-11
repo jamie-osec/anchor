@@ -48,7 +48,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0 # master
         with:
-          toolchain: stable
+          toolchain: 1.85.1
           target: ${{ matrix.target }}
 
       - name: Install dependencies (Linux)

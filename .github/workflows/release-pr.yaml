@@ -40,7 +40,7 @@ jobs:
           toolchain: stable
 
       - name: Install cargo-release
-        run: cargo install cargo-release --version 1.1.1 --locked
+        run: cargo install cargo-release --version 0.25.18 --locked
 
       - name: Publish crates
         run: |
