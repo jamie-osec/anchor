@@ -48,6 +48,9 @@ git grep -l "$old_version" -- $allow_globs |
 
 # Avoid updating the docs for pre-release builds
 if [[ "$is_prerelease" -eq 0 ]]; then
+    # v0.30 uses the legacy documentation site. The release-note and
+    # changelog update logic below applies only to the modern docs layout.
+    if [[ -d docs/content/docs ]]; then
     latest_stable_version=$(
         git tag --sort=-version:refname | \
             grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | \
@@ -132,6 +135,7 @@ EOF
             { print }
         ' "$CHANGELOG_PATH" > "$tmp" && mv "$tmp" "$CHANGELOG_PATH"
     fi
+    fi
 fi
 
 # Potential for collisions in `package.json` files, handle those separately
@@ -139,7 +143,7 @@ fi
 git grep -l "$old_version" -- "**/package.json" | \
     xargs sed -E "${sedi[@]}" \
     -e "s/\"version\": \"$old_version_regex\"/\"version\": \"$version\"/g" \
-    -e "s/@coral-xyz\/(.*)\": \"(.*)$old_version_regex\"/@coral-xyz\/\1\": \"\2$version\"/g"
+    -e "s/@anchor-lang\/(.*)\": \"(.*)$old_version_regex\"/@anchor-lang\/\1\": \"\2$version\"/g"
 
 # Insert version number into CHANGELOG
 sed "${sedi[@]}" -e \
