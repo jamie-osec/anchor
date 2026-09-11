@@ -12,7 +12,7 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=10"
+    "node": ">=20.18.0"
   },
   "scripts": {
     "build": "tsc",
@@ -24,7 +24,7 @@
     "buffer-layout": "^1.2.0"
   },
   "peerDependencies": {
-    "@solana/web3.js": "^1.68.0"
+    "@solana/web3.js": "^1.99.0"
   },
   "files": [
     "dist"
