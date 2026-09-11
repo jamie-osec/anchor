@@ -72,7 +72,7 @@ fn build_fixture() -> Option<PathBuf> {
             "--tools-version",
             TOOLS_VERSION,
             "--arch",
-            "v2",
+            "v3",
         ])
         .env("CARGO_PROFILE_RELEASE_DEBUG", "2")
         .current_dir(&fixture)
@@ -91,7 +91,7 @@ fn build_fixture() -> Option<PathBuf> {
     );
 
     let unstripped = fixture
-        .join("target/sbpfv2-solana-solana/release")
+        .join("target/sbpfv3-solana-solana/release")
         .join(FIXTURE_SO_NAME);
     assert!(
         unstripped.exists(),
@@ -275,9 +275,19 @@ fn source_resolver_handles_stripped_elf_without_dwarf() {
 
 #[test]
 fn debugger_session_orders_invocations_top_down_and_filters_tests() {
-    let Some(elf) = build_fixture() else {
+    let Some(unstripped) = build_fixture() else {
         return;
     };
+    // The debugger parses the post-linked deploy artifact, then finds the
+    // unstripped v3 sibling for symbols and DWARF.
+    let elf = unstripped
+        .parent()
+        .and_then(|p| p.parent())
+        .and_then(|p| p.parent())
+        .expect("walk up to target/")
+        .join("deploy")
+        .join(FIXTURE_SO_NAME);
+    assert!(elf.exists(), "expected deploy artifact at {}", elf.display());
 
     let dir = tempdir().unwrap();
     let wanted = dir.path().join("wanted_case");
