@@ -1,4 +1,4 @@
-import { Idl, StateCoder } from "@coral-xyz/anchor";
+import { Idl, StateCoder } from "@anchor-lang/core";
 
 export class SplStakePoolStateCoder implements StateCoder {
   constructor(_idl: Idl) {}

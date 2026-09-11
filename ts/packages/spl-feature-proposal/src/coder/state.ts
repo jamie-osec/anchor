@@ -1,4 +1,4 @@
-import { Idl, StateCoder } from "@coral-xyz/anchor";
+import { Idl, StateCoder } from "@anchor-lang/core";
 
 export class SplFeatureProposalStateCoder implements StateCoder {
   constructor(_idl: Idl) {}

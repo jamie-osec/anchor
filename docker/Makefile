@@ -1,17 +1,9 @@
-WORKDIR=$(PWD)
-#
 # Anchor version.
-#
-ANCHOR_CLI=v0.30.1
-#
+ANCHOR_CLI=v1.2.0
 # Solana toolchain.
-#
-SOLANA_CLI=v1.18.17
-#
+SOLANA_CLI=v4.1.2
 # Build version should match the Anchor cli version.
-#
-IMG_ORG ?= backpackapp
-IMG_VER ?= $(ANCHOR_CLI)
+VERSIONED_IMG_NAME=quay.io/ottersec/anchor:$(ANCHOR_CLI)
 
 .PHONY: build build-push build-shell publish
 
@@ -21,14 +13,14 @@ build: build/Dockerfile
 	@docker build \
 	--build-arg ANCHOR_CLI=$(ANCHOR_CLI) \
 	--build-arg SOLANA_CLI=$(SOLANA_CLI) \
-	$@ -t $(IMG_ORG)/$@:$(IMG_VER)
+	$@ -t $(VERSIONED_IMG_NAME)
 
 build-push:
-	@docker push $(IMG_ORG)/build:$(IMG_VER)
+	@docker push $(VERSIONED_IMG_NAME)
 
 build-shell:
 	@docker run -ti --rm --net=host \
 		-v $(WORKDIR)/..:/workdir \
-		$(IMG_ORG)/build:$(IMG_VER) bash
+		$(VERSIONED_IMG_NAME) bash
 
 publish: build build-push

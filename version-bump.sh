@@ -26,10 +26,10 @@ git grep -l $(cat VERSION) -- $skip_globs |
     -e "s/$(cat VERSION)/$version/g"
 
 # Potential for collisions in package.json files, handle those separately
-# Replace only matching "version": "x.xx.x" and "@coral-xyz/anchor": "x.xx.x"
+# Replace only matching "version": "x.xx.x" and "@anchor-lang/core": "x.xx.x"
 git grep -l $(cat VERSION) -- '**/package.json' | \
     xargs sed "${sedi[@]}" \
-    -e "s/@coral-xyz\/anchor\": \"$(cat VERSION)\"/@coral-xyz\/anchor\": \"$version\"/g" \
+    -e "s/@anchor-lang\/core\": \"$(cat VERSION)\"/@anchor-lang\/core\": \"$version\"/g" \
     -e "s/\"version\": \"$(cat VERSION)\"/\"version\": \"$version\"/g"
 
 # Potential for collisions in Cargo.lock, use cargo update to update it
