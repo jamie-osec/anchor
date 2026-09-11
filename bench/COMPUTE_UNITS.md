@@ -14,7 +14,7 @@ The programs and their tests are located in [/tests/bench](https://github.com/ot
 
 ## [Unreleased]
 
-Solana version: 3.1.10
+Solana version: 4.2.0
 
 | Instruction                 | Compute Units | -   |
 | --------------------------- | ------------- | --- |
