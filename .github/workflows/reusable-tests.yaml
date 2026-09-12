@@ -367,8 +367,9 @@ jobs:
           anchor init --no-install --test-template ${{ matrix.template }} hello-anchor-${{ matrix.template }}
           cd hello-anchor-${{ matrix.template }}
           cp "$GITHUB_WORKSPACE/Cargo.lock" Cargo.lock
-          yarn link @anchor-lang/core
+          node -e 'const fs = require("fs"); const pkg = require("./package.json"); delete pkg.dependencies["@anchor-lang/core"]; fs.writeFileSync("package.json", `${JSON.stringify(pkg, null, 2)}\n`);'
           yarn
+          yarn link @anchor-lang/core
           anchor test
           yarn lint:fix
       - uses: ./.github/actions/git-diff/
