@@ -371,7 +371,7 @@ jobs:
           yarn
           yarn link @anchor-lang/core
           anchor test
-          yarn lint:fix
+          yarn lint:fix --no-error-on-unmatched-pattern
       - uses: ./.github/actions/git-diff/
 
   test-programs:
