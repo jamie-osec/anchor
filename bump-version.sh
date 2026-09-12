@@ -170,7 +170,9 @@ popd
 if [[ "$is_prerelease" -eq 0 ]]; then
     # Bump benchmark files
     pushd tests/bench
-    anchor run bump-version -- --anchor-version $version
+    # A release bump intentionally refreshes benchmark results on the runner.
+    # Normal CI keeps CI set so unexpected benchmark drift is still rejected.
+    CI= anchor run bump-version -- --anchor-version $version
     popd
 fi
 
