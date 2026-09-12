@@ -182,7 +182,9 @@ fi
 exec "$cargo_bin" "\$@"
 EOF
     chmod +x "$cargo_shim_dir/cargo"
-    PATH="$cargo_shim_dir:$PATH" anchor run bump-version -- --anchor-version $version
+    # A release bump intentionally refreshes benchmark results on the runner.
+    # Normal CI keeps CI set so unexpected benchmark drift is still rejected.
+    CI= PATH="$cargo_shim_dir:$PATH" anchor run bump-version -- --anchor-version $version
     rm "$cargo_shim_dir/cargo"
     rmdir "$cargo_shim_dir"
     popd
