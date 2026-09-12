@@ -364,7 +364,7 @@ jobs:
       - run: |
           test_dir="$(mktemp -d)"
           cd "$test_dir"
-          anchor init --test-template ${{ matrix.template }} hello-anchor-${{ matrix.template }}
+          anchor init --no-install --test-template ${{ matrix.template }} hello-anchor-${{ matrix.template }}
           cd hello-anchor-${{ matrix.template }}
           cp "$GITHUB_WORKSPACE/Cargo.lock" Cargo.lock
           yarn link @anchor-lang/core

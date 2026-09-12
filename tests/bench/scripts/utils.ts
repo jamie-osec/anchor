@@ -483,7 +483,10 @@ export class LockFile {
         throw new Error(`No cached ${this.#CARGO_LOCK} is available`);
       }
 
-      const lockFile = await fs.readFile(path.join("locks", latestLock), "utf8");
+      const lockFile = await fs.readFile(
+        path.join("locks", latestLock),
+        "utf8"
+      );
       await fs.writeFile(this.#CARGO_LOCK, this.#forLegacyCargo(lockFile));
     }
 
