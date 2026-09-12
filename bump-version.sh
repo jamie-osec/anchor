@@ -54,6 +54,11 @@ if [[ "$is_prerelease" -eq 0 ]]; then
             head -n1 | \
             sed 's/^v//'
     )
+    # Forks used for release preparation may not retain upstream tags.
+    # The checked-out version is the previous stable release in that case.
+    if [[ -z "$latest_stable_version" ]]; then
+        latest_stable_version="$old_version"
+    fi
     latest_stable_version_regex=$(printf '%s\n' "$latest_stable_version" | sed 's/[.[\*^$()+?{}|\\]/\\&/g')
     echo "Latest stable version for documentation was $latest_stable_version..."
 
