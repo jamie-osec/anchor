@@ -3047,7 +3047,7 @@ pub struct BuildSbfOptions {
 }
 
 impl BuildSbfOptions {
-    fn new(tools_version: String, arch: String) -> Self {
+    pub fn new(tools_version: String, arch: String) -> Self {
         Self {
             tools_version,
             arch,
@@ -3082,7 +3082,8 @@ fn validator_type_from_env() -> Result<Option<ValidatorType>> {
     }
 }
 
-fn build_sbf_base_args(build_sbf_options: &BuildSbfOptions) -> Vec<String> {
+// Exposed for tests.
+pub fn build_sbf_base_args(build_sbf_options: &BuildSbfOptions) -> Vec<String> {
     let mut args = vec![BUILD_SUBCOMMAND.to_owned()];
     args.push("--tools-version".to_owned());
     // build-sbf requires a 'v' prefix to versions and arches

@@ -12,7 +12,11 @@
 //! jobs that pin the toolchain pick it up automatically.
 
 use {
-    anchor_cli::debugger::{arena, source::SourceResolver},
+    anchor_cli::{
+        build_sbf_base_args,
+        debugger::{arena, source::SourceResolver},
+        BuildSbfOptions,
+    },
     std::{
         collections::{BTreeMap, BTreeSet},
         fs,
@@ -25,7 +29,6 @@ use {
 const FIXTURE_CRATE_REL: &str = "tests/fixtures/debugger_program";
 const FIXTURE_SO_NAME: &str = "debugger_fixture.so";
 const MARKER_TAG: &str = "// MARKER:";
-const TOOLS_VERSION: &str = "v1.57";
 /// PCs beyond any plausible fixture text section. The fixture's `.text`
 /// is ~1-2 KB (~250 insns) — 10k gives comfortable headroom without
 /// slowing the scan. Out-of-range PCs resolve to `None` and cost pennies.
@@ -67,13 +70,7 @@ fn build_fixture() -> Option<PathBuf> {
 
     let fixture = fixture_dir();
     let spawn = Command::new("cargo")
-        .args([
-            "build-sbf",
-            "--tools-version",
-            TOOLS_VERSION,
-            "--arch",
-            "v3",
-        ])
+        .args(build_sbf_base_args(&BuildSbfOptions::default()))
         .env("CARGO_PROFILE_RELEASE_DEBUG", "2")
         .current_dir(&fixture)
         .status();
