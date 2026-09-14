@@ -15,7 +15,7 @@ use {
     anchor_cli::{
         build_sbf_base_args,
         debugger::{arena, source::SourceResolver},
-        BuildSbfOptions,
+        default_build_arch, rust_target_triple, BuildSbfOptions,
     },
     std::{
         collections::{BTreeMap, BTreeSet},
@@ -88,7 +88,9 @@ fn build_fixture() -> Option<PathBuf> {
     );
 
     let unstripped = fixture
-        .join("target/sbpfv3-solana-solana/release")
+        .join("target")
+        .join(rust_target_triple(&default_build_arch()).unwrap())
+        .join("release")
         .join(FIXTURE_SO_NAME);
     assert!(
         unstripped.exists(),

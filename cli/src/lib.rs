@@ -84,7 +84,7 @@ const DEFAULT_BUILD_ARCH: &str = "v3";
 const BUILD_ARCH_ENV: &str = "ANCHOR_BUILD_SBF_ARCH";
 
 /// Rust target triple used by `cargo build-sbf` for an SBPF architecture.
-pub(crate) fn rust_target_triple(arch: &str) -> Option<&'static str> {
+pub fn rust_target_triple(arch: &str) -> Option<&'static str> {
     match arch {
         "v0" => Some("sbf-solana-solana"),
         "v1" => Some("sbpfv1-solana-solana"),
@@ -3065,7 +3065,7 @@ impl Default for BuildSbfOptions {
     }
 }
 
-fn default_build_arch() -> String {
+pub fn default_build_arch() -> String {
     std::env::var(BUILD_ARCH_ENV).unwrap_or_else(|_| DEFAULT_BUILD_ARCH.to_owned())
 }
 
