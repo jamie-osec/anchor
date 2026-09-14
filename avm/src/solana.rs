@@ -845,6 +845,14 @@ mod tests {
             lookup_solana_for_anchor_version(&v("1.0.2")).unwrap(),
             v("3.1.10")
         );
+        assert_eq!(
+            lookup_solana_for_anchor_version(&v("1.2.0")).unwrap(),
+            v("4.1.2")
+        );
+        assert_eq!(
+            lookup_solana_for_anchor_version(&v("1.2.1")).unwrap(),
+            v("4.1.2")
+        );
     }
 
     #[test]
