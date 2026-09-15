@@ -1,0 +1,52 @@
+name: Benchmarks
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'bench/**'
+      - '.github/workflows/benchmarks.yaml'
+  pull_request:
+    branches:
+      - master
+      - anchor-next
+    paths:
+      - 'bench/**'
+      - '.github/workflows/benchmarks.yaml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  benchmarks:
+    name: Benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup/
+
+      - name: Add Solana binaries to PATH
+        run: echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+
+      - uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3
+        name: Cache benchmark toolchains
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ~/.cache/solana/
+            ~/.local/share/solana/
+            ./bench/.cache/
+            ./target/
+          key: benchmarks-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'bench/locks/*.lock') }}
+
+      - run: ./bench/bench all --check
