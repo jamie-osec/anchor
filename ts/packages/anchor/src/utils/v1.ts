@@ -63,7 +63,11 @@ export function toTransaction(
   const message = new V1TransactionMessage({
     payerKey: new V1Web3PublicKey(options.payerKey.toBase58()) as never,
     recentBlockhash: options.recentBlockhash as never,
-    instructions: transaction.instructions.map((instruction) => ({
+    instructions: (transaction.nonceInfo &&
+    transaction.instructions[0] !== transaction.nonceInfo.nonceInstruction
+      ? [transaction.nonceInfo.nonceInstruction, ...transaction.instructions]
+      : transaction.instructions
+    ).map((instruction) => ({
       programId: new V1Web3PublicKey(instruction.programId.toBase58()),
       keys: instruction.keys.map((key) => ({
         ...key,
