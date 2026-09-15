@@ -109,7 +109,7 @@ jobs:
             ./target/
           key: benchmarks-${{ runner.os }}-${{ matrix.version }}-${{ hashFiles('Cargo.lock', 'bench/locks/*.lock') }}
 
-      - run: ./bench/bench "$BENCHMARK_VERSION" --check
+      - run: ./bench/bench "$BENCHMARK_VERSION" --check --verbose
         env:
           BENCH_AVM: avm
           BENCHMARK_VERSION: ${{ matrix.version }}
