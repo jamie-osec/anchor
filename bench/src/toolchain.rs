@@ -73,10 +73,7 @@ impl Runner {
         if workspace.version().is_unreleased() {
             anchor.args(["--path", &self.repo().to_string_lossy(), "--force"]);
         } else {
-            anchor.args([&tools.anchor, "--from-source"]);
-            if tools.anchor == self.current_anchor() {
-                anchor.arg("--force");
-            }
+            anchor.args([&tools.anchor, "--force"]);
         }
         self.run(&mut anchor)?;
         self.run(
