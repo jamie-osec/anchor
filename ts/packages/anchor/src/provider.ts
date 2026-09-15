@@ -26,6 +26,7 @@ import {
   signTransaction as signV1Transaction,
   toTransaction as toV1Transaction,
   V1TransactionConfig,
+  V1Transaction,
 } from "./utils/v1.js";
 
 export default interface Provider {
@@ -49,6 +50,12 @@ export default interface Provider {
     signers?: Signer[],
     opts?: ConfirmOptionsWithBlockhash
   ): Promise<TransactionSignature>;
+  simulateV1?(
+    tx: Transaction,
+    transactionConfig: V1TransactionConfig,
+    signers?: Signer[],
+    commitment?: Commitment
+  ): Promise<SuccessfulTxSimulationResponse>;
   sendAll?<T extends Transaction | VersionedTransaction>(
     txWithSigners: {
       tx: T;
@@ -228,40 +235,77 @@ export class AnchorProvider implements Provider {
     opts?: ConfirmOptionsWithBlockhash
   ): Promise<TransactionSignature> {
     const options = opts ?? this.opts;
-    const payerKey = tx.feePayer ?? this.wallet.publicKey;
-    const recentBlockhash =
-      tx.recentBlockhash &&
-      tx.recentBlockhash !== "11111111111111111111111111111111"
-        ? tx.recentBlockhash
-        : (
-            await this.connection.getLatestBlockhash(
-              options.preflightCommitment
-            )
-          ).blockhash;
-
-    const v1Transaction = toV1Transaction(tx, {
-      payerKey,
-      recentBlockhash,
+    const v1Transaction = await this.buildV1Transaction(
+      tx,
       transactionConfig,
-    });
-    const legacySigners =
-      signers ?? (this.wallet.payer ? [this.wallet.payer] : undefined);
-
-    if (!legacySigners) {
-      throw new Error(
-        "sendV1 requires signers when the provider wallet has no Keypair payer"
-      );
-    }
-
-    const v1Signers = await Promise.all(
-      legacySigners.map(signerFromLegacyKeypair)
+      signers,
+      options.preflightCommitment ?? options.commitment
     );
-    await signV1Transaction(v1Transaction, v1Signers);
     return await sendAndConfirmRawTransaction(
       this.connection,
       v1Transaction.serialize(),
       options
     );
+  }
+
+  /** Simulates an Anchor transaction compiled with the transaction-v1 format. */
+  async simulateV1(
+    tx: Transaction,
+    transactionConfig: V1TransactionConfig,
+    signers?: Signer[],
+    commitment?: Commitment
+  ): Promise<SuccessfulTxSimulationResponse> {
+    const v1Transaction = await this.buildV1Transaction(
+      tx,
+      transactionConfig,
+      signers,
+      commitment ?? this.connection.commitment
+    );
+    const result = await this.connection.simulateTransaction(
+      v1Transaction as unknown as VersionedTransaction,
+      { commitment }
+    );
+    if (result.value.err) {
+      throw new SimulateError(result.value);
+    }
+    return result.value;
+  }
+
+  private async buildV1Transaction(
+    tx: Transaction,
+    transactionConfig: V1TransactionConfig,
+    signers: Signer[] | undefined,
+    commitment: Commitment | undefined
+  ): Promise<V1Transaction> {
+    const recentBlockhash =
+      tx.nonceInfo?.nonce ??
+      (tx.recentBlockhash &&
+      tx.recentBlockhash !== "11111111111111111111111111111111"
+        ? tx.recentBlockhash
+        : (await this.connection.getLatestBlockhash(commitment)).blockhash);
+    const v1Transaction = toV1Transaction(tx, {
+      payerKey: tx.feePayer ?? this.wallet.publicKey,
+      recentBlockhash,
+      transactionConfig,
+    });
+    const legacySigners = [
+      ...(this.wallet.payer ? [this.wallet.payer] : []),
+      ...(signers ?? []),
+    ].filter(
+      (signer, index, all) =>
+        all.findIndex((other) => other.publicKey.equals(signer.publicKey)) ===
+        index
+    );
+    if (legacySigners.length === 0) {
+      throw new Error(
+        "transaction-v1 requires signers when the provider wallet has no Keypair payer"
+      );
+    }
+    await signV1Transaction(
+      v1Transaction,
+      await Promise.all(legacySigners.map(signerFromLegacyKeypair))
+    );
+    return v1Transaction;
   }
 
   /**
