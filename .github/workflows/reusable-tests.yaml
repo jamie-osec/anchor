@@ -506,5 +506,7 @@ jobs:
 
       - run: ${{ matrix.node.cmd }}
         name: ${{ matrix.node.path }} program test
+        env:
+          BENCH_AVM: avm
 
       - uses: ./.github/actions/git-diff/
