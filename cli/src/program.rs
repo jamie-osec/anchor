@@ -777,14 +777,22 @@ fn security_metadata_path(config: Option<&WithPath<Config>>) -> Result<PathBuf> 
     })
 }
 
+fn requested_security_metadata_path(
+    requested: bool,
+    config: Option<&WithPath<Config>>,
+) -> Result<Option<PathBuf>> {
+    requested
+        .then(|| security_metadata_path(config))
+        .transpose()
+}
+
 fn upload_security_metadata(
     cfg_override: &ConfigOverride,
-    config: Option<&WithPath<Config>>,
+    security_path: &Path,
     program_id: Pubkey,
     upgrade_authority_path: &str,
     payer_path: Option<String>,
 ) -> Result<()> {
-    let security_path = security_metadata_path(config)?;
     let (cluster_url, _) = crate::get_cluster_and_wallet(cfg_override)?;
 
     let security_path = security_path
@@ -827,6 +835,8 @@ pub fn program_deploy(
 ) -> Result<()> {
     let (rpc_client, config) = get_rpc_client_and_config(cfg_override)?;
     let payer = get_payer_keypair(cfg_override, &config)?;
+    // Resolve requested metadata before performing any on-chain mutations.
+    let security_path = requested_security_metadata_path(security_metadata, config.as_ref())?;
     let (_cluster_url, wallet_path) = crate::get_cluster_and_wallet(cfg_override)?;
     let upgrade_authority_path = upgrade_authority
         .clone()
@@ -1190,11 +1200,11 @@ pub fn program_deploy(
         }
     }
 
-    if security_metadata {
+    if let Some(security_path) = security_path {
         let payer_path = (payer.pubkey() != upgrade_authority.pubkey()).then_some(wallet_path);
         upload_security_metadata(
             cfg_override,
-            config.as_ref(),
+            &security_path,
             program_id,
             &upgrade_authority_path,
             payer_path,
@@ -3052,6 +3062,17 @@ resolver = "2"
 
         assert!(err.contains("--security-metadata"));
         assert!(err.contains("security.json"));
+    }
+
+    #[test]
+    fn unrequested_security_metadata_does_not_require_file() {
+        let dir = tempdir().unwrap();
+        let cfg = WithPath::new(Config::default(), dir.path().join("Anchor.toml"));
+
+        assert_eq!(
+            requested_security_metadata_path(false, Some(&cfg)).unwrap(),
+            None
+        );
     }
 
     #[test]
