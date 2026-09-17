@@ -768,13 +768,26 @@ fn security_metadata_path(config: Option<&WithPath<Config>>) -> Result<PathBuf> 
         );
     }
 
-    path.canonicalize().map_err(|err| {
+    let path = path.canonicalize().map_err(|err| {
         anyhow!(
             "Failed to canonicalize security metadata path `{}`: {}",
             path.display(),
             err
         )
-    })
+    })?;
+
+    let contents =
+        fs::read(&path).map_err(|err| anyhow!("Failed to read `{}`: {}", path.display(), err))?;
+    let value: serde_json::Value = serde_json::from_slice(&contents)
+        .map_err(|err| anyhow!("Failed to parse `{}` as JSON: {}", path.display(), err))?;
+    if !value.is_object() {
+        bail!(
+            "Security metadata in `{}` must be a JSON object",
+            path.display()
+        );
+    }
+
+    Ok(path)
 }
 
 fn requested_security_metadata_path(
@@ -3062,6 +3075,29 @@ resolver = "2"
 
         assert!(err.contains("--security-metadata"));
         assert!(err.contains("security.json"));
+    }
+
+    #[test]
+    fn security_metadata_path_rejects_invalid_json() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("security.json"), "{\"name\":").unwrap();
+        let cfg = WithPath::new(Config::default(), dir.path().join("Anchor.toml"));
+
+        let err = security_metadata_path(Some(&cfg)).unwrap_err().to_string();
+
+        assert!(err.contains("Failed to parse"));
+        assert!(err.contains("security.json"));
+    }
+
+    #[test]
+    fn security_metadata_path_requires_json_object() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("security.json"), "[]").unwrap();
+        let cfg = WithPath::new(Config::default(), dir.path().join("Anchor.toml"));
+
+        let err = security_metadata_path(Some(&cfg)).unwrap_err().to_string();
+
+        assert!(err.contains("must be a JSON object"));
     }
 
     #[test]
