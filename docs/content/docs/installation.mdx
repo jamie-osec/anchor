@@ -12,40 +12,43 @@ development.
 
 ## Quick Installation
 
-On Mac and Linux, run this single command to install all dependencies.
+Install Anchor with the Anchor Version Manager (AVM). First, install Rust with
+rustup:
 
 ```shell title="Terminal"
-curl --proto '=https' --tlsv1.2 -sSfL https://solana-install.solana.workers.dev | bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+. "$HOME/.cargo/env"
+```
+
+Then install AVM and the latest nightly Anchor CLI:
+
+```shell title="Terminal"
+curl -sSfL https://raw.githubusercontent.com/otter-sec/anchor/master/avm/install | sh
 ```
 
 <Callout type="warn">
   Windows Users: You must first install WSL (see [Install
-  Dependencies](#install-dependencies)). Then run the command above in the
-  Ubuntu (Linux) terminal.
+  Dependencies](#install-dependencies)). Then run the commands above in the
+  Ubuntu (Linux) terminal, not PowerShell.
 </Callout>
 
-After installation, you should see output similar to the following:
+Verify the installation:
 
+```shell title="Terminal"
+avm --version
+anchor --version
 ```
-Installed Versions:
-Rust: rustc 1.85.0 (4d91de4e4 2025-02-17)
-Solana CLI: solana-cli 4.1.2 (src:182084b8; feat:c763ae0a, client:Agave)
-Anchor CLI: anchor-cli 1.2.0
-Node.js: v23.9.0
-Yarn: 1.22.1
 
-Installation complete. Please restart your terminal to apply all changes.
-```
+The first `anchor` command installs the required Solana CLI and platform tools.
 
 <Callout>
 
-If the quick installation command above doesn't work, please refer to the
-[Install Dependencies](#install-dependencies) section below for instructions to
-install each dependency individually.
+If the quick installation commands above don't work, refer to the [Install
+Dependencies](#install-dependencies) section below for individual setup
+instructions.
 
-If the quick install command runs successfully, skip to the
-[Solana CLI Basics](#solana-cli-basics) and
-[Anchor CLI Basics](#anchor-cli-basics) sections below.
+Install Node.js and Yarn from the individual instructions below when you need a
+TypeScript-based test template.
 
 </Callout>
 
@@ -332,29 +335,33 @@ There are two ways to install the Anchor CLI and tooling:
 The Anchor version manager (AVM) allows you to install and manage different
 Anchor versions on your system and easily update Anchor versions in the future.
 
-Install AVM with the following command:
+Install AVM and the latest nightly Anchor CLI with the official installer:
 
 ```shell title="Terminal"
-cargo install --git https://github.com/otter-sec/anchor avm --force
+curl -sSfL https://raw.githubusercontent.com/otter-sec/anchor/master/avm/install | sh
 ```
 
-Check that AVM was installed successfully:
+The installer enables the nightly channel and links the `avm` and `anchor`
+commands into `~/.cargo/bin` when possible. Check that AVM was installed
+successfully:
 
 ```shell title="Terminal"
 avm --version
 ```
 
-Install the latest version of Anchor CLI using AVM:
+To use a published Anchor release instead of nightly, disable the nightly
+channel, then install and activate the version you need:
 
 ```shell title="Terminal"
+avm nightly --disable
 avm install latest
 avm use latest
 ```
 
-Alternatively, you can install a specific version of Anchor CLI by specifying
-the version number:
+To install a specific published version, specify the version number:
 
 ```shell title="Terminal"
+avm nightly --disable
 avm install 1.2.0
 avm use 1.2.0
 ```

@@ -135,30 +135,32 @@ To update the Solana CLI later, run `$ <blue>agave-install</blue> update`.
 <Tabs groupId="anchor" items={["AVM", "Without AVM"]}>
 <Tab>
 
-Install AVM:
+Install AVM and the latest nightly Anchor CLI with the official installer:
 
 ```console
-$ <blue>cargo</blue> install <dim>--git</dim> https://github.com/otter-sec/anchor avm <dim>--locked</dim> <dim>--force</dim>
+$ <blue>curl</blue> <dim>-sSfL</dim> https://raw.githubusercontent.com/otter-sec/anchor/master/avm/install | <blue>sh</blue>
 ```
 
-Verify AVM with `$ <blue>avm</blue> <dim>--version</dim>`:
+The installer enables AVM's nightly channel and links `$ <blue>avm</blue>` and `$ <blue>anchor</blue>` into `~/.cargo/bin{:dir}` when possible. Verify AVM with `$ <blue>avm</blue> <dim>--version</dim>`:
 
 ```console
 $ <blue>avm</blue> <dim>--version</dim>
 avm 1.1.2
 ```
 
-Install and activate the latest Anchor CLI:
+To use a published Anchor release instead of nightly, disable the nightly channel, then install and activate the version you need:
 
 ```console
+$ <blue>avm</blue> nightly <dim>--disable</dim>
 $ <blue>avm</blue> install latest
 $ <blue>avm</blue> use latest
 ```
 
 <Callout variant="tip" title="Pinning a version">
-  To install a specific version, pass the version number:
+  To install a specific published version, disable nightly and pass the version number:
 
 ```bash
+$ <blue>avm</blue> nightly <dim>--disable</dim>
 $ <blue>avm</blue> install 1.1.2
 $ <blue>avm</blue> use 1.1.2
 ```
@@ -324,18 +326,19 @@ To update the Solana CLI later, run `$ <blue>agave-install</blue> update`.
 <Tabs groupId="anchor" items={["AVM", "Without AVM"]}>
 <Tab>
 
-Install AVM, then install and activate the latest Anchor CLI:
+Install AVM and the latest nightly Anchor CLI with the official installer:
 
 ```console
-$ <blue>cargo</blue> install <dim>--git</dim> https://github.com/otter-sec/anchor avm <dim>--locked</dim> <dim>--force</dim>
-$ <blue>avm</blue> install latest
-$ <blue>avm</blue> use latest
+$ <blue>curl</blue> <dim>-sSfL</dim> https://raw.githubusercontent.com/otter-sec/anchor/master/avm/install | <blue>sh</blue>
 ```
 
+The installer enables AVM's nightly channel and links `$ <blue>avm</blue>` and `$ <blue>anchor</blue>` into `~/.cargo/bin{:dir}` when possible.
+
 <Callout variant="tip" title="Pinning a version">
-  To install a specific version, pass the version number:
+  To use a published version instead, disable nightly and then install and activate the version you need:
 
 ```bash
+$ <blue>avm</blue> nightly <dim>--disable</dim>
 $ <blue>avm</blue> install 1.1.2
 $ <blue>avm</blue> use 1.1.2
 ```
@@ -519,13 +522,13 @@ To update the Solana CLI later, run `$ <blue>agave-install</blue> update`.
 
 <Step title="Install Anchor CLI">
 
-Install the Anchor Version Manager (AVM), then install and activate the latest Anchor CLI:
+Install the Anchor Version Manager (AVM) and the latest nightly Anchor CLI with the official installer:
 
 ```console
-$ <blue>cargo</blue> install <dim>--git</dim> https://github.com/otter-sec/anchor avm <dim>--locked</dim> <dim>--force</dim>
-$ <blue>avm</blue> install latest
-$ <blue>avm</blue> use latest
+$ <blue>curl</blue> <dim>-sSfL</dim> https://raw.githubusercontent.com/otter-sec/anchor/master/avm/install | <blue>sh</blue>
 ```
+
+The installer enables AVM's nightly channel and links `$ <blue>avm</blue>` and `$ <blue>anchor</blue>` into `~/.cargo/bin{:dir}` when possible.
 
 Verify with `$ <blue>anchor</blue> <dim>--version</dim>`:
 
