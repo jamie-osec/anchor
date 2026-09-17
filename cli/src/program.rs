@@ -782,7 +782,7 @@ fn upload_security_metadata(
     config: Option<&WithPath<Config>>,
     program_id: Pubkey,
     upgrade_authority_path: &str,
-    payer_path: String,
+    payer_path: Option<String>,
 ) -> Result<()> {
     let security_path = security_metadata_path(config)?;
     let (cluster_url, _) = crate::get_cluster_and_wallet(cfg_override)?;
@@ -1191,12 +1191,13 @@ pub fn program_deploy(
     }
 
     if security_metadata {
+        let payer_path = (payer.pubkey() != upgrade_authority.pubkey()).then_some(wallet_path);
         upload_security_metadata(
             cfg_override,
             config.as_ref(),
             program_id,
             &upgrade_authority_path,
-            wallet_path,
+            payer_path,
         )?;
     }
 
