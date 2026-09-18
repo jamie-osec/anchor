@@ -351,7 +351,8 @@ echo "fake stable avm"
 
         let fallback_stdout = String::from_utf8_lossy(&fallback_output.stdout);
         assert!(
-            fallback_stdout.contains("Add this to your shell profile if avm is not already on PATH:"),
+            fallback_stdout
+                .contains("Add this to your shell profile if avm is not already on PATH:"),
             "{fallback_stdout}"
         );
         assert!(
