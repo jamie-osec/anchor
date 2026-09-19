@@ -365,7 +365,4 @@ if ! path_contains "$BIN_DIR"; then
         say "Add this to your shell profile if avm is not already on PATH:"
         say "  export PATH=\"$BIN_DIR:\$PATH\""
     fi
-
-    PATH="$BIN_DIR${PATH:+:$PATH}"
-    export PATH
 fi
