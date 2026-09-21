@@ -202,21 +202,36 @@ detect_shell_profile() {
     case "$(basename "${SHELL:-}")" in
         bash)
             if [ "$(uname -s)" = "Darwin" ]; then
-                printf '%s\n' "$HOME/.bash_profile"
+                for profile in "$HOME/.bash_profile" "$HOME/.bash_login" "$HOME/.profile"; do
+                    if [ -f "$profile" ]; then
+                        printf '%s\n' "$profile"
+                        return
+                    fi
+                done
             else
-                printf '%s\n' "$HOME/.bashrc"
+                if [ -f "$HOME/.bashrc" ]; then
+                    printf '%s\n' "$HOME/.bashrc"
+                    return
+                fi
             fi
             ;;
         zsh)
-            printf '%s\n' "${ZDOTDIR:-$HOME}/.zshrc"
+            profile="${ZDOTDIR:-$HOME}/.zshrc"
+            if [ -f "$profile" ]; then
+                printf '%s\n' "$profile"
+                return
+            fi
             ;;
         sh|dash|ksh)
-            printf '%s\n' "$HOME/.profile"
-            ;;
-        *)
-            return 1
+            profile="$HOME/.profile"
+            if [ -f "$profile" ]; then
+                printf '%s\n' "$profile"
+                return
+            fi
             ;;
     esac
+
+    return 1
 }
 
 escape_single_quotes() {
@@ -234,7 +249,6 @@ append_bin_dir_to_shell_profile() {
     fi
 
     profile="$(detect_shell_profile)" || return 1
-    profile_dir="$(dirname "$profile")"
     quoted_bin_dir="$(escape_single_quotes "$BIN_DIR")"
 
     profile_line="export PATH='$quoted_bin_dir':\"\$PATH\""
@@ -244,9 +258,7 @@ append_bin_dir_to_shell_profile() {
         return 0
     fi
 
-    if mkdir -p "$profile_dir" 2>/dev/null \
-        && touch "$profile" 2>/dev/null \
-        && printf '\n# Added by AVM installer\n%s\n' "$profile_line" >> "$profile" 2>/dev/null; then
+    if printf '\n# Added by AVM installer\n%s\n' "$profile_line" >> "$profile" 2>/dev/null; then
         say "Added $BIN_DIR to PATH in $profile"
         return 0
     fi
