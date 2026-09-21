@@ -1644,6 +1644,11 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn point_cargo_avm_to_replaces_binary_with_link() {
+        // Do not change a user's Cargo directory outside CI.
+        if std::env::var_os("CI").is_none() {
+            return;
+        }
+
         let dir = tempfile::tempdir().unwrap();
         let cargo_bin = dir.path().join("cargo-bin");
         let avm = dir.path().join("avm-bin/avm");
