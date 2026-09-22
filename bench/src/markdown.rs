@@ -1,6 +1,6 @@
 use {
     crate::results::{Results, VersionResult},
-    anyhow::{Context, Result},
+    anyhow::{bail, Context, Result},
     indexmap::IndexMap,
     std::{fs, path::Path},
     unicode_width::UnicodeWidthStr,
@@ -39,6 +39,47 @@ pub fn sync(directory: &Path, results: &Results) -> Result<()> {
         fs::write(&path, markdown)
             .with_context(|| format!("Failed to write {}", path.display()))?;
     }
+    Ok(())
+}
+
+pub fn bump_version(directory: &Path, version: &str, results: &Results) -> Result<()> {
+    let mut files = Vec::new();
+    for (file, measurement) in [
+        ("BINARY_SIZE.md", Measurement::BinarySize),
+        ("COMPUTE_UNITS.md", Measurement::ComputeUnits),
+        ("STACK_MEMORY.md", Measurement::StackMemory),
+    ] {
+        let path = directory.join(file);
+        let mut markdown = fs::read_to_string(&path)
+            .with_context(|| format!("Failed to read {}", path.display()))?;
+        insert_release_section(&mut markdown, version)?;
+        sync_file(&mut markdown, results, measurement)?;
+        files.push((path, markdown));
+    }
+
+    for (path, markdown) in files {
+        fs::write(&path, markdown)
+            .with_context(|| format!("Failed to write {}", path.display()))?;
+    }
+    Ok(())
+}
+
+fn insert_release_section(markdown: &mut String, version: &str) -> Result<()> {
+    let release_title = format!("## [{version}]");
+    if markdown.contains(&release_title) {
+        bail!("Markdown already contains an Anchor {version} section");
+    }
+
+    let unreleased_title = "## [Unreleased]";
+    let start = markdown
+        .find(unreleased_title)
+        .context("Missing Unreleased section")?;
+    let end = markdown[start..]
+        .find("\n---")
+        .map(|offset| start + offset + "\n---".len())
+        .context("Missing separator after Unreleased section")?;
+    let release = markdown[start..end].replacen(unreleased_title, &release_title, 1);
+    markdown.insert_str(end, &format!("\n\n{release}"));
     Ok(())
 }
 
