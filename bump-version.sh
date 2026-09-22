@@ -161,6 +161,11 @@ pushd examples/tutorial
 yarn install  # locked-in: ignore[yarn-frozen-lockfile]
 popd
 
+# Avoid updating the benchmarks for pre-release builds
+if [[ "$is_prerelease" -eq 0 ]]; then
+    ./bench/bench bump-version "$version"
+fi
+
 echo $version > VERSION
 
 echo "$(git diff --stat | tail -n1) files modified"

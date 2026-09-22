@@ -6,7 +6,6 @@ use {
 };
 
 pub struct Toolchain {
-    pub anchor: String,
     pub solana: String,
     pub platform_tools: String,
     pub sbpf_version: String,
@@ -39,11 +38,6 @@ impl Runner {
     }
 
     pub fn resolve_toolchain(&self, workspace: &Workspace) -> Result<Toolchain> {
-        let anchor = if workspace.version().is_unreleased() {
-            self.current_anchor()
-        } else {
-            workspace.version().as_str()
-        };
         let solana = self.solana_version(workspace.version())?.to_owned();
         let platform_tools = parse_platform_tools_resolution(
             &self.output(
@@ -60,7 +54,6 @@ impl Runner {
             )?,
         )?;
         Ok(Toolchain {
-            anchor: anchor.to_owned(),
             solana,
             platform_tools,
             sbpf_version: workspace.version().sbpf_version()?.to_owned(),
@@ -68,14 +61,6 @@ impl Runner {
     }
 
     pub fn install_toolchain(&self, workspace: &Workspace, tools: &Toolchain) -> Result<()> {
-        let mut anchor = Command::new(self.avm()?);
-        anchor.arg("install");
-        if workspace.version().is_unreleased() {
-            anchor.args(["--path", &self.repo().to_string_lossy(), "--force"]);
-        } else {
-            anchor.args([&tools.anchor, "--force"]);
-        }
-        self.run(&mut anchor)?;
         self.run(
             Command::new(self.avm()?)
                 .args(["solana", "install", &tools.solana])

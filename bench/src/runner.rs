@@ -1,6 +1,6 @@
 use {
     crate::{
-        fixture::Workspace,
+        fixture::{self, Workspace},
         litesvm, markdown,
         results::{Results, VersionResult},
         toolchain::Toolchain,
@@ -21,7 +21,6 @@ pub struct Runner {
     repo: PathBuf,
     bench_dir: PathBuf,
     results: Results,
-    current_anchor: String,
     avm: Option<PathBuf>,
 }
 
@@ -33,13 +32,11 @@ impl Runner {
             .context("bench must be inside the Anchor workspace")?
             .to_owned();
         let results = Results::load(bench_dir.join("results.json"))?;
-        let current_anchor = fs::read_to_string(repo.join("VERSION"))?.trim().to_owned();
         Ok(Self {
             verbose,
             repo,
             bench_dir,
             results,
-            current_anchor,
             avm: None,
         })
     }
@@ -50,10 +47,6 @@ impl Runner {
 
     pub fn bench_dir(&self) -> &Path {
         &self.bench_dir
-    }
-
-    pub fn current_anchor(&self) -> &str {
-        &self.current_anchor
     }
 
     pub fn avm(&self) -> Result<&Path> {
@@ -150,6 +143,32 @@ impl Runner {
         Ok(check && exceeds_threshold)
     }
 
+    pub fn bump_version(&mut self, name: &str) -> Result<()> {
+        let version = Version::parse(name)?;
+        if version.as_str() != env!("CARGO_PKG_VERSION") {
+            bail!(
+                "Cannot transition benchmarks to Anchor {version}: the workspace is version {}",
+                env!("CARGO_PKG_VERSION")
+            );
+        }
+
+        let lock = self.bench_dir.join("locks").join(format!("{version}.lock"));
+        if lock.exists() {
+            bail!("Benchmark lockfile already exists for Anchor {version}");
+        }
+
+        self.results.bump_version(&version)?;
+        let lock_contents = fixture::generate_lock(self)?;
+        markdown::bump_version(&self.bench_dir, version.as_str(), &self.results)?;
+        self.results.save()?;
+        write_file(&lock, &lock_contents)?;
+        write_file(
+            &self.bench_dir.join("locks/unreleased.lock"),
+            &lock_contents,
+        )?;
+        Ok(())
+    }
+
     fn benchmark(&self, workspace: &Workspace, tools: &Toolchain) -> Result<VersionResult> {
         let artifacts = workspace.build(self, tools)?;
         Ok(VersionResult::new(
@@ -202,6 +221,14 @@ impl Runner {
             .env("AVM_HOME", self.bench_dir.join(".cache/avm"))
             .env("CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS", "fallback");
     }
+}
+
+fn write_file(path: &Path, contents: &[u8]) -> Result<()> {
+    let parent = path.parent().context("Output path has no parent")?;
+    let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
+    std::io::Write::write_all(&mut temporary, contents)?;
+    temporary.persist(path)?;
+    Ok(())
 }
 
 fn program_name(command: &Command) -> String {

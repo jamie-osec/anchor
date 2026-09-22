@@ -1,6 +1,6 @@
 use {
     crate::{toolchain::Toolchain, version::Version},
-    anyhow::{Context, Result},
+    anyhow::{bail, Context, Result},
     indexmap::IndexMap,
     serde::{Deserialize, Serialize},
     std::{fs, io::Write, path::PathBuf},
@@ -11,7 +11,7 @@ pub struct Results {
     entries: IndexMap<String, VersionResult>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VersionResult {
     pub solana_version: String,
@@ -21,7 +21,7 @@ pub struct VersionResult {
     pub result: Measurements,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Measurements {
     pub binary_size: IndexMap<String, u64>,
@@ -57,6 +57,23 @@ impl Results {
 
     pub fn update(&mut self, version: &Version, result: VersionResult) {
         self.entries.insert(version.to_string(), result);
+    }
+
+    pub fn bump_version(&mut self, version: &Version) -> Result<()> {
+        if version.is_unreleased() {
+            bail!("Cannot create an unreleased release");
+        }
+        if self.entries.contains_key(version.as_str()) {
+            bail!("Benchmark results already contain Anchor {version}");
+        }
+
+        let unreleased = self
+            .entries
+            .shift_remove("unreleased")
+            .context("Benchmark results do not contain an unreleased entry")?;
+        self.entries.insert(version.to_string(), unreleased.clone());
+        self.entries.insert("unreleased".into(), unreleased);
+        Ok(())
     }
 
     pub fn save(&self) -> Result<()> {
