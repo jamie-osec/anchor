@@ -24,40 +24,7 @@ impl Workspace {
         clean_workspace(&root)?;
         copy_dir(&runner.bench_dir().join("fixture"), &root)?;
 
-        let manifest = root.join("programs/bench/Cargo.toml");
-        let mut contents = fs::read_to_string(&manifest)?;
-        for (name, path) in [("anchor-lang", "lang"), ("anchor-spl", "spl")] {
-            let dependency = if version.is_unreleased() {
-                format!(
-                    "{name} = {{ path = {} }}",
-                    serde_json::to_string(
-                        &runner.repo().join(path).canonicalize()?.to_string_lossy()
-                    )?
-                )
-            } else if version.as_str() == "1.1.0" {
-                format!(
-                    "{name} = {{ git = \"https://github.com/otter-sec/anchor\", tag = \
-                     \"v{version}\" }}"
-                )
-            } else {
-                format!("{name} = \"={version}\"")
-            };
-            contents = contents.replace(&format!("{name} = \"=0.0.0\""), &dependency);
-        }
-        fs::write(&manifest, contents)?;
-
-        let anchor = if version.is_unreleased() {
-            runner.current_anchor()
-        } else {
-            version.as_str()
-        };
-        fs::write(
-            root.join("Anchor.toml"),
-            format!(
-                "[toolchain]\nanchor_version = {}\n",
-                serde_json::to_string(anchor)?
-            ),
-        )?;
+        write_dependencies(runner, &root, version)?;
 
         let lock = runner
             .bench_dir()
@@ -135,6 +102,43 @@ impl Workspace {
         }
         Ok(Artifacts { deploy, stack })
     }
+}
+
+pub fn generate_lock(runner: &Runner) -> Result<Vec<u8>> {
+    let temporary = tempfile::tempdir()?;
+    let root = temporary.path().join("fixture");
+    copy_dir(&runner.bench_dir().join("fixture"), &root)?;
+    write_dependencies(runner, &root, &Version::Unreleased)?;
+    runner.run(
+        Command::new("cargo")
+            .args(["generate-lockfile", "--manifest-path"])
+            .arg(root.join("Cargo.toml"))
+            .current_dir(&root),
+    )?;
+    Ok(fs::read(root.join("Cargo.lock"))?)
+}
+
+fn write_dependencies(runner: &Runner, root: &Path, version: &Version) -> Result<()> {
+    let manifest = root.join("programs/bench/Cargo.toml");
+    let mut contents = fs::read_to_string(&manifest)?;
+    for (name, path) in [("anchor-lang", "lang"), ("anchor-spl", "spl")] {
+        let dependency = if version.is_unreleased() {
+            format!(
+                "{name} = {{ path = {} }}",
+                serde_json::to_string(&runner.repo().join(path).canonicalize()?.to_string_lossy())?
+            )
+        } else if version.as_str() == "1.1.0" {
+            format!(
+                "{name} = {{ git = \"https://github.com/otter-sec/anchor\", tag = \"v{version}\" \
+                 }}"
+            )
+        } else {
+            format!("{name} = \"={version}\"")
+        };
+        contents = contents.replace(&format!("{name} = \"=0.0.0\""), &dependency);
+    }
+    fs::write(&manifest, contents)?;
+    Ok(())
 }
 
 fn clean_workspace(workspace: &Path) -> Result<()> {
