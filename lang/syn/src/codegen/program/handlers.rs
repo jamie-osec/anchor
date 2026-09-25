@@ -3,7 +3,8 @@ use {
         codegen::{private_ident, program::common::*},
         Program,
     },
-    quote::{quote, ToTokens},
+    quote::{quote, quote_spanned, ToTokens},
+    syn::spanned::Spanned,
 };
 
 // Generate non-inlined wrappers for each instruction handler, since Solana's
@@ -90,11 +91,12 @@ pub fn generate(program: &Program) -> proc_macro2::TokenStream {
                 .enumerate()
                 .map(|(idx, arg)| {
                     let arg_ty = &arg.raw_arg.ty;
+                    let arg_ty_span = arg_ty.span();
                     let method_name = syn::Ident::new(
                         &format!("__anchor_validate_ix_arg_type_{}", idx),
-                        proc_macro2::Span::call_site(),
+                        proc_macro2::Span::call_site().located_at(arg_ty_span),
                     );
-                    quote! {
+                    quote_spanned! {arg_ty_span=>
                         const _: fn() = || {
                             let _: fn(&#arg_ty) = #accounts_struct_name::#method_name;
                         };
