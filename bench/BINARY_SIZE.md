@@ -16,9 +16,16 @@ The benchmark harness is located in [/bench](https://github.com/otter-sec/anchor
 
 Solana version: 4.2.0
 
+**Average:** 🟢 **-23,976 (2.91%)** [-2.91%, -2.91%]
+
+<details>
+<summary>Program results (1)</summary>
+
 | Program | Binary Size | -                      |
 | ------- | ----------- | ---------------------- |
 | bench   | 800,288     | 🟢 **-23,976 (2.91%)** |
+
+</details>
 
 ---
 
@@ -26,9 +33,16 @@ Solana version: 4.2.0
 
 Solana version: 4.1.2
 
+**Average:** 🟢 **-107,352 (11.52%)** [-11.52%, -11.52%]
+
+<details>
+<summary>Program results (1)</summary>
+
 | Program | Binary Size | -                        |
 | ------- | ----------- | ------------------------ |
 | bench   | 824,264     | 🟢 **-107,352 (11.52%)** |
+
+</details>
 
 ### Notable changes
 
@@ -38,9 +52,16 @@ Solana version: 4.1.2
 
 Solana version: 3.1.10
 
+**Average:** 🟢 **-432 (0.05%)** [-0.05%, -0.05%]
+
+<details>
+<summary>Program results (1)</summary>
+
 | Program | Binary Size | -                   |
 | ------- | ----------- | ------------------- |
 | bench   | 931,616     | 🟢 **-432 (0.05%)** |
+
+</details>
 
 ### Notable changes
 
@@ -50,9 +71,16 @@ Solana version: 3.1.10
 
 Solana version: 3.1.10
 
+**Average:** 🔴 **+432 (0.05%)** [+0.05%, +0.05%]
+
+<details>
+<summary>Program results (1)</summary>
+
 | Program | Binary Size | -                   |
 | ------- | ----------- | ------------------- |
 | bench   | 932,048     | 🔴 **+432 (0.05%)** |
+
+</details>
 
 ### Notable changes
 
@@ -62,9 +90,16 @@ Solana version: 3.1.10
 
 Solana version: 3.1.10
 
+**Average:** 🔴 **+72 (0.01%)** [+0.01%, +0.01%]
+
+<details>
+<summary>Program results (1)</summary>
+
 | Program | Binary Size | -                  |
 | ------- | ----------- | ------------------ |
 | bench   | 931,616     | 🔴 **+72 (0.01%)** |
+
+</details>
 
 ### Notable changes
 
@@ -74,9 +109,14 @@ Solana version: 3.1.10
 
 Solana version: 3.1.10
 
+<details>
+<summary>No change</summary>
+
 | Program | Binary Size | -   |
 | ------- | ----------- | --- |
 | bench   | 931,544     | -   |
+
+</details>
 
 ### Notable changes
 
@@ -86,9 +126,16 @@ Solana version: 3.1.10
 
 Solana version: 3.1.10
 
+**Average:** 🟢 **-240 (0.03%)** [-0.03%, -0.03%]
+
+<details>
+<summary>Program results (1)</summary>
+
 | Program | Binary Size | -                   |
 | ------- | ----------- | ------------------- |
 | bench   | 931,544     | 🟢 **-240 (0.03%)** |
+
+</details>
 
 ### Notable changes
 
@@ -98,9 +145,14 @@ Solana version: 3.1.10
 
 Solana version: 3.1.10
 
+<details>
+<summary>No change</summary>
+
 | Program | Binary Size | -   |
 | ------- | ----------- | --- |
 | bench   | 931,784     | -   |
+
+</details>
 
 ### Notable changes
 
@@ -110,9 +162,16 @@ Solana version: 3.1.10
 
 Solana version: 3.1.10
 
+**Average:** 🟢 **-194,600 (17.28%)** [-17.28%, -17.28%]
+
+<details>
+<summary>Program results (1)</summary>
+
 | Program | Binary Size | -                        |
 | ------- | ----------- | ------------------------ |
 | bench   | 931,784     | 🟢 **-194,600 (17.28%)** |
+
+</details>
 
 ### Notable changes
 
@@ -122,9 +181,14 @@ Solana version: 3.1.10
 
 Solana version: 2.3.0
 
+<details>
+<summary>No change</summary>
+
 | Program | Binary Size | -   |
 | ------- | ----------- | --- |
 | bench   | 1,126,384   | -   |
+
+</details>
 
 ### Notable changes
 
@@ -134,9 +198,16 @@ Solana version: 2.3.0
 
 Solana version: 2.3.0
 
+**Average:** 🔴 **+84,472 (8.11%)** [+8.11%, +8.11%]
+
+<details>
+<summary>Program results (1)</summary>
+
 | Program | Binary Size | -                      |
 | ------- | ----------- | ---------------------- |
 | bench   | 1,126,384   | 🔴 **+84,472 (8.11%)** |
+
+</details>
 
 ### Notable changes
 
@@ -148,9 +219,14 @@ Solana version: 2.3.0
 
 Solana version: 2.1.0
 
+<details>
+<summary>No change</summary>
+
 | Program | Binary Size | -   |
 | ------- | ----------- | --- |
 | bench   | 1,041,912   | -   |
+
+</details>
 
 ### Notable changes
 
@@ -160,9 +236,16 @@ Solana version: 2.1.0
 
 Solana version: 2.1.0
 
+**Average:** 🔴 **+250,904 (31.72%)** [+31.72%, +31.72%]
+
+<details>
+<summary>Program results (1)</summary>
+
 | Program | Binary Size | -                        |
 | ------- | ----------- | ------------------------ |
 | bench   | 1,041,912   | 🔴 **+250,904 (31.72%)** |
+
+</details>
 
 ### Notable changes
 
@@ -175,9 +258,14 @@ Solana version: 2.1.0
 
 Solana version: 1.18.17
 
+<details>
+<summary>No change</summary>
+
 | Program | Binary Size | -   |
 | ------- | ----------- | --- |
 | bench   | 791,008     | -   |
+
+</details>
 
 ### Notable changes
 
@@ -187,9 +275,16 @@ Solana version: 1.18.17
 
 Solana version: 1.18.8
 
+**Average:** 🔴 **+47,952 (6.45%)** [+6.45%, +6.45%]
+
+<details>
+<summary>Program results (1)</summary>
+
 | Program | Binary Size | -                      |
 | ------- | ----------- | ---------------------- |
 | bench   | 791,008     | 🔴 **+47,952 (6.45%)** |
+
+</details>
 
 ### Notable changes
 
@@ -201,9 +296,16 @@ Solana version: 1.18.8
 
 Solana version: 1.17.0
 
+**Average:** 🟢 **-417,904 (36.00%)** [-36.00%, -36.00%]
+
+<details>
+<summary>Program results (1)</summary>
+
 | Program | Binary Size | +/-                      |
 | ------- | ----------- | ------------------------ |
 | bench   | 743,056     | 🟢 **-417,904 (36.00%)** |
+
+</details>
 
 ### Notable changes
 
@@ -217,9 +319,16 @@ Solana version: 1.17.0
 
 Solana version: 1.16.0
 
+**Average:** 🔴 **+23,272 (2.05%)** [+2.05%, +2.05%]
+
+<details>
+<summary>Program results (1)</summary>
+
 | Program | Binary Size | +/-                    |
 | ------- | ----------- | ---------------------- |
 | bench   | 1,160,960   | 🔴 **+23,272 (2.05%)** |
+
+</details>
 
 ### Notable changes
 
@@ -231,8 +340,15 @@ Solana version: 1.16.0
 
 Solana version: 1.14.16
 
+**Average:** Baseline
+
+<details>
+<summary>Program results (1)</summary>
+
 | Program | Binary Size | +/- |
 | ------- | ----------- | --- |
 | bench   | 1,137,688   | N/A |
+
+</details>
 
 ---
