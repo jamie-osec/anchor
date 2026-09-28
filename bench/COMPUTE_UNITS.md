@@ -16,6 +16,11 @@ The benchmark harness is located in [/bench](https://github.com/otter-sec/anchor
 
 Solana version: 4.2.0
 
+**Average:** 🟢 **-424.21 (7.95%)** [-14.93%, -3.57%]
+
+<details>
+<summary>Instruction results (87)</summary>
+
 | Instruction                 | Compute Units | -                     |
 | --------------------------- | ------------- | --------------------- |
 | accountInfo1                | 588           | 🟢 **-96 (14.04%)**   |
@@ -106,11 +111,18 @@ Solana version: 4.2.0
 | uncheckedAccount4           | 1,396         | 🟢 **-209 (13.02%)**  |
 | uncheckedAccount8           | 2,523         | 🟢 **-360 (12.49%)**  |
 
+</details>
+
 ---
 
 ## [1.2.0]
 
 Solana version: 4.1.2
+
+**Average:** 🟢 **-226.77 (4.07%)** [-28.24%, -1.29%]
+
+<details>
+<summary>Instruction results (87)</summary>
 
 | Instruction                 | Compute Units | -                    |
 | --------------------------- | ------------- | -------------------- |
@@ -202,6 +214,8 @@ Solana version: 4.1.2
 | uncheckedAccount4           | 1,605         | 🟢 **-270 (14.40%)** |
 | uncheckedAccount8           | 2,883         | 🟢 **-288 (9.08%)**  |
 
+</details>
+
 ### Notable changes
 
 ---
@@ -209,6 +223,9 @@ Solana version: 4.1.2
 ## [1.1.2]
 
 Solana version: 3.1.10
+
+<details>
+<summary>No change</summary>
 
 | Instruction                 | Compute Units | -   |
 | --------------------------- | ------------- | --- |
@@ -299,6 +316,8 @@ Solana version: 3.1.10
 | uncheckedAccount2           | 1,227         | -   |
 | uncheckedAccount4           | 1,875         | -   |
 | uncheckedAccount8           | 3,171         | -   |
+
+</details>
 
 ### Notable changes
 
@@ -308,6 +327,9 @@ Solana version: 3.1.10
 
 Solana version: 3.1.10
 
+<details>
+<summary>No change</summary>
+
 | Instruction                 | Compute Units | -   |
 | --------------------------- | ------------- | --- |
 | accountInfo1                | 702           | -   |
@@ -398,6 +420,8 @@ Solana version: 3.1.10
 | uncheckedAccount4           | 1,875         | -   |
 | uncheckedAccount8           | 3,171         | -   |
 
+</details>
+
 ### Notable changes
 
 ---
@@ -405,6 +429,11 @@ Solana version: 3.1.10
 ## [1.1.0]
 
 Solana version: 3.1.10
+
+**Average:** 🟢 **-1.03 (0.02%)** [-0.03%, 0.00%]
+
+<details>
+<summary>Instruction results (87)</summary>
 
 | Instruction                 | Compute Units | -                 |
 | --------------------------- | ------------- | ----------------- |
@@ -496,6 +525,8 @@ Solana version: 3.1.10
 | uncheckedAccount4           | 1,875         | -                 |
 | uncheckedAccount8           | 3,171         | -                 |
 
+</details>
+
 ### Notable changes
 
 ---
@@ -503,6 +534,9 @@ Solana version: 3.1.10
 ## [1.0.3]
 
 Solana version: 3.1.10
+
+<details>
+<summary>No change</summary>
 
 | Instruction                 | Compute Units | -   |
 | --------------------------- | ------------- | --- |
@@ -594,6 +628,8 @@ Solana version: 3.1.10
 | uncheckedAccount4           | 1,875         | -   |
 | uncheckedAccount8           | 3,171         | -   |
 
+</details>
+
 ### Notable changes
 
 ---
@@ -601,6 +637,11 @@ Solana version: 3.1.10
 ## [1.0.2]
 
 Solana version: 3.1.10
+
+**Average:** 🟢 **-3.14 (0.06%)** [-2.92%, 0.00%]
+
+<details>
+<summary>Instruction results (87)</summary>
 
 | Instruction                 | Compute Units | -                  |
 | --------------------------- | ------------- | ------------------ |
@@ -692,6 +733,8 @@ Solana version: 3.1.10
 | uncheckedAccount4           | 1,875         | -                  |
 | uncheckedAccount8           | 3,171         | -                  |
 
+</details>
+
 ### Notable changes
 
 ---
@@ -699,6 +742,9 @@ Solana version: 3.1.10
 ## [1.0.1]
 
 Solana version: 3.1.10
+
+<details>
+<summary>No change</summary>
 
 | Instruction                 | Compute Units | -   |
 | --------------------------- | ------------- | --- |
@@ -790,6 +836,8 @@ Solana version: 3.1.10
 | uncheckedAccount4           | 1,875         | -   |
 | uncheckedAccount8           | 3,171         | -   |
 
+</details>
+
 ### Notable changes
 
 ---
@@ -797,6 +845,11 @@ Solana version: 3.1.10
 ## [1.0.0]
 
 Solana version: 3.1.10
+
+**Average:** 🟢 **-215.59 (3.73%)** [-8.26%, +11.97%]
+
+<details>
+<summary>Instruction results (87)</summary>
 
 | Instruction                 | Compute Units | -                     |
 | --------------------------- | ------------- | --------------------- |
@@ -888,6 +941,8 @@ Solana version: 3.1.10
 | uncheckedAccount4           | 1,875         | 🔴 **+159 (9.27%)**   |
 | uncheckedAccount8           | 3,171         | 🔴 **+338 (11.93%)**  |
 
+</details>
+
 ### Notable changes
 
 ---
@@ -895,6 +950,9 @@ Solana version: 3.1.10
 ## [0.32.1]
 
 Solana version: 2.3.0
+
+<details>
+<summary>No change</summary>
 
 | Instruction                 | Compute Units | -   |
 | --------------------------- | ------------- | --- |
@@ -986,6 +1044,8 @@ Solana version: 2.3.0
 | uncheckedAccount4           | 1,716         | -   |
 | uncheckedAccount8           | 2,833         | -   |
 
+</details>
+
 ### Notable changes
 
 ---
@@ -993,6 +1053,11 @@ Solana version: 2.3.0
 ## [0.32.0]
 
 Solana version: 2.3.0
+
+**Average:** 🟢 **-546.72 (8.63%)** [-57.53%, +20.00%]
+
+<details>
+<summary>Instruction results (87)</summary>
 
 | Instruction                 | Compute Units | -                      |
 | --------------------------- | ------------- | ---------------------- |
@@ -1084,6 +1149,8 @@ Solana version: 2.3.0
 | uncheckedAccount4           | 1,716         | 🔴 **+122 (7.65%)**    |
 | uncheckedAccount8           | 2,833         | 🔴 **+154 (5.75%)**    |
 
+</details>
+
 ### Notable changes
 
 ---
@@ -1091,6 +1158,9 @@ Solana version: 2.3.0
 ## [0.31.1]
 
 Solana version: 2.1.0
+
+<details>
+<summary>No change</summary>
 
 | Instruction                 | Compute Units | -   |
 | --------------------------- | ------------- | --- |
@@ -1182,6 +1252,8 @@ Solana version: 2.1.0
 | uncheckedAccount4           | 1,594         | -   |
 | uncheckedAccount8           | 2,679         | -   |
 
+</details>
+
 ### Notable changes
 
 ---
@@ -1189,6 +1261,11 @@ Solana version: 2.1.0
 ## [0.31.0]
 
 Solana version: 2.1.0
+
+**Average:** 🟢 **-227.25 (3.46%)** [-13.74%, +39.08%]
+
+<details>
+<summary>Instruction results (87)</summary>
 
 | Instruction                 | Compute Units | -                      |
 | --------------------------- | ------------- | ---------------------- |
@@ -1280,6 +1357,8 @@ Solana version: 2.1.0
 | uncheckedAccount4           | 1,594         | 🔴 **+216 (15.67%)**   |
 | uncheckedAccount8           | 2,679         | 🔴 **+211 (8.55%)**    |
 
+</details>
+
 ### Notable changes
 
 - lang: Update `dispatch` function to support dynamic discriminators ([#3104](https://github.com/otter-sec/anchor/pull/3104)).
@@ -1290,6 +1369,9 @@ Solana version: 2.1.0
 ## [0.30.1]
 
 Solana version: 1.18.17
+
+<details>
+<summary>No change</summary>
 
 | Instruction                 | Compute Units | -   |
 | --------------------------- | ------------- | --- |
@@ -1381,6 +1463,8 @@ Solana version: 1.18.17
 | uncheckedAccount4           | 1,378         | -   |
 | uncheckedAccount8           | 2,468         | -   |
 
+</details>
+
 ### Notable changes
 
 ---
@@ -1388,6 +1472,11 @@ Solana version: 1.18.17
 ## [0.30.0]
 
 Solana version: 1.18.8
+
+**Average:** 🟢 **-829.63 (11.23%)** [-43.16%, +0.76%]
+
+<details>
+<summary>Instruction results (87)</summary>
 
 | Instruction                 | Compute Units | -                      |
 | --------------------------- | ------------- | ---------------------- |
@@ -1479,6 +1568,8 @@ Solana version: 1.18.8
 | uncheckedAccount4           | 1,378         | 🟢 **-148 (9.70%)**    |
 | uncheckedAccount8           | 2,468         | 🟢 **-220 (8.18%)**    |
 
+</details>
+
 ### Notable changes
 
 - Upgrade Solana to `1.18.8` ([#2867](https://github.com/otter-sec/anchor/pull/2867)).
@@ -1488,6 +1579,11 @@ Solana version: 1.18.8
 ## [0.29.0]
 
 Solana version: 1.17.0
+
+**Average:** 🟢 **-1,003.24 (11.95%)** [-45.49%, +0.45%]
+
+<details>
+<summary>Instruction results (87)</summary>
 
 | Instruction                 | Compute Units | +/-                    |
 | --------------------------- | ------------- | ---------------------- |
@@ -1579,6 +1675,8 @@ Solana version: 1.17.0
 | uncheckedAccount4           | 1,526         | 🟢 **-850 (35.77%)**   |
 | uncheckedAccount8           | 2,688         | 🟢 **-1,964 (42.22%)** |
 
+</details>
+
 ### Notable changes
 
 - `Box` the `anchor_lang::Result` error variants ([#2600](https://github.com/otter-sec/anchor/pull/2600)).
@@ -1590,6 +1688,11 @@ Solana version: 1.17.0
 ## [0.28.0]
 
 Solana version: 1.16.0
+
+**Average:** 🟢 **-1.32 (0.02%)** [-8.06%, +27.54%]
+
+<details>
+<summary>Instruction results (87)</summary>
 
 | Instruction                 | Compute Units | +/-                    |
 | --------------------------- | ------------- | ---------------------- |
@@ -1681,6 +1784,8 @@ Solana version: 1.16.0
 | uncheckedAccount4           | 2,376         | 🟢 **-87 (3.53%)**     |
 | uncheckedAccount8           | 4,652         | 🔴 **+2 (0.04%)**      |
 
+</details>
+
 ### Notable changes
 
 - Upgrading Solana to `1.16`. The difference in compute units usage between `0.27.0` and `0.28.0` is the direct result of upgrading Solana version(both build tools and crates) ([#2512](https://github.com/otter-sec/anchor/pull/2512)).
@@ -1690,6 +1795,11 @@ Solana version: 1.16.0
 ## [0.27.0]
 
 Solana version: 1.14.16
+
+**Average:** Baseline
+
+<details>
+<summary>Instruction results (87)</summary>
 
 | Instruction                 | Compute Units | +/- |
 | --------------------------- | ------------- | --- |
@@ -1780,5 +1890,7 @@ Solana version: 1.14.16
 | uncheckedAccount2           | 1,774         | N/A |
 | uncheckedAccount4           | 2,463         | N/A |
 | uncheckedAccount8           | 4,650         | N/A |
+
+</details>
 
 ---

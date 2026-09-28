@@ -18,6 +18,11 @@ The stack size of the `try_accounts` function is measured.
 
 Solana version: 4.2.0
 
+**Average:** 🔴 **+8.83 (3.45%)** [0.00%, +25.00%]
+
+<details>
+<summary>Accounts struct results (87)</summary>
+
 | Instruction                    | Stack Memory | -                    |
 | ------------------------------ | ------------ | -------------------- |
 | account_info1                  | 64           | -                    |
@@ -108,6 +113,8 @@ Solana version: 4.2.0
 | unchecked_account4             | 64           | -                    |
 | unchecked_account8             | 64           | -                    |
 
+</details>
+
 ### Notable changes
 
 ---
@@ -115,6 +122,11 @@ Solana version: 4.2.0
 ## [1.2.0]
 
 Solana version: 4.1.2
+
+**Average:** 🟢 **-164.05 (39.05%)** [-75.00%, +50.00%]
+
+<details>
+<summary>Accounts struct results (87)</summary>
 
 | Instruction                    | Stack Memory | -                      |
 | ------------------------------ | ------------ | ---------------------- |
@@ -206,6 +218,8 @@ Solana version: 4.1.2
 | unchecked_account4             | 64           | 🟢 **-64 (50.00%)**    |
 | unchecked_account8             | 64           | 🟢 **-192 (75.00%)**   |
 
+</details>
+
 ### Notable changes
 
 ---
@@ -213,6 +227,9 @@ Solana version: 4.1.2
 ## [1.1.2]
 
 Solana version: 3.1.10
+
+<details>
+<summary>No change</summary>
 
 | Instruction                    | Stack Memory | -   |
 | ------------------------------ | ------------ | --- |
@@ -303,6 +320,8 @@ Solana version: 3.1.10
 | unchecked_account2             | 64           | -   |
 | unchecked_account4             | 128          | -   |
 | unchecked_account8             | 256          | -   |
+
+</details>
 
 ### Notable changes
 
@@ -312,6 +331,9 @@ Solana version: 3.1.10
 
 Solana version: 3.1.10
 
+<details>
+<summary>No change</summary>
+
 | Instruction                    | Stack Memory | -   |
 | ------------------------------ | ------------ | --- |
 | account_info1                  | 64           | -   |
@@ -401,6 +423,8 @@ Solana version: 3.1.10
 | unchecked_account2             | 64           | -   |
 | unchecked_account4             | 128          | -   |
 | unchecked_account8             | 256          | -   |
+
+</details>
 
 ### Notable changes
 
@@ -410,6 +434,9 @@ Solana version: 3.1.10
 
 Solana version: 3.1.10
 
+<details>
+<summary>No change</summary>
+
 | Instruction                    | Stack Memory | -   |
 | ------------------------------ | ------------ | --- |
 | account_info1                  | 64           | -   |
@@ -499,6 +526,8 @@ Solana version: 3.1.10
 | unchecked_account2             | 64           | -   |
 | unchecked_account4             | 128          | -   |
 | unchecked_account8             | 256          | -   |
+
+</details>
 
 ### Notable changes
 
@@ -508,6 +537,9 @@ Solana version: 3.1.10
 
 Solana version: 3.1.10
 
+<details>
+<summary>No change</summary>
+
 | Instruction                    | Stack Memory | -   |
 | ------------------------------ | ------------ | --- |
 | account_info1                  | 64           | -   |
@@ -597,6 +629,8 @@ Solana version: 3.1.10
 | unchecked_account2             | 64           | -   |
 | unchecked_account4             | 128          | -   |
 | unchecked_account8             | 256          | -   |
+
+</details>
 
 ### Notable changes
 
@@ -606,6 +640,9 @@ Solana version: 3.1.10
 
 Solana version: 3.1.10
 
+<details>
+<summary>No change</summary>
+
 | Instruction                    | Stack Memory | -   |
 | ------------------------------ | ------------ | --- |
 | account_info1                  | 64           | -   |
@@ -695,6 +732,8 @@ Solana version: 3.1.10
 | unchecked_account2             | 64           | -   |
 | unchecked_account4             | 128          | -   |
 | unchecked_account8             | 256          | -   |
+
+</details>
 
 ### Notable changes
 
@@ -704,6 +743,9 @@ Solana version: 3.1.10
 
 Solana version: 3.1.10
 
+<details>
+<summary>No change</summary>
+
 | Instruction                    | Stack Memory | -   |
 | ------------------------------ | ------------ | --- |
 | account_info1                  | 64           | -   |
@@ -794,6 +836,8 @@ Solana version: 3.1.10
 | unchecked_account4             | 128          | -   |
 | unchecked_account8             | 256          | -   |
 
+</details>
+
 ### Notable changes
 
 ---
@@ -801,6 +845,11 @@ Solana version: 3.1.10
 ## [1.0.0]
 
 Solana version: 3.1.10
+
+**Average:** 🔴 **+12.51 (3.07%)** [-10.00%, +100.00%]
+
+<details>
+<summary>Accounts struct results (87)</summary>
 
 | Instruction                    | Stack Memory | -                     |
 | ------------------------------ | ------------ | --------------------- |
@@ -892,6 +941,8 @@ Solana version: 3.1.10
 | unchecked_account4             | 128          | 🔴 **+64 (100.00%)**  |
 | unchecked_account8             | 256          | -                     |
 
+</details>
+
 ### Notable changes
 
 ---
@@ -899,6 +950,9 @@ Solana version: 3.1.10
 ## [0.32.1]
 
 Solana version: 2.3.0
+
+<details>
+<summary>No change</summary>
 
 | Instruction                    | Stack Memory | -   |
 | ------------------------------ | ------------ | --- |
@@ -990,6 +1044,8 @@ Solana version: 2.3.0
 | unchecked_account4             | 64           | -   |
 | unchecked_account8             | 256          | -   |
 
+</details>
+
 ### Notable changes
 
 ---
@@ -997,6 +1053,11 @@ Solana version: 2.3.0
 ## [0.32.0]
 
 Solana version: 2.3.0
+
+**Average:** 🟢 **-2.85 (0.69%)** [-50.00%, +100.00%]
+
+<details>
+<summary>Accounts struct results (87)</summary>
 
 | Instruction                    | Stack Memory | -                    |
 | ------------------------------ | ------------ | -------------------- |
@@ -1088,6 +1149,8 @@ Solana version: 2.3.0
 | unchecked_account4             | 64           | 🟢 **-64 (50.00%)**  |
 | unchecked_account8             | 256          | 🟢 **-32 (11.11%)**  |
 
+</details>
+
 ### Notable changes
 
 ---
@@ -1095,6 +1158,9 @@ Solana version: 2.3.0
 ## [0.31.1]
 
 Solana version: 2.1.0
+
+<details>
+<summary>No change</summary>
 
 | Instruction                    | Stack Memory | -   |
 | ------------------------------ | ------------ | --- |
@@ -1186,6 +1252,8 @@ Solana version: 2.1.0
 | unchecked_account4             | 128          | -   |
 | unchecked_account8             | 288          | -   |
 
+</details>
+
 ### Notable changes
 
 ---
@@ -1193,6 +1261,11 @@ Solana version: 2.1.0
 ## [0.31.0]
 
 Solana version: 2.1.0
+
+**Average:** 🟢 **-622.44 (60.27%)** [-71.20%, +8.33%]
+
+<details>
+<summary>Accounts struct results (87)</summary>
 
 | Instruction                    | Stack Memory | -                      |
 | ------------------------------ | ------------ | ---------------------- |
@@ -1284,6 +1357,8 @@ Solana version: 2.1.0
 | unchecked_account4             | 128          | -                      |
 | unchecked_account8             | 288          | -                      |
 
+</details>
+
 ### Notable changes
 
 - lang: Use closures for `init` constraints to reduce the stack usage of `try_accounts` ([#2939](https://github.com/otter-sec/anchor/pull/2939)).
@@ -1293,6 +1368,9 @@ Solana version: 2.1.0
 ## [0.30.1]
 
 Solana version: 1.18.17
+
+<details>
+<summary>No change</summary>
 
 | Instruction                    | Stack Memory | -   |
 | ------------------------------ | ------------ | --- |
@@ -1384,6 +1462,8 @@ Solana version: 1.18.17
 | unchecked_account4             | 128          | -   |
 | unchecked_account8             | 288          | -   |
 
+</details>
+
 ### Notable changes
 
 ---
@@ -1391,6 +1471,11 @@ Solana version: 1.18.17
 ## [0.30.0]
 
 Solana version: 1.18.8
+
+**Average:** 🔴 **+440.74 (74.44%)** [-8.33%, +128.53%]
+
+<details>
+<summary>Accounts struct results (87)</summary>
 
 | Instruction                    | Stack Memory | -                       |
 | ------------------------------ | ------------ | ----------------------- |
@@ -1482,6 +1567,8 @@ Solana version: 1.18.8
 | unchecked_account4             | 128          | -                       |
 | unchecked_account8             | 288          | -                       |
 
+</details>
+
 ### Notable changes
 
 - Upgrade Solana to `1.18.8` ([#2867](https://github.com/otter-sec/anchor/pull/2867)).
@@ -1491,6 +1578,11 @@ Solana version: 1.18.8
 ## [0.29.0]
 
 Solana version: 1.17.0
+
+**Average:** 🟢 **-293.7 (33.16%)** [-94.94%, +149.66%]
+
+<details>
+<summary>Accounts struct results (87)</summary>
 
 | Instruction                    | Stack Memory | +/-                     |
 | ------------------------------ | ------------ | ----------------------- |
@@ -1582,6 +1674,8 @@ Solana version: 1.17.0
 | unchecked_account4             | 128          | 🟢 **-680 (84.16%)**    |
 | unchecked_account8             | 288          | 🟢 **-712 (71.20%)**    |
 
+</details>
+
 ### Notable changes
 
 - `Box` the `anchor_lang::Result` error variants ([#2600](https://github.com/otter-sec/anchor/pull/2600)).
@@ -1591,6 +1685,11 @@ Solana version: 1.17.0
 ## [0.28.0]
 
 Solana version: 1.16.0
+
+**Average:** 🟢 **-65.2 (6.86%)** [-13.00%, +3.33%]
+
+<details>
+<summary>Accounts struct results (87)</summary>
 
 | Instruction                    | Stack Memory | +/-                  |
 | ------------------------------ | ------------ | -------------------- |
@@ -1682,6 +1781,8 @@ Solana version: 1.16.0
 | unchecked_account4             | 808          | 🟢 **-72 (8.18%)**   |
 | unchecked_account8             | 1,000        | 🟢 **-72 (6.72%)**   |
 
+</details>
+
 ### Notable changes
 
 - Upgrading Solana to `1.16`. The difference in stack memory usage between `0.27.0` and `0.28.0` is the direct result of upgrading Solana version(both build tools and crates) ([#2512](https://github.com/otter-sec/anchor/pull/2512)).
@@ -1692,6 +1793,11 @@ Solana version: 1.16.0
 ## [0.27.0]
 
 Solana version: 1.14.16
+
+**Average:** Baseline
+
+<details>
+<summary>Accounts struct results (87)</summary>
 
 | Instruction                    | Stack Memory | +/- |
 | ------------------------------ | ------------ | --- |
@@ -1782,5 +1888,7 @@ Solana version: 1.14.16
 | unchecked_account2             | 784          | N/A |
 | unchecked_account4             | 880          | N/A |
 | unchecked_account8             | 1,072        | N/A |
+
+</details>
 
 ---

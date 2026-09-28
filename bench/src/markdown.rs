@@ -24,6 +24,14 @@ impl Measurement {
             Self::StackMemory => &result.result.stack_memory,
         }
     }
+
+    fn details(self) -> &'static str {
+        match self {
+            Self::BinarySize => "Program results",
+            Self::ComputeUnits => "Instruction results",
+            Self::StackMemory => "Accounts struct results",
+        }
+    }
 }
 
 pub fn sync(directory: &Path, results: &Results) -> Result<()> {
@@ -100,6 +108,7 @@ fn sync_file(markdown: &mut String, results: &Results, measurement: Measurement)
             measurement.values(new.1),
             measurement.values(old.1),
             index == 0,
+            measurement.details(),
         )?;
         old = new;
     }
@@ -113,6 +122,7 @@ fn update_version(
     new: &Values,
     old: &Values,
     first: bool,
+    details: &str,
 ) -> Result<()> {
     let title = if version == "unreleased" {
         "## [Unreleased]".to_owned()
@@ -126,24 +136,6 @@ fn update_version(
         .find("\n---")
         .map(|offset| start + offset)
         .with_context(|| format!("Missing separator after {title}"))?;
-    let table_start = markdown[start..section_end]
-        .find('|')
-        .map(|offset| start + offset)
-        .with_context(|| format!("Missing table in {title}"))?;
-    let table_end = markdown[table_start..]
-        .find("\n\n")
-        .map(|offset| table_start + offset)
-        .filter(|end| *end <= section_end)
-        .with_context(|| format!("Missing blank line after table in {title}"))?;
-    let header_end = markdown[table_start..table_end]
-        .find('\n')
-        .map(|offset| table_start + offset)
-        .with_context(|| format!("Missing table separator in {title}"))?;
-    markdown.replace_range(
-        table_start..table_end + 1,
-        &format_table(&markdown[table_start..header_end], new, old, first)?,
-    );
-
     let version_start = markdown[start..]
         .find("Solana version: ")
         .map(|offset| start + offset)
@@ -152,11 +144,122 @@ fn update_version(
         .find('\n')
         .map(|offset| version_start + offset)
         .with_context(|| format!("Missing newline after Solana version in {title}"))?;
+    let results_start = version_end + 1;
+    let results_end = markdown[results_start..section_end]
+        .find("\n### Notable changes")
+        .map(|offset| results_start + offset)
+        .unwrap_or(section_end);
+    let table_start = markdown[results_start..results_end]
+        .find('|')
+        .map(|offset| results_start + offset)
+        .with_context(|| format!("Missing table in {title}"))?;
+    let header_end = markdown[table_start..results_end]
+        .find('\n')
+        .map(|offset| table_start + offset)
+        .with_context(|| format!("Missing table separator in {title}"))?;
+    let header = markdown[table_start..header_end].to_owned();
+    markdown.replace_range(
+        results_start..results_end,
+        &format!("\n{}\n", format_results(&header, new, old, first, details)?),
+    );
+
     markdown.replace_range(
         version_start..version_end,
         &format!("Solana version: {solana}"),
     );
     Ok(())
+}
+
+fn format_results(
+    header: &str,
+    new: &Values,
+    old: &Values,
+    first: bool,
+    details: &str,
+) -> Result<String> {
+    let average = mean(new);
+    let average_change = if first {
+        "Baseline".into()
+    } else if new == old {
+        "No change".into()
+    } else {
+        format_average_change(average, mean(old), new, old)
+    };
+    let table = format_table(header, new, old, first)?;
+
+    if !first && new == old {
+        Ok(format!(
+            "<details>\n<summary>No change</summary>\n\n{table}\n</details>",
+        ))
+    } else {
+        Ok(format!(
+            "**Average:** {average_change}\n\n<details>\n<summary>{details} \
+             ({})</summary>\n\n{table}\n</details>",
+            new.len(),
+        ))
+    }
+}
+
+fn mean(values: &Values) -> f64 {
+    values.values().sum::<u64>() as f64 / values.len() as f64
+}
+
+fn format_average_change(average: f64, old_average: f64, new: &Values, old: &Values) -> String {
+    let percentages = new
+        .iter()
+        .filter_map(|(name, value)| {
+            old.get(name)
+                .map(|old_value| percent_change(*value, *old_value))
+        })
+        .collect::<Vec<_>>();
+    let range = if percentages.is_empty() {
+        "N/A, N/A".into()
+    } else {
+        let minimum = percentages.iter().copied().fold(f64::INFINITY, f64::min);
+        let maximum = percentages
+            .iter()
+            .copied()
+            .fold(f64::NEG_INFINITY, f64::max);
+        format!(
+            "{}, {}",
+            format_signed_percent(minimum),
+            format_signed_percent(maximum)
+        )
+    };
+    let percent = percent_change_float(average, old_average);
+    let icon = if percent > 0.0 { "🔴" } else { "🟢" };
+    let sign = if average > old_average { "+" } else { "" };
+    format!(
+        "{icon} **{sign}{} ({}%)** [{range}]",
+        format_decimal(average - old_average),
+        format_percent(percent.abs()),
+    )
+}
+
+fn percent_change(new: u64, old: u64) -> f64 {
+    percent_change_float(new as f64, old as f64)
+}
+
+fn percent_change_float(new: f64, old: f64) -> f64 {
+    (new / old - 1.0) * 100.0
+}
+
+fn format_signed_percent(percent: f64) -> String {
+    format!(
+        "{}{}%",
+        if percent > 0.0 {
+            "+"
+        } else if percent < 0.0 {
+            "-"
+        } else {
+            ""
+        },
+        format_percent(percent.abs())
+    )
+}
+
+fn format_percent(percent: f64) -> String {
+    ryu_js::Buffer::new().format_to_fixed(percent, 2).to_owned()
 }
 
 fn format_table(header: &str, new: &Values, old: &Values, first: bool) -> Result<String> {
@@ -167,7 +270,7 @@ fn format_table(header: &str, new: &Values, old: &Values, first: bool) -> Result
         .collect::<Vec<_>>()
         .try_into()
         .map_err(|_| anyhow::anyhow!("Expected a three-column Markdown table: {header}"))?;
-    let rows = new
+    let mut rows = new
         .iter()
         .map(|(name, value)| {
             let change = match old.get(name) {
@@ -178,6 +281,11 @@ fn format_table(header: &str, new: &Values, old: &Values, first: bool) -> Result
             row(name, *value, change)
         })
         .collect::<Vec<_>>();
+    rows.extend(
+        old.iter()
+            .filter(|(name, _)| !new.contains_key(*name))
+            .map(|(name, _)| [name.to_owned(), "-".into(), "Removed".into()]),
+    );
 
     let mut widths = [3; 3];
     for row in std::iter::once(&headers).chain(&rows) {
@@ -239,4 +347,17 @@ fn format_number(number: i128) -> String {
         formatted.push(character);
     }
     formatted
+}
+
+fn format_decimal(number: f64) -> String {
+    let raw = ryu_js::Buffer::new().format_to_fixed(number, 2).to_owned();
+    let raw = raw.trim_end_matches('0').trim_end_matches('.');
+    let (sign, raw) = raw.strip_prefix('-').map_or(("", raw), |raw| ("-", raw));
+    let (integer, fraction) = raw.split_once('.').unwrap_or((raw, ""));
+    let integer = format_number(integer.parse().expect("formatted number is an integer"));
+    if fraction.is_empty() {
+        format!("{sign}{integer}")
+    } else {
+        format!("{sign}{integer}.{fraction}")
+    }
 }
