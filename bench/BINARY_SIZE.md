@@ -16,14 +16,15 @@ The benchmark harness is located in [/bench](https://github.com/otter-sec/anchor
 
 Solana version: 4.2.0
 
-**Average:** 🟢 **-23,976 (2.91%)** [-2.91%, -2.91%]
+**Average:** 🟢 **-12,136 (2.48%)** [-2.91%, -0.19%]
 
 <details>
-<summary>Program results (1)</summary>
+<summary>Program results (2)</summary>
 
 | Program | Binary Size | -                      |
 | ------- | ----------- | ---------------------- |
 | bench   | 800,288     | 🟢 **-23,976 (2.91%)** |
+| escrow  | 153,424     | 🟢 **-296 (0.19%)**    |
 
 </details>
 
@@ -33,14 +34,15 @@ Solana version: 4.2.0
 
 Solana version: 4.1.2
 
-**Average:** 🟢 **-107,352 (11.52%)** [-11.52%, -11.52%]
+**Average:** 🟢 **-63,556 (11.50%)** [-11.52%, -11.39%]
 
 <details>
-<summary>Program results (1)</summary>
+<summary>Program results (2)</summary>
 
 | Program | Binary Size | -                        |
 | ------- | ----------- | ------------------------ |
 | bench   | 824,264     | 🟢 **-107,352 (11.52%)** |
+| escrow  | 153,720     | 🟢 **-19,760 (11.39%)**  |
 
 </details>
 
@@ -52,14 +54,15 @@ Solana version: 4.1.2
 
 Solana version: 3.1.10
 
-**Average:** 🟢 **-432 (0.05%)** [-0.05%, -0.05%]
+**Average:** 🟢 **-1,292 (0.23%)** [-1.23%, -0.05%]
 
 <details>
-<summary>Program results (1)</summary>
+<summary>Program results (2)</summary>
 
-| Program | Binary Size | -                   |
-| ------- | ----------- | ------------------- |
-| bench   | 931,616     | 🟢 **-432 (0.05%)** |
+| Program | Binary Size | -                     |
+| ------- | ----------- | --------------------- |
+| bench   | 931,616     | 🟢 **-432 (0.05%)**   |
+| escrow  | 173,480     | 🟢 **-2,152 (1.23%)** |
 
 </details>
 
@@ -71,14 +74,15 @@ Solana version: 3.1.10
 
 Solana version: 3.1.10
 
-**Average:** 🔴 **+432 (0.05%)** [+0.05%, +0.05%]
+**Average:** 🔴 **+1,292 (0.23%)** [+0.05%, +1.24%]
 
 <details>
-<summary>Program results (1)</summary>
+<summary>Program results (2)</summary>
 
-| Program | Binary Size | -                   |
-| ------- | ----------- | ------------------- |
-| bench   | 932,048     | 🔴 **+432 (0.05%)** |
+| Program | Binary Size | -                     |
+| ------- | ----------- | --------------------- |
+| bench   | 932,048     | 🔴 **+432 (0.05%)**   |
+| escrow  | 175,632     | 🔴 **+2,152 (1.24%)** |
 
 </details>
 
@@ -90,14 +94,15 @@ Solana version: 3.1.10
 
 Solana version: 3.1.10
 
-**Average:** 🔴 **+72 (0.01%)** [+0.01%, +0.01%]
+**Average:** 🔴 **+4 (0.00%)** [-0.04%, +0.01%]
 
 <details>
-<summary>Program results (1)</summary>
+<summary>Program results (2)</summary>
 
 | Program | Binary Size | -                  |
 | ------- | ----------- | ------------------ |
 | bench   | 931,616     | 🔴 **+72 (0.01%)** |
+| escrow  | 173,480     | 🟢 **-64 (0.04%)** |
 
 </details>
 
@@ -109,12 +114,15 @@ Solana version: 3.1.10
 
 Solana version: 3.1.10
 
-<details>
-<summary>No change</summary>
+**Average:** 🟢 **-860 (0.16%)** [-0.98%, 0.00%]
 
-| Program | Binary Size | -   |
-| ------- | ----------- | --- |
-| bench   | 931,544     | -   |
+<details>
+<summary>Program results (2)</summary>
+
+| Program | Binary Size | -                     |
+| ------- | ----------- | --------------------- |
+| bench   | 931,544     | -                     |
+| escrow  | 173,544     | 🟢 **-1,720 (0.98%)** |
 
 </details>
 
@@ -126,14 +134,15 @@ Solana version: 3.1.10
 
 Solana version: 3.1.10
 
-**Average:** 🟢 **-240 (0.03%)** [-0.03%, -0.03%]
+**Average:** 🟢 **-208 (0.04%)** [-0.10%, -0.03%]
 
 <details>
-<summary>Program results (1)</summary>
+<summary>Program results (2)</summary>
 
 | Program | Binary Size | -                   |
 | ------- | ----------- | ------------------- |
 | bench   | 931,544     | 🟢 **-240 (0.03%)** |
+| escrow  | 175,264     | 🟢 **-176 (0.10%)** |
 
 </details>
 
@@ -151,6 +160,7 @@ Solana version: 3.1.10
 | Program | Binary Size | -   |
 | ------- | ----------- | --- |
 | bench   | 931,784     | -   |
+| escrow  | 175,440     | -   |
 
 </details>
 
@@ -162,14 +172,15 @@ Solana version: 3.1.10
 
 Solana version: 3.1.10
 
-**Average:** 🟢 **-194,600 (17.28%)** [-17.28%, -17.28%]
+**Average:** 🟢 **-126,244 (18.57%)** [-24.81%, -17.28%]
 
 <details>
-<summary>Program results (1)</summary>
+<summary>Program results (2)</summary>
 
 | Program | Binary Size | -                        |
 | ------- | ----------- | ------------------------ |
 | bench   | 931,784     | 🟢 **-194,600 (17.28%)** |
+| escrow  | 175,440     | 🟢 **-57,888 (24.81%)**  |
 
 </details>
 
@@ -187,6 +198,7 @@ Solana version: 2.3.0
 | Program | Binary Size | -   |
 | ------- | ----------- | --- |
 | bench   | 1,126,384   | -   |
+| escrow  | 233,328     | -   |
 
 </details>
 
@@ -198,14 +210,15 @@ Solana version: 2.3.0
 
 Solana version: 2.3.0
 
-**Average:** 🔴 **+84,472 (8.11%)** [+8.11%, +8.11%]
+**Average:** 🔴 **+48,080 (7.61%)** [+5.27%, +8.11%]
 
 <details>
-<summary>Program results (1)</summary>
+<summary>Program results (2)</summary>
 
 | Program | Binary Size | -                      |
 | ------- | ----------- | ---------------------- |
 | bench   | 1,126,384   | 🔴 **+84,472 (8.11%)** |
+| escrow  | 233,328     | 🔴 **+11,688 (5.27%)** |
 
 </details>
 
@@ -225,6 +238,7 @@ Solana version: 2.1.0
 | Program | Binary Size | -   |
 | ------- | ----------- | --- |
 | bench   | 1,041,912   | -   |
+| escrow  | 221,640     | -   |
 
 </details>
 
@@ -236,14 +250,15 @@ Solana version: 2.1.0
 
 Solana version: 2.1.0
 
-**Average:** 🔴 **+246,024 (30.91%)** [+30.91%, +30.91%]
+**Average:** 🔴 **+111,692 (21.48%)** [-9.27%, +30.91%]
 
 <details>
-<summary>Program results (1)</summary>
+<summary>Program results (2)</summary>
 
 | Program | Binary Size | -                        |
 | ------- | ----------- | ------------------------ |
 | bench   | 1,041,912   | 🔴 **+246,024 (30.91%)** |
+| escrow  | 221,640     | 🟢 **-22,640 (9.27%)**   |
 
 </details>
 
@@ -258,14 +273,15 @@ Solana version: 2.1.0
 
 Solana version: 1.18.17
 
-**Average:** 🔴 **+272 (0.03%)** [+0.03%, +0.03%]
+**Average:** 🔴 **+272 (0.05%)** [+0.03%, +0.11%]
 
 <details>
-<summary>Program results (1)</summary>
+<summary>Program results (2)</summary>
 
 | Program | Binary Size | -                   |
 | ------- | ----------- | ------------------- |
 | bench   | 795,888     | 🔴 **+272 (0.03%)** |
+| escrow  | 244,280     | 🔴 **+272 (0.11%)** |
 
 </details>
 
@@ -277,14 +293,15 @@ Solana version: 1.18.17
 
 Solana version: 1.18.8
 
-**Average:** 🔴 **+52,592 (7.08%)** [+7.08%, +7.08%]
+**Average:** 🔴 **+35,008 (7.22%)** [+7.08%, +7.69%]
 
 <details>
-<summary>Program results (1)</summary>
+<summary>Program results (2)</summary>
 
 | Program | Binary Size | -                      |
 | ------- | ----------- | ---------------------- |
 | bench   | 795,616     | 🔴 **+52,592 (7.08%)** |
+| escrow  | 244,008     | 🔴 **+17,424 (7.69%)** |
 
 </details>
 
@@ -298,14 +315,15 @@ Solana version: 1.18.8
 
 Solana version: 1.17.25
 
-**Average:** 🟢 **-417,936 (36.00%)** [-36.00%, -36.00%]
+**Average:** 🟢 **-676,156 (58.24%)** [-36.00%, -36.00%]
 
 <details>
-<summary>Program results (1)</summary>
+<summary>Program results (2)</summary>
 
 | Program | Binary Size | +/-                      |
 | ------- | ----------- | ------------------------ |
 | bench   | 743,024     | 🟢 **-417,936 (36.00%)** |
+| escrow  | 226,584     | N/A                      |
 
 </details>
 
