@@ -10,24 +10,28 @@ use {
 };
 
 const BENCH_REVISIONS: &[(&str, &str)] = &[("0.29.0", "v1")];
+const ESCROW_REVISIONS: &[(&str, &str)] = &[("0.29.0", "v1")];
 
 #[derive(Clone, Copy)]
 pub enum Program {
     Bench,
+    Escrow,
 }
 
 impl Program {
-    pub const ALL: &[Self] = &[Self::Bench];
+    pub const ALL: &[Self] = &[Self::Bench, Self::Escrow];
 
     pub fn name(self) -> &'static str {
         match self {
             Self::Bench => "bench",
+            Self::Escrow => "escrow",
         }
     }
 
     pub fn result_name(self, name: &str) -> String {
         match self {
             Self::Bench => name.to_owned(),
+            _ => format!("{}/{name}", self.name()),
         }
     }
 
@@ -38,9 +42,20 @@ impl Program {
         }
     }
 
+    pub fn stack_cases(self) -> Vec<(String, String)> {
+        match self {
+            Self::Bench => crate::cases::stack_cases(),
+            Self::Escrow => [("initialize", "Initialize"), ("take", "Take")]
+                .into_iter()
+                .map(|(result, name)| (result.into(), name.into()))
+                .collect(),
+        }
+    }
+
     fn revisions(self) -> &'static [(&'static str, &'static str)] {
         match self {
             Self::Bench => BENCH_REVISIONS,
+            Self::Escrow => ESCROW_REVISIONS,
         }
     }
 

@@ -381,7 +381,8 @@
     "sbpfVersion": "v0",
     "result": {
       "binarySize": {
-        "bench": 743024
+        "bench": 743024,
+        "escrow": 226584
       },
       "computeUnits": {
         "accountInfo1": 695,
@@ -470,7 +471,9 @@
         "uncheckedAccount1": 657,
         "uncheckedAccount2": 949,
         "uncheckedAccount4": 1526,
-        "uncheckedAccount8": 2688
+        "uncheckedAccount8": 2688,
+        "escrow/initialize": 12607,
+        "escrow/take": 10564
       },
       "stackMemory": {
         "account_info1": 32,
@@ -559,7 +562,9 @@
         "unchecked_account1": 32,
         "unchecked_account2": 64,
         "unchecked_account4": 128,
-        "unchecked_account8": 288
+        "unchecked_account8": 288,
+        "escrow/initialize": 1712,
+        "escrow/take": 1600
       }
     }
   },
@@ -569,7 +574,8 @@
     "sbpfVersion": "v0",
     "result": {
       "binarySize": {
-        "bench": 795616
+        "bench": 795616,
+        "escrow": 244008
       },
       "computeUnits": {
         "accountInfo1": 601,
@@ -652,7 +658,9 @@
         "uncheckedAccount1": 563,
         "uncheckedAccount2": 836,
         "uncheckedAccount4": 1378,
-        "uncheckedAccount8": 2468
+        "uncheckedAccount8": 2468,
+        "escrow/initialize": 11557,
+        "escrow/take": 9552
       },
       "stackMemory": {
         "account_info1": 32,
@@ -741,7 +749,9 @@
         "unchecked_account1": 32,
         "unchecked_account2": 64,
         "unchecked_account4": 128,
-        "unchecked_account8": 288
+        "unchecked_account8": 288,
+        "escrow/initialize": 1864,
+        "escrow/take": 1560
       }
     }
   },
@@ -751,7 +761,8 @@
     "sbpfVersion": "v0",
     "result": {
       "binarySize": {
-        "bench": 795888
+        "bench": 795888,
+        "escrow": 244280
       },
       "computeUnits": {
         "accountInfo1": 601,
@@ -834,7 +845,9 @@
         "uncheckedAccount1": 563,
         "uncheckedAccount2": 836,
         "uncheckedAccount4": 1378,
-        "uncheckedAccount8": 2468
+        "uncheckedAccount8": 2468,
+        "escrow/initialize": 11557,
+        "escrow/take": 9552
       },
       "stackMemory": {
         "account_info1": 32,
@@ -923,7 +936,9 @@
         "unchecked_account1": 32,
         "unchecked_account2": 64,
         "unchecked_account4": 128,
-        "unchecked_account8": 288
+        "unchecked_account8": 288,
+        "escrow/initialize": 1864,
+        "escrow/take": 1560
       }
     }
   },
@@ -933,7 +948,8 @@
     "sbpfVersion": "v0",
     "result": {
       "binarySize": {
-        "bench": 1041912
+        "bench": 1041912,
+        "escrow": 221640
       },
       "computeUnits": {
         "accountInfo1": 571,
@@ -1022,7 +1038,9 @@
         "uncheckedAccount1": 783,
         "uncheckedAccount2": 1056,
         "uncheckedAccount4": 1594,
-        "uncheckedAccount8": 2679
+        "uncheckedAccount8": 2679,
+        "escrow/initialize": 10579,
+        "escrow/take": 8406
       },
       "stackMemory": {
         "account_info1": 32,
@@ -1111,7 +1129,9 @@
         "unchecked_account1": 32,
         "unchecked_account2": 64,
         "unchecked_account4": 128,
-        "unchecked_account8": 288
+        "unchecked_account8": 288,
+        "escrow/initialize": 1336,
+        "escrow/take": 1568
       }
     }
   },
@@ -1121,7 +1141,8 @@
     "sbpfVersion": "v0",
     "result": {
       "binarySize": {
-        "bench": 1041912
+        "bench": 1041912,
+        "escrow": 221640
       },
       "computeUnits": {
         "accountInfo1": 571,
@@ -1210,7 +1231,9 @@
         "uncheckedAccount1": 783,
         "uncheckedAccount2": 1056,
         "uncheckedAccount4": 1594,
-        "uncheckedAccount8": 2679
+        "uncheckedAccount8": 2679,
+        "escrow/initialize": 10579,
+        "escrow/take": 8406
       },
       "stackMemory": {
         "account_info1": 32,
@@ -1299,7 +1322,9 @@
         "unchecked_account1": 32,
         "unchecked_account2": 64,
         "unchecked_account4": 128,
-        "unchecked_account8": 288
+        "unchecked_account8": 288,
+        "escrow/initialize": 1336,
+        "escrow/take": 1568
       }
     }
   },
@@ -1309,7 +1334,8 @@
     "sbpfVersion": "v0",
     "result": {
       "binarySize": {
-        "bench": 1126384
+        "bench": 1126384,
+        "escrow": 233328
       },
       "computeUnits": {
         "accountInfo1": 685,
@@ -1398,7 +1424,9 @@
         "uncheckedAccount1": 882,
         "uncheckedAccount2": 1162,
         "uncheckedAccount4": 1716,
-        "uncheckedAccount8": 2833
+        "uncheckedAccount8": 2833,
+        "escrow/initialize": 8814,
+        "escrow/take": 6262
       },
       "stackMemory": {
         "account_info1": 64,
@@ -1487,7 +1515,9 @@
         "unchecked_account1": 64,
         "unchecked_account2": 64,
         "unchecked_account4": 64,
-        "unchecked_account8": 256
+        "unchecked_account8": 256,
+        "escrow/initialize": 1600,
+        "escrow/take": 2112
       }
     }
   },
@@ -1497,7 +1527,8 @@
     "sbpfVersion": "v0",
     "result": {
       "binarySize": {
-        "bench": 1126384
+        "bench": 1126384,
+        "escrow": 233328
       },
       "computeUnits": {
         "accountInfo1": 685,
@@ -1586,7 +1617,9 @@
         "uncheckedAccount1": 882,
         "uncheckedAccount2": 1162,
         "uncheckedAccount4": 1716,
-        "uncheckedAccount8": 2833
+        "uncheckedAccount8": 2833,
+        "escrow/initialize": 8814,
+        "escrow/take": 6262
       },
       "stackMemory": {
         "account_info1": 64,
@@ -1675,7 +1708,9 @@
         "unchecked_account1": 64,
         "unchecked_account2": 64,
         "unchecked_account4": 64,
-        "unchecked_account8": 256
+        "unchecked_account8": 256,
+        "escrow/initialize": 1600,
+        "escrow/take": 2112
       }
     }
   },
@@ -1685,7 +1720,8 @@
     "sbpfVersion": "v0",
     "result": {
       "binarySize": {
-        "bench": 931784
+        "bench": 931784,
+        "escrow": 175440
       },
       "computeUnits": {
         "accountInfo1": 702,
@@ -1774,7 +1810,9 @@
         "uncheckedAccount1": 896,
         "uncheckedAccount2": 1227,
         "uncheckedAccount4": 1875,
-        "uncheckedAccount8": 3171
+        "uncheckedAccount8": 3171,
+        "escrow/initialize": 8621,
+        "escrow/take": 6748
       },
       "stackMemory": {
         "account_info1": 64,
@@ -1863,7 +1901,9 @@
         "unchecked_account1": 64,
         "unchecked_account2": 64,
         "unchecked_account4": 128,
-        "unchecked_account8": 256
+        "unchecked_account8": 256,
+        "escrow/initialize": 1856,
+        "escrow/take": 2880
       }
     }
   },
@@ -1873,7 +1913,8 @@
     "sbpfVersion": "v0",
     "result": {
       "binarySize": {
-        "bench": 931784
+        "bench": 931784,
+        "escrow": 175440
       },
       "computeUnits": {
         "accountInfo1": 702,
@@ -1962,7 +2003,9 @@
         "uncheckedAccount1": 896,
         "uncheckedAccount2": 1227,
         "uncheckedAccount4": 1875,
-        "uncheckedAccount8": 3171
+        "uncheckedAccount8": 3171,
+        "escrow/initialize": 8621,
+        "escrow/take": 6748
       },
       "stackMemory": {
         "account_info1": 64,
@@ -2051,7 +2094,9 @@
         "unchecked_account1": 64,
         "unchecked_account2": 64,
         "unchecked_account4": 128,
-        "unchecked_account8": 256
+        "unchecked_account8": 256,
+        "escrow/initialize": 1856,
+        "escrow/take": 2880
       }
     }
   },
@@ -2061,7 +2106,8 @@
     "sbpfVersion": "v0",
     "result": {
       "binarySize": {
-        "bench": 931544
+        "bench": 931544,
+        "escrow": 175264
       },
       "computeUnits": {
         "accountInfo1": 702,
@@ -2150,7 +2196,9 @@
         "uncheckedAccount1": 896,
         "uncheckedAccount2": 1227,
         "uncheckedAccount4": 1875,
-        "uncheckedAccount8": 3171
+        "uncheckedAccount8": 3171,
+        "escrow/initialize": 8618,
+        "escrow/take": 6748
       },
       "stackMemory": {
         "account_info1": 64,
@@ -2239,7 +2287,9 @@
         "unchecked_account1": 64,
         "unchecked_account2": 64,
         "unchecked_account4": 128,
-        "unchecked_account8": 256
+        "unchecked_account8": 256,
+        "escrow/initialize": 1856,
+        "escrow/take": 2880
       }
     }
   },
@@ -2249,7 +2299,8 @@
     "sbpfVersion": "v0",
     "result": {
       "binarySize": {
-        "bench": 931544
+        "bench": 931544,
+        "escrow": 173544
       },
       "computeUnits": {
         "accountInfo1": 702,
@@ -2338,7 +2389,9 @@
         "uncheckedAccount1": 896,
         "uncheckedAccount2": 1227,
         "uncheckedAccount4": 1875,
-        "uncheckedAccount8": 3171
+        "uncheckedAccount8": 3171,
+        "escrow/initialize": 8618,
+        "escrow/take": 6747
       },
       "stackMemory": {
         "account_info1": 64,
@@ -2427,7 +2480,9 @@
         "unchecked_account1": 64,
         "unchecked_account2": 64,
         "unchecked_account4": 128,
-        "unchecked_account8": 256
+        "unchecked_account8": 256,
+        "escrow/initialize": 1792,
+        "escrow/take": 2752
       }
     }
   },
@@ -2437,7 +2492,8 @@
     "sbpfVersion": "v0",
     "result": {
       "binarySize": {
-        "bench": 931616
+        "bench": 931616,
+        "escrow": 173480
       },
       "computeUnits": {
         "accountInfo1": 702,
@@ -2526,7 +2582,9 @@
         "uncheckedAccount1": 896,
         "uncheckedAccount2": 1227,
         "uncheckedAccount4": 1875,
-        "uncheckedAccount8": 3171
+        "uncheckedAccount8": 3171,
+        "escrow/initialize": 8617,
+        "escrow/take": 6748
       },
       "stackMemory": {
         "account_info1": 64,
@@ -2615,7 +2673,9 @@
         "unchecked_account1": 64,
         "unchecked_account2": 64,
         "unchecked_account4": 128,
-        "unchecked_account8": 256
+        "unchecked_account8": 256,
+        "escrow/initialize": 1792,
+        "escrow/take": 2752
       }
     }
   },
@@ -2625,7 +2685,8 @@
     "sbpfVersion": "v0",
     "result": {
       "binarySize": {
-        "bench": 932048
+        "bench": 932048,
+        "escrow": 175632
       },
       "computeUnits": {
         "accountInfo1": 702,
@@ -2714,7 +2775,9 @@
         "uncheckedAccount1": 896,
         "uncheckedAccount2": 1227,
         "uncheckedAccount4": 1875,
-        "uncheckedAccount8": 3171
+        "uncheckedAccount8": 3171,
+        "escrow/initialize": 8617,
+        "escrow/take": 6749
       },
       "stackMemory": {
         "account_info1": 64,
@@ -2803,7 +2866,9 @@
         "unchecked_account1": 64,
         "unchecked_account2": 64,
         "unchecked_account4": 128,
-        "unchecked_account8": 256
+        "unchecked_account8": 256,
+        "escrow/initialize": 1856,
+        "escrow/take": 2880
       }
     }
   },
@@ -2813,7 +2878,8 @@
     "sbpfVersion": "v0",
     "result": {
       "binarySize": {
-        "bench": 931616
+        "bench": 931616,
+        "escrow": 173480
       },
       "computeUnits": {
         "accountInfo1": 702,
@@ -2902,7 +2968,9 @@
         "uncheckedAccount1": 896,
         "uncheckedAccount2": 1227,
         "uncheckedAccount4": 1875,
-        "uncheckedAccount8": 3171
+        "uncheckedAccount8": 3171,
+        "escrow/initialize": 8617,
+        "escrow/take": 6748
       },
       "stackMemory": {
         "account_info1": 64,
@@ -2991,7 +3059,9 @@
         "unchecked_account1": 64,
         "unchecked_account2": 64,
         "unchecked_account4": 128,
-        "unchecked_account8": 256
+        "unchecked_account8": 256,
+        "escrow/initialize": 1792,
+        "escrow/take": 2752
       }
     }
   },
@@ -3001,7 +3071,8 @@
     "sbpfVersion": "v3",
     "result": {
       "binarySize": {
-        "bench": 824264
+        "bench": 824264,
+        "escrow": 153720
       },
       "computeUnits": {
         "accountInfo1": 684,
@@ -3090,7 +3161,9 @@
         "uncheckedAccount1": 643,
         "uncheckedAccount2": 966,
         "uncheckedAccount4": 1605,
-        "uncheckedAccount8": 2883
+        "uncheckedAccount8": 2883,
+        "escrow/initialize": 8469,
+        "escrow/take": 6541
       },
       "stackMemory": {
         "account_info1": 64,
@@ -3179,7 +3252,9 @@
         "unchecked_account1": 64,
         "unchecked_account2": 64,
         "unchecked_account4": 64,
-        "unchecked_account8": 64
+        "unchecked_account8": 64,
+        "escrow/initialize": 1344,
+        "escrow/take": 1664
       }
     }
   },
@@ -3189,7 +3264,8 @@
     "sbpfVersion": "v3",
     "result": {
       "binarySize": {
-        "bench": 800288
+        "bench": 800288,
+        "escrow": 153424
       },
       "computeUnits": {
         "accountInfo1": 588,
@@ -3278,7 +3354,9 @@
         "uncheckedAccount1": 547,
         "uncheckedAccount2": 832,
         "uncheckedAccount4": 1396,
-        "uncheckedAccount8": 2523
+        "uncheckedAccount8": 2523,
+        "escrow/initialize": 7891,
+        "escrow/take": 6155
       },
       "stackMemory": {
         "account_info1": 64,
@@ -3367,7 +3445,9 @@
         "unchecked_account1": 64,
         "unchecked_account2": 64,
         "unchecked_account4": 64,
-        "unchecked_account8": 64
+        "unchecked_account8": 64,
+        "escrow/initialize": 1088,
+        "escrow/take": 1536
       }
     }
   }

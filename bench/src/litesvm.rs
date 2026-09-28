@@ -15,9 +15,9 @@ use {
 };
 
 const PROGRAM_ID: &str = "Bench11111111111111111111111111111111111111";
-const SYSTEM_ID: &str = "11111111111111111111111111111111";
-const TOKEN_ID: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
-const NATIVE_LOADER_ID: &str = "NativeLoader1111111111111111111111111111111";
+pub(crate) const SYSTEM_ID: &str = "11111111111111111111111111111111";
+pub(crate) const TOKEN_ID: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+pub(crate) const NATIVE_LOADER_ID: &str = "NativeLoader1111111111111111111111111111111";
 
 pub fn measure(deploy: &Path, max_init_accounts: usize) -> Result<IndexMap<String, u64>> {
     Harness::new(deploy)?.measure(max_init_accounts)
@@ -170,7 +170,7 @@ impl Harness {
     }
 }
 
-fn set_account(
+pub(crate) fn set_account(
     svm: &mut LiteSVM,
     address: Pubkey,
     owner: Pubkey,
@@ -196,7 +196,7 @@ fn anchor_data(name: &str, size: usize) -> Vec<u8> {
     data
 }
 
-fn mint_data(authority: Pubkey) -> Vec<u8> {
+pub(crate) fn mint_data(authority: Pubkey) -> Vec<u8> {
     let mut data = vec![0; 82];
     data[..4].copy_from_slice(&1_u32.to_le_bytes());
     data[4..36].copy_from_slice(authority.as_ref());
@@ -204,7 +204,7 @@ fn mint_data(authority: Pubkey) -> Vec<u8> {
     data
 }
 
-fn token_data(mint: Pubkey, owner: Pubkey) -> Vec<u8> {
+pub(crate) fn token_data(mint: Pubkey, owner: Pubkey) -> Vec<u8> {
     let mut data = vec![0; 165];
     data[..32].copy_from_slice(mint.as_ref());
     data[32..64].copy_from_slice(owner.as_ref());
@@ -212,12 +212,12 @@ fn token_data(mint: Pubkey, owner: Pubkey) -> Vec<u8> {
     data
 }
 
-fn discriminator(namespace: &str, name: &str) -> [u8; 8] {
+pub(crate) fn discriminator(namespace: &str, name: &str) -> [u8; 8] {
     Sha256::digest(format!("{namespace}:{name}"))[..8]
         .try_into()
         .unwrap()
 }
 
-fn key(value: &str) -> Result<Pubkey> {
+pub(crate) fn key(value: &str) -> Result<Pubkey> {
     Pubkey::from_str(value).with_context(|| format!("Invalid public key {value}"))
 }

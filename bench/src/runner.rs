@@ -1,6 +1,6 @@
 use {
     crate::{
-        cases,
+        escrow,
         fixture::{self, Program, Workspace},
         litesvm, markdown,
         results::{Results, VersionResult},
@@ -186,13 +186,14 @@ impl Runner {
                     &artifacts.deploy,
                     artifacts.program.max_init_accounts(workspace.version()),
                 )?,
+                Program::Escrow => escrow::measure(&artifacts.deploy)?,
             };
             insert_results(&mut compute_units, artifacts.program, compute);
             let stack = self.measure_stack(
                 &tools.platform_tools,
                 &artifacts.stack,
                 artifacts.program.name(),
-                &cases::stack_cases(),
+                &artifacts.program.stack_cases(),
             )?;
             insert_results(&mut stack_memory, artifacts.program, stack);
         }
