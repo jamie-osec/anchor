@@ -1,5 +1,5 @@
 use {
-    crate::{cases, runner::Runner},
+    crate::runner::Runner,
     anyhow::{bail, Context, Result},
     indexmap::IndexMap,
     regex::Regex,
@@ -15,6 +15,8 @@ impl Runner {
         &self,
         platform_tools: &str,
         binary: &Path,
+        program: &str,
+        cases: &[(String, String)],
     ) -> Result<IndexMap<String, u64>> {
         let objdump = self
             .bench_dir()
@@ -33,7 +35,7 @@ impl Runner {
                 .arg(binary),
         )?;
         let symbols = self.output(Command::new(&objdump).args(["-t", "-C"]).arg(binary))?;
-        stack_sizes(&stack, &symbols)
+        stack_sizes(&stack, &symbols, program, cases)
     }
 }
 
@@ -98,30 +100,18 @@ fn parse_symbols(output: &str) -> Result<HashMap<u64, Vec<String>>> {
     Ok(symbols)
 }
 
-fn stack_sizes(stack: &str, symbols: &str) -> Result<IndexMap<String, u64>> {
+fn stack_sizes(
+    stack: &str,
+    symbols: &str,
+    program: &str,
+    cases: &[(String, String)],
+) -> Result<IndexMap<String, u64>> {
     let sizes = parse_stack_section(stack)?;
     let symbols = parse_symbols(symbols)?;
     let mut results = IndexMap::new();
 
-    for case in cases::CASES {
-        if case.init {
-            for &count in case.counts {
-                insert_stack_size(
-                    &mut results,
-                    &sizes,
-                    &symbols,
-                    &cases::instruction(case.name, true, count),
-                )?;
-            }
-        }
-        for &count in case.counts {
-            insert_stack_size(
-                &mut results,
-                &sizes,
-                &symbols,
-                &cases::instruction(case.name, false, count),
-            )?;
-        }
+    for (result, name) in cases {
+        insert_stack_size(&mut results, &sizes, &symbols, program, result, name)?;
     }
     Ok(results)
 }
@@ -130,10 +120,15 @@ fn insert_stack_size(
     results: &mut IndexMap<String, u64>,
     sizes: &HashMap<u64, u64>,
     symbols: &HashMap<u64, Vec<String>>,
-    handler: &str,
+    program: &str,
+    result: &str,
+    name: &str,
 ) -> Result<()> {
-    let name = cases::struct_name(handler);
-    let fallback = Regex::new(&format!(r"_5benchNtB\w+_{}{name}I", name.len()))?;
+    let fallback = Regex::new(&format!(
+        r"_{}{program}NtB\w+_{}{name}I",
+        program.len(),
+        name.len()
+    ))?;
     let legacy_try_accounts = Regex::new(r"::try_accounts::h[0-9a-f]+$")?;
     let matches = sizes
         .iter()
@@ -143,10 +138,11 @@ fn insert_stack_size(
                     (symbol.ends_with("::try_accounts")
                         || symbol.ends_with("E12try_accounts")
                         || legacy_try_accounts.is_match(symbol))
-                        && (symbol.contains(&format!("<bench::{name} as "))
-                            || symbol.contains(&format!("bench::{name} as anchor_lang::Accounts"))
+                        && (symbol.contains(&format!("<{program}::{name} as "))
+                            || symbol
+                                .contains(&format!("{program}::{name} as anchor_lang::Accounts"))
                             || symbol.contains(&format!(
-                                "$LT$bench..{name}$u20$as$u20$anchor_lang..Accounts"
+                                "$LT${program}..{name}$u20$as$u20$anchor_lang..Accounts"
                             ))
                             || fallback.is_match(symbol))
                 })
@@ -158,6 +154,6 @@ fn insert_stack_size(
         bail!("Expected one stack-size entry for {name}::try_accounts, found {matches:?}");
     }
     let size = *matches.iter().next().unwrap();
-    results.insert(handler.to_owned(), size);
+    results.insert(result.to_owned(), size);
     Ok(())
 }
