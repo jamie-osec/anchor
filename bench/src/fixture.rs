@@ -49,7 +49,7 @@ impl Workspace {
     }
 
     pub fn build(&self, runner: &Runner, tools: &Toolchain) -> Result<Artifacts> {
-        let help = runner.output(Command::new("cargo").args(["build-sbf", "--help"]))?;
+        let help = runner.output(Command::new("cargo-build-sbf").arg("--help"))?;
         let cargo_architecture =
             if tools.sbpf_version == "v0" && help.contains("possible values: sbfv1, sbfv2") {
                 "sbfv1"
@@ -62,9 +62,9 @@ impl Workspace {
             version => format!("sbpf{version}-solana-solana"),
         };
 
-        let mut command = Command::new("cargo");
+        let mut command = Command::new("cargo-build-sbf");
         command
-            .args(["build-sbf", "--manifest-path"])
+            .arg("--manifest-path")
             .arg(self.root.join("programs/bench/Cargo.toml"))
             .args([
                 "--tools-version",
@@ -75,6 +75,14 @@ impl Workspace {
                 "--locked",
             ])
             .current_dir(&self.root)
+            .env(
+                "CARGO",
+                runner
+                    .bench_dir()
+                    .join(".cache/avm/platform-tools")
+                    .join(&tools.platform_tools)
+                    .join("rust/bin/cargo"),
+            )
             .env("RUSTC_BOOTSTRAP", "1")
             .env(
                 format!(
@@ -83,6 +91,13 @@ impl Workspace {
                 ),
                 "-Zemit-stack-sizes",
             );
+        fs::copy(
+            runner
+                .bench_dir()
+                .join("locks")
+                .join(format!("{}.lock", self.version)),
+            self.root.join("Cargo.lock"),
+        )?;
         runner.run(&mut command)?;
 
         let deploy = [

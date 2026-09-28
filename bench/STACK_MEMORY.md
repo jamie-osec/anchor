@@ -1577,7 +1577,7 @@ Solana version: 1.18.8
 
 ## [0.29.0]
 
-Solana version: 1.17.0
+Solana version: 1.17.25
 
 **Average:** 🟢 **-293.7 (33.16%)** [-94.94%, +149.66%]
 

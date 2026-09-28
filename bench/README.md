@@ -42,3 +42,7 @@ use v3.
 Compute units are measured in-process with the workspace-pinned LiteSVM. A
 successful run updates `results.json` and regenerates the benchmark Markdown
 files in this directory.
+
+Anchor 0.30's eight-account `init` instructions exceed the legacy VM stack
+frame. Their stack measurements remain available, but compute results are
+limited to four initialized accounts.
