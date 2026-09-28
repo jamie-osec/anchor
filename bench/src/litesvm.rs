@@ -19,8 +19,8 @@ const SYSTEM_ID: &str = "11111111111111111111111111111111";
 const TOKEN_ID: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 const NATIVE_LOADER_ID: &str = "NativeLoader1111111111111111111111111111111";
 
-pub fn measure(deploy: &Path) -> Result<IndexMap<String, u64>> {
-    Harness::new(deploy)?.measure()
+pub fn measure(deploy: &Path, max_init_accounts: usize) -> Result<IndexMap<String, u64>> {
+    Harness::new(deploy)?.measure(max_init_accounts)
 }
 
 struct Harness {
@@ -75,11 +75,11 @@ impl Harness {
         })
     }
 
-    fn measure(mut self) -> Result<IndexMap<String, u64>> {
+    fn measure(mut self, max_init_accounts: usize) -> Result<IndexMap<String, u64>> {
         let mut results = IndexMap::new();
         for case in CASES {
             for &count in case.counts {
-                if case.init {
+                if case.init && count <= max_init_accounts {
                     self.measure_instruction(
                         case.kind,
                         &cases::instruction(case.name, true, count),

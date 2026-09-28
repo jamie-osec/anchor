@@ -171,10 +171,14 @@ impl Runner {
 
     fn benchmark(&self, workspace: &Workspace, tools: &Toolchain) -> Result<VersionResult> {
         let artifacts = workspace.build(self, tools)?;
+        let max_init_accounts = match workspace.version().as_str() {
+            "0.30.0" | "0.30.1" => 4,
+            _ => usize::MAX,
+        };
         Ok(VersionResult::new(
             tools,
             fs::metadata(&artifacts.deploy)?.len(),
-            litesvm::measure(&artifacts.deploy)?,
+            litesvm::measure(&artifacts.deploy, max_init_accounts)?,
             self.measure_stack(&tools.platform_tools, &artifacts.stack)?,
         ))
     }

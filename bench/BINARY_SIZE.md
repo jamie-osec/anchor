@@ -236,14 +236,14 @@ Solana version: 2.1.0
 
 Solana version: 2.1.0
 
-**Average:** 🔴 **+250,904 (31.72%)** [+31.72%, +31.72%]
+**Average:** 🔴 **+246,024 (30.91%)** [+30.91%, +30.91%]
 
 <details>
 <summary>Program results (1)</summary>
 
 | Program | Binary Size | -                        |
 | ------- | ----------- | ------------------------ |
-| bench   | 1,041,912   | 🔴 **+250,904 (31.72%)** |
+| bench   | 1,041,912   | 🔴 **+246,024 (30.91%)** |
 
 </details>
 
@@ -258,12 +258,14 @@ Solana version: 2.1.0
 
 Solana version: 1.18.17
 
-<details>
-<summary>No change</summary>
+**Average:** 🔴 **+272 (0.03%)** [+0.03%, +0.03%]
 
-| Program | Binary Size | -   |
-| ------- | ----------- | --- |
-| bench   | 791,008     | -   |
+<details>
+<summary>Program results (1)</summary>
+
+| Program | Binary Size | -                   |
+| ------- | ----------- | ------------------- |
+| bench   | 795,888     | 🔴 **+272 (0.03%)** |
 
 </details>
 
@@ -275,14 +277,14 @@ Solana version: 1.18.17
 
 Solana version: 1.18.8
 
-**Average:** 🔴 **+47,952 (6.45%)** [+6.45%, +6.45%]
+**Average:** 🔴 **+52,592 (7.08%)** [+7.08%, +7.08%]
 
 <details>
 <summary>Program results (1)</summary>
 
 | Program | Binary Size | -                      |
 | ------- | ----------- | ---------------------- |
-| bench   | 791,008     | 🔴 **+47,952 (6.45%)** |
+| bench   | 795,616     | 🔴 **+52,592 (7.08%)** |
 
 </details>
 
@@ -294,16 +296,16 @@ Solana version: 1.18.8
 
 ## [0.29.0]
 
-Solana version: 1.17.0
+Solana version: 1.17.25
 
-**Average:** 🟢 **-417,904 (36.00%)** [-36.00%, -36.00%]
+**Average:** 🟢 **-417,936 (36.00%)** [-36.00%, -36.00%]
 
 <details>
 <summary>Program results (1)</summary>
 
 | Program | Binary Size | +/-                      |
 | ------- | ----------- | ------------------------ |
-| bench   | 743,056     | 🟢 **-417,904 (36.00%)** |
+| bench   | 743,024     | 🟢 **-417,936 (36.00%)** |
 
 </details>
 
