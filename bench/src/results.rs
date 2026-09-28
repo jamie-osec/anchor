@@ -21,7 +21,7 @@ pub struct VersionResult {
     pub result: Measurements,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Measurements {
     pub binary_size: IndexMap<String, u64>,
@@ -89,7 +89,7 @@ impl Results {
 impl VersionResult {
     pub fn new(
         tools: &Toolchain,
-        binary_size: u64,
+        binary_size: IndexMap<String, u64>,
         compute_units: IndexMap<String, u64>,
         stack_memory: IndexMap<String, u64>,
     ) -> Self {
@@ -98,7 +98,7 @@ impl VersionResult {
             platform_tools_version: tools.platform_tools.clone(),
             sbpf_version: tools.sbpf_version.clone(),
             result: Measurements {
-                binary_size: IndexMap::from([("bench".into(), binary_size)]),
+                binary_size,
                 compute_units,
                 stack_memory,
             },

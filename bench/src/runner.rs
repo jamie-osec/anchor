@@ -1,12 +1,14 @@
 use {
     crate::{
-        fixture::{self, Workspace},
+        cases,
+        fixture::{self, Program, Workspace},
         litesvm, markdown,
         results::{Results, VersionResult},
         toolchain::Toolchain,
         version::Version,
     },
     anyhow::{bail, Context, Result},
+    indexmap::IndexMap,
     std::{
         env,
         fmt::Display,
@@ -171,15 +173,34 @@ impl Runner {
 
     fn benchmark(&self, workspace: &Workspace, tools: &Toolchain) -> Result<VersionResult> {
         let artifacts = workspace.build(self, tools)?;
-        let max_init_accounts = match workspace.version().as_str() {
-            "0.30.0" | "0.30.1" => 4,
-            _ => usize::MAX,
-        };
+        let mut binary_size = IndexMap::new();
+        let mut compute_units = IndexMap::new();
+        let mut stack_memory = IndexMap::new();
+        for artifacts in artifacts {
+            binary_size.insert(
+                artifacts.program.name().to_owned(),
+                fs::metadata(&artifacts.deploy)?.len(),
+            );
+            let compute = match artifacts.program {
+                Program::Bench => litesvm::measure(
+                    &artifacts.deploy,
+                    artifacts.program.max_init_accounts(workspace.version()),
+                )?,
+            };
+            insert_results(&mut compute_units, artifacts.program, compute);
+            let stack = self.measure_stack(
+                &tools.platform_tools,
+                &artifacts.stack,
+                artifacts.program.name(),
+                &cases::stack_cases(),
+            )?;
+            insert_results(&mut stack_memory, artifacts.program, stack);
+        }
         Ok(VersionResult::new(
             tools,
-            fs::metadata(&artifacts.deploy)?.len(),
-            litesvm::measure(&artifacts.deploy, max_init_accounts)?,
-            self.measure_stack(&tools.platform_tools, &artifacts.stack)?,
+            binary_size,
+            compute_units,
+            stack_memory,
         ))
     }
 
@@ -225,6 +246,18 @@ impl Runner {
             .env("AVM_HOME", self.bench_dir.join(".cache/avm"))
             .env("CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS", "fallback");
     }
+}
+
+fn insert_results(
+    target: &mut IndexMap<String, u64>,
+    program: Program,
+    source: IndexMap<String, u64>,
+) {
+    target.extend(
+        source
+            .into_iter()
+            .map(|(name, value)| (program.result_name(&name), value)),
+    );
 }
 
 fn write_file(path: &Path, contents: &[u8]) -> Result<()> {

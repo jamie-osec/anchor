@@ -151,3 +151,20 @@ pub fn struct_name(instruction: &str) -> String {
         .map(|first| first.to_ascii_uppercase().to_string() + characters.as_str())
         .unwrap_or_default()
 }
+
+pub fn stack_cases() -> Vec<(String, String)> {
+    CASES
+        .iter()
+        .flat_map(|case| {
+            case.counts.iter().flat_map(move |&count| {
+                let regular = instruction(case.name, false, count);
+                let init = case.init.then(|| instruction(case.name, true, count));
+                init.into_iter().chain(std::iter::once(regular))
+            })
+        })
+        .map(|instruction| {
+            let name = struct_name(&instruction);
+            (instruction, name)
+        })
+        .collect()
+}

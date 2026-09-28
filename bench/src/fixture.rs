@@ -9,14 +9,67 @@ use {
     },
 };
 
-const REVISIONS: &[(&str, &str)] = &[("0.29.0", "v1")];
+const BENCH_REVISIONS: &[(&str, &str)] = &[("0.29.0", "v1")];
+
+#[derive(Clone, Copy)]
+pub enum Program {
+    Bench,
+}
+
+impl Program {
+    pub const ALL: &[Self] = &[Self::Bench];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Bench => "bench",
+        }
+    }
+
+    pub fn result_name(self, name: &str) -> String {
+        match self {
+            Self::Bench => name.to_owned(),
+        }
+    }
+
+    pub fn max_init_accounts(self, version: &Version) -> usize {
+        match (self, version.as_str()) {
+            (Self::Bench, "0.30.0" | "0.30.1") => 4,
+            _ => usize::MAX,
+        }
+    }
+
+    fn revisions(self) -> &'static [(&'static str, &'static str)] {
+        match self {
+            Self::Bench => BENCH_REVISIONS,
+        }
+    }
+
+    fn revision(self, version: &Version) -> Result<&'static str> {
+        let revisions = self.revisions();
+        if version.is_unreleased() {
+            return revisions
+                .last()
+                .map(|(_, revision)| *revision)
+                .with_context(|| format!("No revisions configured for {}", self.name()));
+        }
+        let version = Semver::parse(version.as_str())?;
+        revisions
+            .iter()
+            .rev()
+            .find(|(since, _)| Semver::parse(since).is_ok_and(|since| version >= since))
+            .map(|(_, revision)| *revision)
+            .with_context(|| format!("No {} fixture supports Anchor {version}", self.name()))
+    }
+}
 
 pub struct Workspace {
     root: PathBuf,
     version: Version,
+    programs: Vec<Program>,
 }
 
 pub struct Artifacts {
+    pub program: Program,
     pub deploy: PathBuf,
     pub stack: PathBuf,
 }
@@ -25,9 +78,10 @@ impl Workspace {
     pub fn prepare(runner: &Runner, version: &Version) -> Result<Self> {
         let root = runner.bench_dir().join(".work").join(version.as_str());
         clean_workspace(&root)?;
-        copy_fixture(runner, &root, version)?;
+        let programs = Program::ALL.to_vec();
+        copy_fixtures(runner, &root, version, &programs)?;
 
-        write_dependencies(runner, &root, version)?;
+        write_dependencies(runner, &root, version, &programs)?;
 
         let lock = runner
             .bench_dir()
@@ -40,6 +94,7 @@ impl Workspace {
         Ok(Self {
             root,
             version: version.clone(),
+            programs,
         })
     }
 
@@ -51,7 +106,7 @@ impl Workspace {
         &self.version
     }
 
-    pub fn build(&self, runner: &Runner, tools: &Toolchain) -> Result<Artifacts> {
+    pub fn build(&self, runner: &Runner, tools: &Toolchain) -> Result<Vec<Artifacts>> {
         let help = runner.output(Command::new("cargo-build-sbf").arg("--help"))?;
         let cargo_architecture =
             if tools.sbpf_version == "v0" && help.contains("possible values: sbfv1, sbfv2") {
@@ -65,68 +120,83 @@ impl Workspace {
             version => format!("sbpf{version}-solana-solana"),
         };
 
-        let mut command = Command::new("cargo-build-sbf");
-        command
-            .arg("--manifest-path")
-            .arg(self.root.join("programs/bench/Cargo.toml"))
-            .args([
-                "--tools-version",
-                &tools.platform_tools,
-                "--arch",
-                cargo_architecture,
-                "--",
-                "--locked",
-            ])
-            .current_dir(&self.root)
-            .env(
-                "CARGO",
+        let mut artifacts = Vec::new();
+        for &program in &self.programs {
+            let mut command = Command::new("cargo-build-sbf");
+            command
+                .arg("--manifest-path")
+                .arg(
+                    self.root
+                        .join("programs")
+                        .join(program.name())
+                        .join("Cargo.toml"),
+                )
+                .args([
+                    "--tools-version",
+                    &tools.platform_tools,
+                    "--arch",
+                    cargo_architecture,
+                    "--",
+                    "--locked",
+                ])
+                .current_dir(&self.root)
+                .env(
+                    "CARGO",
+                    runner
+                        .bench_dir()
+                        .join(".cache/avm/platform-tools")
+                        .join(&tools.platform_tools)
+                        .join("rust/bin/cargo"),
+                )
+                .env("RUSTC_BOOTSTRAP", "1")
+                .env(
+                    format!(
+                        "CARGO_TARGET_{}_RUSTFLAGS",
+                        target.to_ascii_uppercase().replace('-', "_")
+                    ),
+                    "-Zemit-stack-sizes",
+                );
+            fs::copy(
                 runner
                     .bench_dir()
-                    .join(".cache/avm/platform-tools")
-                    .join(&tools.platform_tools)
-                    .join("rust/bin/cargo"),
-            )
-            .env("RUSTC_BOOTSTRAP", "1")
-            .env(
-                format!(
-                    "CARGO_TARGET_{}_RUSTFLAGS",
-                    target.to_ascii_uppercase().replace('-', "_")
-                ),
-                "-Zemit-stack-sizes",
-            );
-        fs::copy(
-            runner
-                .bench_dir()
-                .join("locks")
-                .join(format!("{}.lock", self.version)),
-            self.root.join("Cargo.lock"),
-        )?;
-        runner.run(&mut command)?;
+                    .join("locks")
+                    .join(format!("{}.lock", self.version)),
+                self.root.join("Cargo.lock"),
+            )?;
+            runner.run(&mut command)?;
 
-        let deploy = [
-            self.root.join("target/deploy/bench.so"),
-            self.root.join("deploy/bench.so"),
-        ]
-        .into_iter()
-        .find(|path| path.is_file())
-        .context("cargo build-sbf did not produce target/deploy/bench.so")?;
-        let stack = self
-            .root
-            .join("target")
-            .join(target)
-            .join("release/bench.so");
-        if !stack.is_file() {
-            bail!("Could not locate the unstripped SBF artifact");
+            let name = program.name();
+            let deploy = [
+                self.root.join(format!("target/deploy/{name}.so")),
+                self.root.join(format!("deploy/{name}.so")),
+            ]
+            .into_iter()
+            .find(|path| path.is_file())
+            .with_context(|| format!("cargo build-sbf did not produce {name}.so"))?;
+            let stack = self
+                .root
+                .join("target")
+                .join(&target)
+                .join(format!("release/{name}.so"));
+            if !stack.is_file() {
+                bail!("Could not locate the unstripped {name} SBF artifact");
+            }
+            artifacts.push(Artifacts {
+                program,
+                deploy,
+                stack,
+            });
         }
-        Ok(Artifacts { deploy, stack })
+        Ok(artifacts)
     }
 }
 
 pub fn generate_lock(runner: &Runner) -> Result<Vec<u8>> {
     let temporary = tempfile::tempdir()?;
     let root = temporary.path().join("fixture");
-    copy_fixture(runner, &root, &Version::Unreleased)?;
-    write_dependencies(runner, &root, &Version::Unreleased)?;
+    let programs = Program::ALL.to_vec();
+    copy_fixtures(runner, &root, &Version::Unreleased, &programs)?;
+    write_dependencies(runner, &root, &Version::Unreleased, &programs)?;
     runner.run(
         Command::new("cargo")
             .args(["generate-lockfile", "--manifest-path"])
@@ -136,54 +206,59 @@ pub fn generate_lock(runner: &Runner) -> Result<Vec<u8>> {
     Ok(fs::read(root.join("Cargo.lock"))?)
 }
 
-fn copy_fixture(runner: &Runner, root: &Path, version: &Version) -> Result<()> {
+fn copy_fixtures(
+    runner: &Runner,
+    root: &Path,
+    version: &Version,
+    programs: &[Program],
+) -> Result<()> {
     let fixture = runner.bench_dir().join("fixture");
     fs::create_dir_all(root)?;
     fs::copy(fixture.join("Cargo.toml"), root.join("Cargo.toml"))?;
-    copy_dir(
-        &fixture
-            .join("programs/bench")
-            .join(fixture_revision(version)?),
-        &root.join("programs/bench"),
-    )
+    for &program in programs {
+        copy_dir(
+            &fixture
+                .join("programs")
+                .join(program.name())
+                .join(program.revision(version)?),
+            &root.join("programs").join(program.name()),
+        )?;
+    }
+    Ok(())
 }
 
-fn fixture_revision(version: &Version) -> Result<&'static str> {
-    if version.is_unreleased() {
-        return REVISIONS
-            .last()
-            .map(|(_, revision)| *revision)
-            .context("No benchmark fixture revisions are configured");
+fn write_dependencies(
+    runner: &Runner,
+    root: &Path,
+    version: &Version,
+    programs: &[Program],
+) -> Result<()> {
+    for program in programs {
+        let manifest = root
+            .join("programs")
+            .join(program.name())
+            .join("Cargo.toml");
+        let mut contents = fs::read_to_string(&manifest)?;
+        for (name, path) in [("anchor-lang", "lang"), ("anchor-spl", "spl")] {
+            let dependency = if version.is_unreleased() {
+                format!(
+                    "{name} = {{ path = {} }}",
+                    serde_json::to_string(
+                        &runner.repo().join(path).canonicalize()?.to_string_lossy()
+                    )?
+                )
+            } else if version.as_str() == "1.1.0" {
+                format!(
+                    "{name} = {{ git = \"https://github.com/otter-sec/anchor\", tag = \
+                     \"v{version}\" }}"
+                )
+            } else {
+                format!("{name} = \"={version}\"")
+            };
+            contents = contents.replace(&format!("{name} = \"=0.0.0\""), &dependency);
+        }
+        fs::write(&manifest, contents)?;
     }
-    let version = Semver::parse(version.as_str())?;
-    REVISIONS
-        .iter()
-        .rev()
-        .find(|(since, _)| Semver::parse(since).is_ok_and(|since| version >= since))
-        .map(|(_, revision)| *revision)
-        .with_context(|| format!("No benchmark fixture supports Anchor {version}"))
-}
-
-fn write_dependencies(runner: &Runner, root: &Path, version: &Version) -> Result<()> {
-    let manifest = root.join("programs/bench/Cargo.toml");
-    let mut contents = fs::read_to_string(&manifest)?;
-    for (name, path) in [("anchor-lang", "lang"), ("anchor-spl", "spl")] {
-        let dependency = if version.is_unreleased() {
-            format!(
-                "{name} = {{ path = {} }}",
-                serde_json::to_string(&runner.repo().join(path).canonicalize()?.to_string_lossy())?
-            )
-        } else if version.as_str() == "1.1.0" {
-            format!(
-                "{name} = {{ git = \"https://github.com/otter-sec/anchor\", tag = \"v{version}\" \
-                 }}"
-            )
-        } else {
-            format!("{name} = \"={version}\"")
-        };
-        contents = contents.replace(&format!("{name} = \"=0.0.0\""), &dependency);
-    }
-    fs::write(&manifest, contents)?;
     Ok(())
 }
 
