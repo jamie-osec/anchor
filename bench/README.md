@@ -37,7 +37,8 @@ lockfile.
 runnable when it has a lockfile in `locks/`. The fixture depends directly on the
 selected Anchor crates, while AVM installs the matching Solana and
 platform-tools versions. Builds before Anchor 1.2.0 use SBPF v0; newer builds
-use v3.
+use v3. Program revisions live under `fixture/programs/<program>/<revision>`;
+the runner selects the newest revision compatible with the Anchor version.
 
 Compute units are measured in-process with the workspace-pinned LiteSVM. A
 successful run updates `results.json` and regenerates the benchmark Markdown

@@ -1,12 +1,15 @@
 use {
     crate::{runner::Runner, toolchain::Toolchain, version::Version},
     anyhow::{bail, Context, Result},
+    semver::Version as Semver,
     std::{
         fs,
         path::{Path, PathBuf},
         process::Command,
     },
 };
+
+const REVISIONS: &[(&str, &str)] = &[("0.29.0", "v1")];
 
 pub struct Workspace {
     root: PathBuf,
@@ -22,7 +25,7 @@ impl Workspace {
     pub fn prepare(runner: &Runner, version: &Version) -> Result<Self> {
         let root = runner.bench_dir().join(".work").join(version.as_str());
         clean_workspace(&root)?;
-        copy_dir(&runner.bench_dir().join("fixture"), &root)?;
+        copy_fixture(runner, &root, version)?;
 
         write_dependencies(runner, &root, version)?;
 
@@ -122,7 +125,7 @@ impl Workspace {
 pub fn generate_lock(runner: &Runner) -> Result<Vec<u8>> {
     let temporary = tempfile::tempdir()?;
     let root = temporary.path().join("fixture");
-    copy_dir(&runner.bench_dir().join("fixture"), &root)?;
+    copy_fixture(runner, &root, &Version::Unreleased)?;
     write_dependencies(runner, &root, &Version::Unreleased)?;
     runner.run(
         Command::new("cargo")
@@ -131,6 +134,34 @@ pub fn generate_lock(runner: &Runner) -> Result<Vec<u8>> {
             .current_dir(&root),
     )?;
     Ok(fs::read(root.join("Cargo.lock"))?)
+}
+
+fn copy_fixture(runner: &Runner, root: &Path, version: &Version) -> Result<()> {
+    let fixture = runner.bench_dir().join("fixture");
+    fs::create_dir_all(root)?;
+    fs::copy(fixture.join("Cargo.toml"), root.join("Cargo.toml"))?;
+    copy_dir(
+        &fixture
+            .join("programs/bench")
+            .join(fixture_revision(version)?),
+        &root.join("programs/bench"),
+    )
+}
+
+fn fixture_revision(version: &Version) -> Result<&'static str> {
+    if version.is_unreleased() {
+        return REVISIONS
+            .last()
+            .map(|(_, revision)| *revision)
+            .context("No benchmark fixture revisions are configured");
+    }
+    let version = Semver::parse(version.as_str())?;
+    REVISIONS
+        .iter()
+        .rev()
+        .find(|(since, _)| Semver::parse(since).is_ok_and(|since| version >= since))
+        .map(|(_, revision)| *revision)
+        .with_context(|| format!("No benchmark fixture supports Anchor {version}"))
 }
 
 fn write_dependencies(runner: &Runner, root: &Path, version: &Version) -> Result<()> {
