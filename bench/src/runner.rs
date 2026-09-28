@@ -113,6 +113,13 @@ impl Runner {
             .with_context(|| format!("No benchmark result for Anchor {version}"))
     }
 
+    pub fn platform_tools_version(&self, version: &Version) -> Result<&str> {
+        self.results
+            .get(version)
+            .map(|result| result.platform_tools_version.as_str())
+            .with_context(|| format!("No benchmark result for Anchor {version}"))
+    }
+
     pub fn run_benchmarks(&mut self, versions: &[Version], check: bool) -> Result<bool> {
         let mut exceeds_threshold = false;
 

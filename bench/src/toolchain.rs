@@ -1,8 +1,8 @@
 use {
     crate::{fixture::Workspace, runner::Runner},
-    anyhow::{bail, Result},
+    anyhow::{bail, Context, Result},
     regex::Regex,
-    std::{env, path::PathBuf, process::Command},
+    std::{env, fs, path::PathBuf, process::Command},
 };
 
 pub struct Toolchain {
@@ -39,20 +39,24 @@ impl Runner {
 
     pub fn resolve_toolchain(&self, workspace: &Workspace) -> Result<Toolchain> {
         let solana = self.solana_version(workspace.version())?.to_owned();
-        let platform_tools = parse_platform_tools_resolution(
-            &self.output(
-                Command::new(self.avm()?)
-                    .args([
-                        "platform-tools",
-                        "resolve",
-                        "--solana-version",
-                        &solana,
-                        "--output",
-                        "version",
-                    ])
-                    .current_dir(workspace.root()),
-            )?,
-        )?;
+        let platform_tools = if workspace.version().is_unreleased() {
+            parse_platform_tools_resolution(
+                &self.output(
+                    Command::new(self.avm()?)
+                        .args([
+                            "platform-tools",
+                            "resolve",
+                            "--solana-version",
+                            &solana,
+                            "--output",
+                            "version",
+                        ])
+                        .current_dir(workspace.root()),
+                )?,
+            )?
+        } else {
+            self.platform_tools_version(workspace.version())?.to_owned()
+        };
         Ok(Toolchain {
             solana,
             platform_tools,
@@ -70,7 +74,34 @@ impl Runner {
             Command::new(self.avm()?)
                 .args(["platform-tools", "install", &tools.platform_tools])
                 .current_dir(workspace.root()),
-        )
+        )?;
+        self.link_platform_tools(&tools.platform_tools)
+    }
+
+    fn link_platform_tools(&self, version: &str) -> Result<()> {
+        let source = self
+            .bench_dir()
+            .join(".cache/avm/platform-tools")
+            .join(version);
+        if !source.is_dir() {
+            bail!(
+                "AVM did not install platform-tools {version} at {}",
+                source.display()
+            );
+        }
+        let home = env::var_os("HOME").context("HOME is not set")?;
+        let cache = PathBuf::from(home).join(".cache/solana").join(version);
+        let destination = cache.join("platform-tools");
+        if destination.exists() {
+            return Ok(());
+        }
+
+        fs::create_dir_all(cache)?;
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&source, &destination)?;
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_dir(&source, &destination)?;
+        Ok(())
     }
 
     pub fn active_solana(&self) -> Option<String> {
