@@ -64,7 +64,7 @@ const IDL_PATH = path.join("target", "idl", "bench.json");
       }
     );
     const platformToolsOutput = platformToolsResult.stdout.toString().trim();
-    if (!/^v\d+\.\d+$/.test(platformToolsOutput)) {
+    if (!/^v\d+\.\d+(?:\.\d+)?$/.test(platformToolsOutput)) {
       throw new Error(
         `AVM returned an invalid platform-tools version: ${platformToolsOutput}.`
       );

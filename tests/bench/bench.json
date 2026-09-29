@@ -3188,7 +3188,7 @@
     "platformToolsVersion": "v1.57",
     "result": {
       "binarySize": {
-        "bench": 891144
+        "bench": 800288
       },
       "computeUnits": {
         "accountInfo1": 588,
