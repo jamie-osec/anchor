@@ -13,6 +13,7 @@ import {
 
 /** Message-level resource limits and priority fee for transaction-v1. */
 export type V1TransactionConfig = {
+  /** Defaults to 200,000 when omitted during v1 compilation. */
   computeUnitLimit?: number;
   heapSize?: number;
   loadedAccountsDataSizeLimit?: number;
@@ -75,7 +76,10 @@ export function toTransaction(
       })),
       data: Uint8Array.from(instruction.data),
     })) as never,
-  }).compileToV1Message(options.transactionConfig as never);
+  }).compileToV1Message({
+    ...options.transactionConfig,
+    computeUnitLimit: options.transactionConfig.computeUnitLimit ?? 200_000,
+  } as never);
 
   return new V1VersionedTransaction(message) as unknown as V1Transaction;
 }
