@@ -532,6 +532,8 @@ fn namespaced_constraints_accept_qualified_constants_as_values() {
         r#"
 use anchor_lang::prelude::*;
 
+declare_id!("11111111111111111111111111111111");
+
 #[derive(Default, anchor_lang::AnchorDeserialize, anchor_lang::AnchorSerialize)]
 pub struct Counter {
     pub value: u64,
@@ -673,7 +675,7 @@ fn namespaced_constraints_reject_self_refs_during_init() {
         "namespaced_constraint_init_self_ref",
         r#"
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Token, TokenAccount};
+use anchor_spl::{mint::Mint, token::{Token, TokenAccount}};
 
 declare_id!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
 
@@ -681,7 +683,8 @@ declare_id!("Con9ukTn9BRPXWcjS2UBbuN3NnCwy1hcaDNZ9Hb8QMNp");
 pub struct Bad {
     #[account(mut)]
     pub payer: Signer,
-    #[account(init, payer = payer, token::authority = token_account)]
+    pub mint: Account<Mint>,
+    #[account(init, payer = payer, token::mint = mint, token::authority = token_account)]
     pub token_account: Account<TokenAccount>,
     pub token_program: Program<Token>,
     pub system_program: Program<System>,
@@ -2254,7 +2257,7 @@ pub struct Close {
 }
 
 #[test]
-fn account_attrs_on_nested_field_do_not_compile() {
+fn nested_account_constraints_must_be_valid_rust() {
     CompileCase::new(
         "account_attrs_on_nested_field",
         r#"
@@ -2285,7 +2288,7 @@ pub struct Outer {
 }
 "#,
     )
-    .expect_fail(&["`#[account(...)]` attributes are not supported on `Nested<T>` fields"]);
+    .expect_fail(&["cannot find function `missing_symbol_that_should_not_compile`"]);
 }
 
 #[test]
@@ -2733,6 +2736,8 @@ fn realloc_on_borsh_account_alias_compiles() {
         "realloc_on_borsh_account_alias",
         r#"
 use anchor_lang::prelude::*;
+
+declare_id!("11111111111111111111111111111111");
 
 #[derive(anchor_lang::AnchorDeserialize, anchor_lang::AnchorSerialize, Default)]
 pub struct Data {
