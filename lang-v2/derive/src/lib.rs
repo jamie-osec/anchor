@@ -3086,7 +3086,7 @@ fn collect_declare_account_group(
             let nested_ident = Ident::new(&generated_nested_name, span);
             fields.push(DeclareAccountField {
                 name: ident,
-                ty: quote! { anchor_lang::Nested<#nested_ident> },
+                ty: quote! { #nested_ident },
                 attrs: quote! {},
             });
             continue;

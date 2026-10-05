@@ -1190,6 +1190,33 @@ fn declare_program_account_group_variants_do_not_collide_with_existing_types() {
 }
 
 #[test]
+fn declare_program_emits_direct_nested_account_groups() {
+    CompileCase::new(
+        "declare_program_direct_nested_groups",
+        r#"
+use anchor_lang::prelude::*;
+declare_program!(bad);
+
+pub fn take_inner(accounts: bad::Ix) -> bad::Inner {
+    accounts.inner
+}
+"#,
+    )
+    .file(
+        "idls/bad.json",
+        r#"{
+  "address": "11111111111111111111111111111111",
+  "metadata": { "name": "bad", "version": "0.1.0", "spec": "0.1.0" },
+  "instructions": [{
+    "name": "ix", "discriminator": [1], "args": [],
+    "accounts": [{ "name": "inner", "accounts": [{ "name": "data" }] }]
+  }]
+}"#,
+    )
+    .expect_pass();
+}
+
+#[test]
 fn event_bytemuck_rejects_host_padding_layouts() {
     CompileCase::new(
         "event_bytemuck_rejects_host_padding_layouts",
