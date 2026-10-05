@@ -597,6 +597,13 @@ unsafe impl<T: bytemuck::Pod, const MAX: usize> bytemuck::Zeroable for PodVec<T,
 // padding when the prefix-to-element transition is padding-free.
 unsafe impl<T: PodVecElement, const MAX: usize> bytemuck::Pod for PodVec<T, MAX> {}
 
+impl<T: PodVecElement + crate::PodLayout, const MAX: usize> crate::PodLayout for PodVec<T, MAX> {
+    const CHECK: () = {
+        let () = T::CHECK;
+        let _ = Self::CAPACITY;
+    };
+}
+
 /// Error returned when pushing to a full `PodVec`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CapacityError;

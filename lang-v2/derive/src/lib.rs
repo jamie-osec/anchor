@@ -1978,31 +1978,6 @@ pub fn account(attr: TokenStream, item: TokenStream) -> TokenStream {
             quote! {},
         )
     } else {
-        // Targeted diagnostics for common non-Pod field types. Emits a
-        // `compile_error!` with a concrete suggestion instead of letting the
-        // user hit an opaque `the trait bound Vec<u8>: Pod is not satisfied`.
-        // Intentionally avoids recommending `#[account(borsh)]` — borsh is a
-        // per-instruction serialization cost, rarely what the user actually
-        // wants. The fix is almost always a Pod-compatible alternative.
-        let field_diagnostics: Vec<proc_macro2::TokenStream> = if let Fields::Named(named) = fields
-        {
-            named
-                .named
-                .iter()
-                .filter_map(|field| {
-                    let field_name = field.ident.as_ref()?.to_string();
-                    let msg = diagnose_non_pod_field(&field.ty, &field_name, &name_str)?;
-                    let cfg_attrs = cfg_attrs(&field.attrs);
-                    let span = field.ty.span();
-                    Some(quote::quote_spanned!(span=>
-                        #(#cfg_attrs)*
-                        const _: () = { compile_error!(#msg); };
-                    ))
-                })
-                .collect()
-        } else {
-            Vec::new()
-        };
         let field_pod_asserts: Vec<proc_macro2::TokenStream> = if let Fields::Named(named) = fields
         {
             named
@@ -2014,7 +1989,7 @@ pub fn account(attr: TokenStream, item: TokenStream) -> TokenStream {
                     quote! {
                         #(#cfg_attrs)*
                         const _: fn() = || {
-                            fn assert_pod<T: anchor_lang::bytemuck::Pod>() {}
+                            fn assert_pod<T: anchor_lang::PodLayout>() {}
                             assert_pod::<#ty>();
                         };
                     }
@@ -2030,11 +2005,10 @@ pub fn account(attr: TokenStream, item: TokenStream) -> TokenStream {
                 .map(|field| {
                     let ty = &field.ty;
                     let cfg_attrs = cfg_attrs(&field.attrs);
-                    let capacity_check = pod_vec_capacity_check(ty);
                     quote! {
                         #(#cfg_attrs)*
                         {
-                            #capacity_check
+                            let () = <#ty as anchor_lang::PodLayout>::CHECK;
                             __size += core::mem::size_of::<#ty>();
                         }
                     }
@@ -2047,7 +2021,6 @@ pub fn account(attr: TokenStream, item: TokenStream) -> TokenStream {
         (
             quote! { #[derive(Clone, Copy)] #[repr(C)] },
             quote! {
-                #(#field_diagnostics)*
                 #(#field_pod_asserts)*
                 // Verify no padding: struct size must equal sum of field sizes.
                 // repr(C) inserts padding between fields with different alignments
@@ -2063,6 +2036,7 @@ pub fn account(attr: TokenStream, item: TokenStream) -> TokenStream {
                 };
                 unsafe impl anchor_lang::bytemuck::Pod for #name {}
                 unsafe impl anchor_lang::bytemuck::Zeroable for #name {}
+                impl anchor_lang::PodLayout for #name {}
             },
         )
     };
@@ -2361,65 +2335,6 @@ fn has_repr_c(attrs: &[syn::Attribute]) -> bool {
         })
         .flatten()
         .any(|meta| matches!(meta, Meta::Path(path) if path.is_ident("C")))
-}
-
-/// Syntactic diagnosis for common non-Pod field types on `#[account]` structs.
-/// Produces a targeted, actionable error message when we can recognize the
-/// shape of the offending type (Vec, String, Option, Box, bool, etc.). Falls
-/// through to `None` for types we can't identify by name — the surrounding
-/// `assert_pod::<T>` check in the macro output catches those generically.
-///
-/// Intentionally never suggests `#[account(borsh)]`: borsh accounts incur a
-/// per-instruction (de)serialization cost that's rarely what a user actually
-/// wants. The fix for "this field isn't Pod" is almost always a Pod-
-/// compatible alternative (fixed-size array, sentinel value, `PodBool`, a
-/// `Slab<H, T>` tail, etc.).
-fn diagnose_non_pod_field(ty: &Type, field_name: &str, struct_name: &str) -> Option<String> {
-    let Type::Path(tp) = ty else { return None };
-    let seg = tp.path.segments.last()?;
-    let ident = seg.ident.to_string();
-    match ident.as_str() {
-        "Vec" => Some(format!(
-            "field `{field_name}` on `#[account] struct {struct_name}` uses `Vec`, which \
-             allocates on the heap and isn't Pod. Zero-copy accounts need fixed-size fields. Use \
-             `[T; N]` for a bounded array, or restructure `{struct_name}` as `Slab<Header, T>` if \
-             you need a dynamic tail."
-        )),
-        "String" => Some(format!(
-            "field `{field_name}` on `#[account] struct {struct_name}` uses `String`, which \
-             allocates on the heap and isn't Pod. Use a fixed-size `[u8; N]` buffer to store \
-             string data in a zero-copy account."
-        )),
-        "Option" => Some(format!(
-            "field `{field_name}` on `#[account] struct {struct_name}` uses `Option`, which \
-             carries a discriminant byte that breaks the zero-copy layout contract. Use a \
-             sentinel value (e.g. an all-zero `[u8; 32]` for \"no address\") or a `PodBool` flag \
-             stored alongside the value."
-        )),
-        "Box" | "Rc" | "Arc" => Some(format!(
-            "field `{field_name}` on `#[account] struct {struct_name}` uses `{ident}`, which \
-             heap-allocates and isn't valid in a zero-copy account. Store the inner type directly."
-        )),
-        "bool" => Some(format!(
-            "field `{field_name}` on `#[account] struct {struct_name}` uses `bool`. `bytemuck` \
-             disallows `bool` as Pod because only `0x00` and `0x01` are valid bit-patterns (any \
-             other byte read as `bool` is UB). Use `anchor_lang::PodBool` instead."
-        )),
-        _ => None,
-    }
-}
-
-/// Force the capacity invariant while evaluating the account's layout const,
-/// even if no `PodVec` methods are used. Rust resolves and evaluates `MAX`,
-/// including named constants and const expressions that the macro cannot
-/// evaluate from syntax alone.
-fn pod_vec_capacity_check(ty: &Type) -> Option<TokenStream2> {
-    let Type::Path(tp) = ty else { return None };
-    let seg = tp.path.segments.last()?;
-    if seg.ident != "PodVec" {
-        return None;
-    }
-    Some(quote::quote_spanned!(ty.span()=> let _ = <#ty>::CAPACITY;))
 }
 
 // ---------------------------------------------------------------------------
@@ -4118,6 +4033,7 @@ fn gen_declare_program_pod_impls(
         return Ok(quote! {
             unsafe impl #impl_generics anchor_lang::bytemuck::Pod for #ident #ty_generics #where_clause {}
             unsafe impl #impl_generics anchor_lang::bytemuck::Zeroable for #ident #ty_generics #where_clause {}
+            impl #impl_generics anchor_lang::PodLayout for #ident #ty_generics #where_clause {}
         });
     }
 
@@ -4146,6 +4062,11 @@ fn gen_declare_program_pod_impls(
             #(#field_types: anchor_lang::bytemuck::Pod
                 + anchor_lang::bytemuck::Zeroable),*
         }
+    };
+    let layout_where_clause = if where_clause.is_empty() {
+        quote! {}
+    } else {
+        quote! { #where_clause, #(#field_types: anchor_lang::PodLayout,)* }
     };
     // Item-level `const _: ()` is always evaluated. An unused associated const
     // on an `impl` is not, so the previous padding `assert!` never ran.
@@ -4179,6 +4100,12 @@ fn gen_declare_program_pod_impls(
         #touch_no_padding
         unsafe impl #impl_generics anchor_lang::bytemuck::Pod for #ident #ty_generics #where_clause {}
         unsafe impl #impl_generics anchor_lang::bytemuck::Zeroable for #ident #ty_generics #where_clause {}
+        impl #impl_generics anchor_lang::PodLayout for #ident #ty_generics #layout_where_clause {
+            const CHECK: () = {
+                #(let () = <#field_types as anchor_lang::PodLayout>::CHECK;)*
+                let () = Self::__ANCHOR_DECLARE_PROGRAM_NO_PADDING;
+            };
+        }
     })
 }
 
@@ -5843,29 +5770,6 @@ pub fn event(attr: TokenStream, item: TokenStream) -> TokenStream {
             #idl_event_print
         }),
         EventMode::Bytemuck => {
-            // Targeted diagnostics for common non-Pod field types. Fires
-            // *before* the generic `assert_pod::<T>` bound so users hit a
-            // field-specific migration hint instead of the opaque
-            // `Vec<u8>: Pod is not satisfied` error. Mirrors the pattern in
-            // `#[account]` zero-copy codegen. Borsh mode is suggested here
-            // because (unlike `#[account]`) events have a correct dynamic
-            // fallback — see `diagnose_non_pod_event_field`.
-            let field_diagnostics: Vec<_> = fields
-                .iter()
-                .filter_map(|field| {
-                    let field_name = field
-                        .ident
-                        .as_ref()
-                        .map(|i| i.to_string())
-                        .unwrap_or_default();
-                    let msg = diagnose_non_pod_event_field(&field.ty, &field_name)?;
-                    let cfg_attrs = cfg_attrs(&field.attrs);
-                    Some(quote! {
-                        #(#cfg_attrs)*
-                        ::core::compile_error!(#msg);
-                    })
-                })
-                .collect();
             let field_pod_asserts: Vec<_> = fields
                 .iter()
                 .map(|field| {
@@ -5874,7 +5778,7 @@ pub fn event(attr: TokenStream, item: TokenStream) -> TokenStream {
                     quote! {
                         #(#cfg_attrs)*
                         const _: fn() = || {
-                            fn assert_pod<T: anchor_lang::bytemuck::Pod>() {}
+                            fn assert_pod<T: anchor_lang::PodLayout>() {}
                             assert_pod::<#ty>();
                         };
                     }
@@ -5888,6 +5792,7 @@ pub fn event(attr: TokenStream, item: TokenStream) -> TokenStream {
                     quote! {
                         #(#cfg_attrs)*
                         {
+                            let () = <#ty as anchor_lang::PodLayout>::CHECK;
                             __size += ::core::mem::size_of::<#ty>();
                         }
                     }
@@ -5914,11 +5819,6 @@ pub fn event(attr: TokenStream, item: TokenStream) -> TokenStream {
                 #[derive(::core::clone::Clone, ::core::marker::Copy)]
                 #(#attrs)*
                 #vis struct #name #fields
-
-                // Targeted diagnostics fire first so users see a specific
-                // migration hint (e.g. "drop `bytemuck` for dynamic strings")
-                // instead of bytemuck's opaque `Pod not satisfied`.
-                #(#field_diagnostics)*
 
                 // Transitive Pod bound per field — catches fat pointers even
                 // when hidden inside an opaque user-defined struct (the
@@ -5976,6 +5876,7 @@ pub fn event(attr: TokenStream, item: TokenStream) -> TokenStream {
                 // bytemuck's generic trait errors.
                 unsafe impl anchor_lang::bytemuck::Pod for #name {}
                 unsafe impl anchor_lang::bytemuck::Zeroable for #name {}
+                impl anchor_lang::PodLayout for #name {}
 
                 #discriminator_impl
 
@@ -6122,58 +6023,6 @@ fn is_valid_event_name(name: &str) -> bool {
     let mut chars = name.chars();
     matches!(chars.next(), Some(c) if c == '_' || c.is_ascii_alphabetic())
         && chars.all(|c| c == '_' || c.is_ascii_alphanumeric())
-}
-
-/// Targeted diagnostics for common non-Pod field types on
-/// `#[event(bytemuck)]` structs. Bytemuck mode is strict by design —
-/// `Vec`/`String`/`Option`/etc. can't round-trip through a `copy_nonoverlapping`
-/// of the struct bytes. The hint steers authors to drop the `bytemuck` flag
-/// (getting the wincode default, which handles these fine). Returns `None`
-/// for types we can't recognize by name — the `assert_pod::<T>` bound
-/// catches those generically via `bytemuck::Pod`.
-fn diagnose_non_pod_event_field(ty: &Type, field_name: &str) -> Option<String> {
-    let Type::Path(tp) = ty else { return None };
-    let seg = tp.path.segments.last()?;
-    let ident = seg.ident.to_string();
-    match ident.as_str() {
-        "Vec" => Some(format!(
-            "event field `{field_name}` uses `Vec`, which is a fat pointer — the \
-             `#[event(bytemuck)]` memcpy path would emit the `(ptr, len, cap)` bits instead of \
-             the elements. Use `[T; N]` for a fixed-size array, or drop the `bytemuck` attribute \
-             to use the default wincode encoding, which handles `Vec` natively."
-        )),
-        "String" => Some(format!(
-            "event field `{field_name}` uses `String`, which is a fat pointer — the \
-             `#[event(bytemuck)]` memcpy path would emit the `(ptr, len, cap)` bits instead of \
-             the UTF-8 bytes. Use `[u8; N]` for a bounded buffer, or drop the `bytemuck` \
-             attribute to use the default wincode encoding, which handles `String` natively."
-        )),
-        "Option" => Some(format!(
-            "event field `{field_name}` uses `Option`, whose niche-or-tag layout isn't guaranteed \
-             to match the client decoder. Use a sentinel value (e.g. an all-zero `[u8; 32]` for \
-             \"no address\"), or drop the `bytemuck` attribute to use the default wincode \
-             encoding."
-        )),
-        "Box" | "Rc" | "Arc" | "Cow" | "Weak" => Some(format!(
-            "event field `{field_name}` uses `{ident}`, which is a heap/shared pointer — its \
-             bytes are a pointer, not the referenced data. Inline the value directly (`T` instead \
-             of `{ident}<T>`), or drop the `bytemuck` attribute to use the default wincode \
-             encoding."
-        )),
-        "HashMap" | "HashSet" | "BTreeMap" | "BTreeSet" | "BinaryHeap" | "LinkedList"
-        | "VecDeque" => Some(format!(
-            "event field `{field_name}` uses `{ident}`, which allocates on the heap. Drop the \
-             `bytemuck` attribute to use the default wincode encoding, which handles dynamic \
-             collections."
-        )),
-        "bool" => Some(format!(
-            "event field `{field_name}` is `bool`. `bytemuck` disallows `bool` as Pod because \
-             only `0x00` and `0x01` are valid — any other byte is UB. Use a `u8` and treat `0` / \
-             non-zero as the boolean, or drop the `bytemuck` attribute to use the default wincode \
-             encoding."
-        )),
-        _ => None,
-    }
 }
 
 // ---------------------------------------------------------------------------

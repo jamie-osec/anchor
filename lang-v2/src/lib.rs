@@ -6,6 +6,9 @@
 extern crate alloc;
 extern crate self as anchor_lang;
 
+mod pod_layout;
+pub use pod_layout::PodLayout;
+
 mod account_field;
 pub use account_field::{AccountField, AccountSlot, PdaPayer};
 pub mod accounts;

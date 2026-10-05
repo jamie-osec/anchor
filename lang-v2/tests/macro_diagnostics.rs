@@ -2017,3 +2017,65 @@ mod tests {
         &["idl-build"],
     );
 }
+
+#[test]
+#[cfg_attr(miri, ignore = "spawns cargo")]
+fn zero_copy_checks_resolved_layouts_instead_of_type_names() {
+    compile_pass_case(
+        "pod_fields_named_like_collections",
+        r#"
+use anchor_lang::prelude::*;
+declare_id!("11111111111111111111111111111111");
+mod custom {
+    use super::*;
+    #[account]
+    pub struct Vec { pub value: u64 }
+    #[account]
+    pub struct String { pub value: u64 }
+}
+type Value = custom::Vec;
+#[account]
+pub struct State { pub value: Value, pub text: custom::String }
+#[event(bytemuck)]
+pub struct Changed { pub value: Value }
+"#,
+    );
+    compile_fail_case(
+        "aliased_podvec_capacity",
+        r#"
+use anchor_lang::prelude::*;
+declare_id!("11111111111111111111111111111111");
+type Items = PodVec<u8, 70000>;
+#[account]
+pub struct State { pub items: Items }
+"#,
+        &["MAX must be <= 65_535"],
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore = "spawns cargo")]
+fn bounded_space_rejects_missing_and_surplus_capacities() {
+    compile_fail_case(
+        "aliased_space_missing_capacity",
+        r#"
+use anchor_lang::prelude::*;
+type Text = String;
+#[derive(InitSpace)]
+pub struct State { pub text: Text }
+const _: usize = State::INIT_SPACE;
+"#,
+        &["max_len"],
+    );
+    compile_fail_case(
+        "aliased_space_surplus_capacity",
+        r#"
+use anchor_lang::prelude::*;
+type Text = String;
+#[derive(InitSpace)]
+pub struct State { #[max_len(1, 2)] pub text: Text }
+const _: usize = State::INIT_SPACE;
+"#,
+        &["too many max_len capacities"],
+    );
+}

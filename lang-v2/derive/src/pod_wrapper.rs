@@ -181,6 +181,7 @@ pub fn expand(item: TokenStream) -> TokenStream {
         // cast time — so `bytemuck`'s zero-copy cast is always sound.
         unsafe impl anchor_lang::bytemuck::Pod for #pod_name {}
         unsafe impl anchor_lang::bytemuck::Zeroable for #pod_name {}
+        impl anchor_lang::PodLayout for #pod_name {}
 
         impl #pod_name {
             #(#variant_consts)*
