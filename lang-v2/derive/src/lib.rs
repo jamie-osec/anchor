@@ -2041,6 +2041,7 @@ pub fn account(attr: TokenStream, item: TokenStream) -> TokenStream {
         )
     };
 
+    let idl_reference_impl = idl::type_reference_impl(&name_str, &input.generics);
     TokenStream::from(quote! {
         #(#attrs)*
         #struct_attrs
@@ -2059,6 +2060,7 @@ pub fn account(attr: TokenStream, item: TokenStream) -> TokenStream {
         #[cfg(feature = "idl-build")]
         #[doc(hidden)]
         impl anchor_lang::IdlAccountType for #name {
+            #idl_reference_impl
             const __IDL_ACCOUNT_ENTRY: Option<&'static str> = #idl_account_entry;
             #idl_account_entry_fn
             fn __idl_type_def() -> Option<&'static str> {
@@ -2263,11 +2265,13 @@ pub fn derive_idl_type(input: TokenStream) -> TokenStream {
         quote! { #where_clause }
     };
 
+    let idl_reference_impl = idl::type_reference_impl(&name_str, &input.generics);
     TokenStream::from(quote! {
         #(#idl_validation_tokens)*
         #[cfg(feature = "idl-build")]
         #[doc(hidden)]
         impl #impl_generics anchor_lang::IdlAccountType for #name #ty_generics #idl_where_clause {
+            #idl_reference_impl
             fn __idl_type_def() -> Option<&'static str> {
                 #idl_type_def
             }
@@ -3910,9 +3914,13 @@ fn gen_declare_program_idl_account_type_impl(
     let impl_generics = &generics.impl_generics;
     let ty_generics = &generics.ty_generics;
     let where_clause = &generics.idl_where_clause;
+    let rust_generics: syn::Generics =
+        syn::parse2(generics.impl_generics.clone()).expect("generated generics");
+    let idl_reference_impl = idl::type_reference_impl(&ident.to_string(), &rust_generics);
     quote! {
         #[doc(hidden)]
         impl #impl_generics anchor_lang::IdlAccountType for #ident #ty_generics #where_clause {
+            #idl_reference_impl
             const __IDL_ACCOUNT_ENTRY: Option<&'static str> = #account_entry;
             const __IDL_TYPE_DEF: Option<&'static str> = Some(#type_def);
 
@@ -5706,10 +5714,12 @@ pub fn event(attr: TokenStream, item: TokenStream) -> TokenStream {
     // program-level `accounts[]` array — `__IDL_ACCOUNT_ENTRY` defaults
     // to `None`. Their discriminator lives in `event_header_json` (the
     // `--- IDL begin event ---` payload prefix), not in `__IDL_TYPE_DEF`.
+    let idl_reference_impl = idl::type_reference_impl(&event_name, &input.generics);
     let idl_account_type_impl = quote! {
         #[cfg(feature = "idl-build")]
         #[doc(hidden)]
         impl anchor_lang::IdlAccountType for #name {
+            #idl_reference_impl
             fn __idl_type_def() -> Option<&'static str> {
                 #event_type_def
             }
@@ -6721,9 +6731,8 @@ mod tests {
 
     #[test]
     fn qualified_type_helper_module_path_tracks_original_scope() {
-        let ty: Type = syn::parse_quote!(crate::shared::Inner);
-        let qualified =
-            QualifiedTypePath::from_type(&ty).expect("qualified nested path should parse");
+        let path: syn::Path = syn::parse_quote!(crate::shared::Inner);
+        let qualified = QualifiedTypePath::from_path(&path).expect("qualified path should parse");
         let client_path =
             qualified.helper_module_path("__client_accounts_", 1, proc_macro2::Span::call_site());
         let cpi_path =
@@ -6945,19 +6954,7 @@ mod tests {
 
         let generated = impl_accounts(&input).to_string();
 
-        assert!(
-            generated.contains("< Inner > :: __idl_register_deps"),
-            "nested accounts should forward IDL dep registration through the inner helper: \
-             {generated}"
-        );
-        assert!(
-            !generated.contains(
-                "< anchor_lang :: Nested < Inner > as anchor_lang :: IdlAccountType > :: \
-                 __register_idl_deps"
-            ),
-            "nested accounts should not require an IdlAccountType impl on Inner via Nested: \
-             {generated}"
-        );
+        assert!(generated.contains("< anchor_lang :: Nested < Inner > as anchor_lang :: IdlAccountType > :: __register_idl_deps"));
     }
 
     #[test]

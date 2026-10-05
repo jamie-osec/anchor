@@ -22,6 +22,7 @@ pub mod event;
 pub mod hash;
 #[doc(hidden)]
 pub mod idl_build;
+mod idl_type;
 pub mod loader;
 pub mod pod;
 pub mod prelude;

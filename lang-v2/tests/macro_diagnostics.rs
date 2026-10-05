@@ -174,8 +174,8 @@ pub mod btree_set_tuple_and_idl_type_args {
 #[test]
 fn nested_dependencies_are_forwarded() {
     let type_def = <CollectionArgs as IdlAccountType>::__idl_type_def().unwrap();
-    assert!(type_def.contains("\"name\":\"BTreeSet\""));
-    assert!(type_def.contains("\"name\":\"(NestedArgs,u16)\""));
+    assert!(type_def.contains("\"vec\":{\"defined\":{\"name\":\"NestedArgs\""));
+    assert!(type_def.contains("\"name\":\"__anchor_tuple_2\""));
 
     let mut accounts = alloc::vec::Vec::new();
     let mut types = alloc::vec::Vec::new();

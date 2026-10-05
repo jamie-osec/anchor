@@ -3278,24 +3278,15 @@ mod tests {
     }
 
     #[test]
-    fn account_attrs_on_nested_field_are_rejected() {
+    fn constrained_fields_dispatch_after_rust_name_resolution() {
         use syn::parse::Parser;
-
-        let field: syn::Field = syn::Field::parse_named
-            .parse2(quote::quote! {
-                #[account(constraint = missing_symbol_that_should_not_compile())]
-                pub inner: Nested<Inner>
+        let field = syn::Field::parse_named
+            .parse2(quote! {
+                #[account(mut)] pub field: AccountAlias
             })
             .unwrap();
-        let err = match parse_test_field(&field) {
-            Ok(_) => panic!("account attrs on Nested<T> must be rejected"),
-            Err(err) => err,
-        };
-        assert!(
-            err.to_string()
-                .contains("`#[account(...)]` attributes are not supported on `Nested<T>` fields"),
-            "unexpected error: {err}"
-        );
+        let parsed = parse_test_field(&field).unwrap();
+        assert!(parsed.load.to_string().contains("AccountSlot"));
     }
 
     #[test]

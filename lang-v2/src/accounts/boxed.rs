@@ -91,6 +91,11 @@ impl<T: crate::AccountClose> crate::AccountClose for Box<T> {
 
 #[doc(hidden)]
 impl<T: crate::IdlAccountType> crate::IdlAccountType for Box<T> {
+    fn __idl_type_reference(
+        args: &[Option<crate::idl_build::IdlGenericArg>],
+    ) -> alloc::string::String {
+        crate::idl_build::__idl_type_argument::<T>(args, 0)
+    }
     const __IDL_ACCOUNT_ENTRY: Option<&'static str> = T::__IDL_ACCOUNT_ENTRY;
     const __IDL_TYPE_DEF: Option<&'static str> = T::__IDL_TYPE_DEF;
     const __IDL_IS_SIGNER: bool = T::__IDL_IS_SIGNER;

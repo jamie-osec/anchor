@@ -19,6 +19,11 @@
 //! stable API and is subject to change.
 
 extern crate alloc;
+#[doc(hidden)]
+pub use crate::idl_type::{
+    __idl_defined_reference, __idl_override_args, __idl_tuple_definition, __idl_type_argument,
+    IdlGenericArg,
+};
 
 /// Contributes (or elides) a user-defined type to the generated IDL.
 ///
@@ -44,6 +49,21 @@ extern crate alloc;
             `#[account]` / `#[event]`"
 )]
 pub trait IdlAccountType {
+    const __IDL_TYPE_NAME: Option<&'static str> = None;
+    const __IDL_IS_U8: bool = false;
+
+    /// JSON type reference for this resolved Rust type. Overrides preserve
+    /// symbolic generic parameters inside a generic type definition.
+    fn __idl_type_reference(overrides: &[Option<IdlGenericArg>]) -> alloc::string::String {
+        let _ = overrides;
+        let name = Self::__IDL_TYPE_NAME
+            .unwrap_or_else(|| core::any::type_name::<Self>().rsplit("::").next().unwrap());
+        __idl_defined_reference(name, &[])
+    }
+    fn __idl_named_reference() -> alloc::string::String {
+        Self::__idl_type_reference(&[])
+    }
+
     /// Account groups return their recursively assembled instruction accounts.
     fn __idl_nested_accounts() -> Option<alloc::string::String> {
         None
@@ -159,32 +179,25 @@ pub fn strip_account_entry_identity(entry: &str) -> alloc::string::String {
 // forward to their element type so a `Vec<Inner>` field still pulls `Inner`
 // into the registry.
 
-macro_rules! impl_idl_account_type_noop {
-    ($($t:ty),* $(,)?) => {
-        $(
-            #[doc(hidden)]
-            impl IdlAccountType for $t {}
-        )*
-    };
+macro_rules! impl_idl_primitive {
+    ($($ty:ty => $name:literal),* $(,)?) => { $(
+        impl IdlAccountType for $ty {
+            fn __idl_type_reference(_: &[Option<IdlGenericArg>]) -> alloc::string::String { __idl_json_string($name) }
+        }
+    )* };
 }
-
-impl_idl_account_type_noop!(
-    bool,
-    u8,
-    u16,
-    u32,
-    u64,
-    u128,
-    i8,
-    i16,
-    i32,
-    i64,
-    i128,
-    f32,
-    f64,
-    alloc::string::String,
-    pinocchio::address::Address,
-);
+impl_idl_primitive! {
+    bool => "bool", u16 => "u16", u32 => "u32", u64 => "u64", u128 => "u128",
+    i8 => "i8", i16 => "i16", i32 => "i32", i64 => "i64", i128 => "i128",
+    f32 => "f32", f64 => "f64", alloc::string::String => "string", str => "string",
+    pinocchio::address::Address => "pubkey",
+}
+impl IdlAccountType for u8 {
+    const __IDL_IS_U8: bool = true;
+    fn __idl_type_reference(_: &[Option<IdlGenericArg>]) -> alloc::string::String {
+        __idl_json_string("u8")
+    }
+}
 
 // Pod scalar wrappers still lower like their native counterparts when they
 // appear directly in a field type, but generic bytemuck helpers like `PodVec`
@@ -195,6 +208,9 @@ macro_rules! impl_idl_account_type_pod_alias {
         $(
             #[doc(hidden)]
             impl IdlAccountType for $t {
+                const __IDL_TYPE_NAME: Option<&'static str> = Some($name);
+                fn __idl_type_reference(_: &[Option<IdlGenericArg>]) -> alloc::string::String { __idl_json_string($alias) }
+                fn __idl_named_reference() -> alloc::string::String { __idl_defined_reference($name, &[]) }
                 const __IDL_TYPE_DEF: Option<&'static str> = Some(concat!(
                     "{\"name\":\"",
                     $name,
@@ -230,6 +246,9 @@ impl_idl_account_type_pod_alias!(
 
 #[doc(hidden)]
 impl<T: IdlAccountType> IdlAccountType for alloc::vec::Vec<T> {
+    fn __idl_type_reference(args: &[Option<IdlGenericArg>]) -> alloc::string::String {
+        alloc::format!("{{\"vec\":{}}}", __idl_type_argument::<T>(args, 0))
+    }
     fn __register_idl_deps(
         accounts: &mut alloc::vec::Vec<&'static str>,
         types: &mut alloc::vec::Vec<&'static str>,
@@ -240,17 +259,22 @@ impl<T: IdlAccountType> IdlAccountType for alloc::vec::Vec<T> {
 
 #[doc(hidden)]
 impl<K: IdlAccountType, V: IdlAccountType> IdlAccountType for alloc::collections::BTreeMap<K, V> {
+    fn __idl_type_reference(args: &[Option<IdlGenericArg>]) -> alloc::string::String {
+        alloc::format!("{{\"vec\":{}}}", <(K, V)>::__idl_type_reference(args))
+    }
     fn __register_idl_deps(
         accounts: &mut alloc::vec::Vec<&'static str>,
         types: &mut alloc::vec::Vec<&'static str>,
     ) {
-        K::__register_idl_deps(accounts, types);
-        V::__register_idl_deps(accounts, types);
+        <(K, V)>::__register_idl_deps(accounts, types);
     }
 }
 
 #[doc(hidden)]
 impl<T: IdlAccountType> IdlAccountType for alloc::collections::BTreeSet<T> {
+    fn __idl_type_reference(args: &[Option<IdlGenericArg>]) -> alloc::string::String {
+        alloc::format!("{{\"vec\":{}}}", __idl_type_argument::<T>(args, 0))
+    }
     fn __register_idl_deps(
         accounts: &mut alloc::vec::Vec<&'static str>,
         types: &mut alloc::vec::Vec<&'static str>,
@@ -263,10 +287,21 @@ macro_rules! impl_idl_account_type_tuple {
     ($($ty:ident),+ $(,)?) => {
         #[doc(hidden)]
         impl<$($ty: IdlAccountType),+> IdlAccountType for ($($ty,)+) {
+            fn __idl_type_reference(overrides: &[Option<IdlGenericArg>]) -> alloc::string::String {
+                let name = alloc::format!("__anchor_tuple_{}", [$(stringify!($ty)),+].len());
+                let mut args = [$(IdlGenericArg::Type($ty::__idl_type_reference(&[]))),+];
+                __idl_override_args(&mut args, overrides);
+                __idl_defined_reference(&name, &args)
+            }
+            fn __idl_type_def() -> Option<&'static str> {
+                let name = alloc::format!("__anchor_tuple_{}", [$(stringify!($ty)),+].len());
+                Some(__idl_tuple_definition(&name, &[$(stringify!($ty)),+]))
+            }
             fn __register_idl_deps(
                 accounts: &mut alloc::vec::Vec<&'static str>,
                 types: &mut alloc::vec::Vec<&'static str>,
             ) {
+                types.push(Self::__idl_type_def().unwrap());
                 $( $ty::__register_idl_deps(accounts, types); )+
             }
         }
@@ -274,7 +309,18 @@ macro_rules! impl_idl_account_type_tuple {
 }
 
 #[doc(hidden)]
-impl IdlAccountType for () {}
+impl IdlAccountType for () {
+    const __IDL_TYPE_NAME: Option<&'static str> = Some("__anchor_tuple_0");
+    const __IDL_TYPE_DEF: Option<&'static str> =
+        Some("{\"name\":\"__anchor_tuple_0\",\"type\":{\"kind\":\"struct\",\"fields\":[]}}");
+    fn __register_idl_deps(
+        _: &mut alloc::vec::Vec<&'static str>,
+        types: &mut alloc::vec::Vec<&'static str>,
+    ) {
+        types.push(Self::__IDL_TYPE_DEF.unwrap());
+    }
+}
+impl_idl_account_type_tuple!(A);
 
 impl_idl_account_type_tuple!(A, B);
 impl_idl_account_type_tuple!(A, B, C);
@@ -297,6 +343,13 @@ impl_idl_account_type_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P);
 // which wincode supports as a zero-copy ix arg.
 #[doc(hidden)]
 impl<T: IdlAccountType> IdlAccountType for [T] {
+    fn __idl_type_reference(args: &[Option<IdlGenericArg>]) -> alloc::string::String {
+        if T::__IDL_IS_U8 && args.first().is_none_or(Option::is_none) {
+            __idl_json_string("bytes")
+        } else {
+            alloc::format!("{{\"vec\":{}}}", __idl_type_argument::<T>(args, 0))
+        }
+    }
     fn __register_idl_deps(
         accounts: &mut alloc::vec::Vec<&'static str>,
         types: &mut alloc::vec::Vec<&'static str>,
@@ -309,6 +362,9 @@ impl<T: IdlAccountType> IdlAccountType for [T] {
 // type def into the IDL's `types[]`.
 #[doc(hidden)]
 impl<T: IdlAccountType + ?Sized> IdlAccountType for &T {
+    fn __idl_type_reference(args: &[Option<IdlGenericArg>]) -> alloc::string::String {
+        T::__idl_type_reference(args)
+    }
     fn __register_idl_deps(
         accounts: &mut alloc::vec::Vec<&'static str>,
         types: &mut alloc::vec::Vec<&'static str>,
@@ -319,6 +375,9 @@ impl<T: IdlAccountType + ?Sized> IdlAccountType for &T {
 
 #[doc(hidden)]
 impl<T: IdlAccountType> IdlAccountType for Option<T> {
+    fn __idl_type_reference(args: &[Option<IdlGenericArg>]) -> alloc::string::String {
+        alloc::format!("{{\"option\":{}}}", __idl_type_argument::<T>(args, 0))
+    }
     const __IDL_IS_OPTIONAL: bool = true;
     const __IDL_IS_SIGNER: bool = T::__IDL_IS_SIGNER;
     const __IDL_ADDRESS: Option<&'static str> = T::__IDL_ADDRESS;
@@ -332,6 +391,13 @@ impl<T: IdlAccountType> IdlAccountType for Option<T> {
 
 #[doc(hidden)]
 impl<T: IdlAccountType, const N: usize> IdlAccountType for [T; N] {
+    fn __idl_type_reference(args: &[Option<IdlGenericArg>]) -> alloc::string::String {
+        alloc::format!(
+            "{{\"array\":[{},{}]}}",
+            __idl_type_argument::<T>(args, 0),
+            N
+        )
+    }
     fn __register_idl_deps(
         accounts: &mut alloc::vec::Vec<&'static str>,
         types: &mut alloc::vec::Vec<&'static str>,
@@ -351,6 +417,15 @@ impl<T, const MAX: usize> IdlAccountType for crate::pod::PodVec<T, MAX>
 where
     T: bytemuck::Pod + IdlAccountType,
 {
+    const __IDL_TYPE_NAME: Option<&'static str> = Some("PodVec");
+    fn __idl_type_reference(overrides: &[Option<IdlGenericArg>]) -> alloc::string::String {
+        let mut args = [
+            IdlGenericArg::Type(T::__idl_named_reference()),
+            IdlGenericArg::Const(alloc::format!("{}", MAX)),
+        ];
+        __idl_override_args(&mut args, overrides);
+        __idl_defined_reference("PodVec", &args)
+    }
     const __IDL_TYPE_DEF: Option<&'static str> = Some(
         "{\"name\":\"PodVec\",\"generics\":[{\"kind\":\"type\",\"name\":\"T\"},{\"kind\":\"const\"\
          ,\"name\":\"MAX\",\"type\":\"usize\"}],\"serialization\":\"bytemuckunsafe\",\"repr\":{\"\
