@@ -77,7 +77,6 @@ struct ManualCpi<'a> {
     authority: CpiHandle<'a>,
     #[account_meta(skip)]
     authority_signer: bool,
-    #[nested]
     inner: InnerCpi<'a>,
     optional_readonly: Option<CpiHandle<'a>>,
     #[signer]

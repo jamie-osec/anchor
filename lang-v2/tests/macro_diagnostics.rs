@@ -304,7 +304,7 @@ pub struct Bad {
     ignore = "spawns cargo and writes temporary workspaces; covered by normal cargo test"
 )]
 fn nested_accounts_flattened_header_size_must_fit_u8_domain() {
-    // Top-level field count is only 2, but Nested expands to 128+128 = 256
+    // Top-level field count is only 2, but nested groups expand to 128+128 = 256
     // slots — past the 256-bit duplicate / u8 offset domain.
     let chunk_fields: String = (0..128)
         .map(|i| format!("    pub a{i}: UncheckedAccount,\n"))
@@ -321,8 +321,8 @@ pub struct Chunk {{
 
 #[derive(Accounts)]
 pub struct Outer {{
-    pub left: Nested<Chunk>,
-    pub right: Nested<Chunk>,
+    pub left: Chunk,
+    pub right: Chunk,
 }}
 "#
     );
@@ -1287,7 +1287,7 @@ pub mod shared {
 
     #[derive(Accounts)]
     pub struct Outer {
-        pub inner: Nested<crate::shared2::Leaf>,
+        pub inner: crate::shared2::Leaf,
     }
 }
 

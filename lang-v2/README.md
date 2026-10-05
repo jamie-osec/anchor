@@ -122,7 +122,7 @@ None of these carry an `'info` lifetime — pinocchio's account model is static-
 | `BorshAccount<T>` | Data with `Vec` / `String` / enums. Deserializes on load, serializes on exit. |
 | `Slab<H, Item>` | Header + dynamic item tail. Zero-copy ledger / event-log accounts. `Account<T>` is `Slab<T, HeaderOnly>` under the hood. |
 | `Option<Account<T>>` | Optional account slot. Client sends program-ID as sentinel when absent; bumps become `Option<u8>`. |
-| Another `Accounts` struct | Compose account groups directly, as in v1. Access via `ctx.accounts.inner.field`. `Nested<T>` remains supported for existing code. |
+| Another `Accounts` struct | Compose account groups directly, as in v1. Access via `ctx.accounts.inner.field`. |
 | `Signer` | Transaction signer. Validates `is_signer`. (v1 compat) |
 | `Program<T>` | CPI targets (`Program<System>`, `Program<Token>`, …). Validates executable + program ID via `T: Id`. (v1 compat) |
 | `SystemAccount` | System-owned account. Owner check only. (v1 compat) |
@@ -179,7 +179,7 @@ let metas = multisig_v2::accounts::CreateResolved { creator: creator.pubkey() }
     .to_account_metas(None);   // auto-derives `config` PDA, auto-fills `system_program`
 ```
 
-In v1, the caller built the `AccountMeta` vector by hand on every call — deriving the PDA, wiring up `system_program`, and keeping the order in sync with the handler's `#[derive(Accounts)]`.
+V1's generated Rust client structs handled account ordering, but callers supplied every account address, including PDAs and program IDs. Its TypeScript client could resolve those addresses from IDL metadata.
 
 `resolve` requires a fixed address supplied by `Id`, or canonical
 PDA seeds built from constants and sibling account addresses. PDAs using

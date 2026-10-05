@@ -13,7 +13,7 @@ pub struct Inner {
 #[derive(Accounts)]
 pub struct Outer {
     pub authority: UncheckedAccount,
-    pub inner: Nested<Inner>,
+    pub inner: Inner,
 }
 
 fn nested_bump(ctx: &Context<'_, Outer>) -> u8 {

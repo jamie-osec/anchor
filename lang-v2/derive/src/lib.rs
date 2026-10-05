@@ -81,10 +81,7 @@ pub fn __erase(_: TokenStream, _: TokenStream) -> TokenStream {
 // #[derive(ToCpiAccounts)]
 // ---------------------------------------------------------------------------
 
-#[proc_macro_derive(
-    ToCpiAccounts,
-    attributes(signer, nested, account_meta, accounts_program_id)
-)]
+#[proc_macro_derive(ToCpiAccounts, attributes(signer, account_meta, accounts_program_id))]
 pub fn derive_to_cpi_accounts(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     TokenStream::from(impl_to_cpi_accounts(&input))
@@ -315,19 +312,11 @@ fn impl_to_cpi_accounts(input: &DeriveInput) -> TokenStream2 {
             Ok(signer) => signer,
             Err(err) => return err.to_compile_error(),
         };
-        let nested = match has_nested_attr(field) {
-            Ok(nested) => nested,
-            Err(err) => return err.to_compile_error(),
-        };
-        if (attrs.skip || nested) && signer.present {
-            return syn::Error::new_spanned(field, "skip and nested fields cannot have #[signer]")
+        if attrs.skip && signer.present {
+            return syn::Error::new_spanned(field, "skip fields cannot have #[signer]")
                 .to_compile_error();
         }
         if attrs.skip {
-            if nested {
-                return syn::Error::new_spanned(field, "skip cannot be combined with #[nested]")
-                    .to_compile_error();
-            }
             continue;
         }
         generics
@@ -465,26 +454,6 @@ fn signer_expr_attr(field: &syn::Field) -> syn::Result<SignerExpr> {
             expr: quote! { false },
         },
     })
-}
-
-fn has_nested_attr(field: &syn::Field) -> syn::Result<bool> {
-    let mut nested = false;
-    for attr in &field.attrs {
-        if !attr.path().is_ident("nested") {
-            continue;
-        }
-        if nested {
-            return Err(syn::Error::new_spanned(
-                attr,
-                "duplicate #[nested] attribute",
-            ));
-        }
-        if !matches!(attr.meta, syn::Meta::Path(_)) {
-            return Err(syn::Error::new_spanned(attr, "expected #[nested]"));
-        }
-        nested = true;
-    }
-    Ok(nested)
 }
 
 fn account_meta_attrs(field: &syn::Field) -> syn::Result<AccountMetaAttrs> {
@@ -6952,16 +6921,18 @@ mod tests {
     }
 
     #[test]
-    fn nested_accounts_register_idl_deps_through_nested_wrapper() {
+    fn nested_accounts_register_idl_deps_through_direct_group() {
         let input: syn::DeriveInput = syn::parse_quote! {
             pub struct Outer {
-                pub nested: anchor_lang::Nested<Inner>,
+                pub nested: Inner,
             }
         };
 
         let generated = impl_accounts(&input).to_string();
 
-        assert!(generated.contains("< anchor_lang :: Nested < Inner > as anchor_lang :: IdlAccountType > :: __register_idl_deps"));
+        assert!(
+            generated.contains("< Inner as anchor_lang :: IdlAccountType > :: __register_idl_deps")
+        );
     }
 
     #[test]
@@ -7243,44 +7214,5 @@ mod tests {
         let pod_bool =
             declare_idl_type_to_tokens(&json!({ "defined": { "name": "PodBool" } }), span).unwrap();
         assert_eq!(pod_bool.to_string(), "anchor_lang :: pod :: PodBool");
-    }
-
-    fn nested_accounts_preserve_inner_bumps_in_generated_surface() {
-        let input: syn::DeriveInput = syn::parse_quote! {
-            pub struct Outer {
-                pub authority: anchor_lang::accounts::UncheckedAccount,
-                pub inner: anchor_lang::Nested<Inner>,
-            }
-        };
-
-        let generated = impl_accounts(&input).to_string();
-
-        assert!(
-            generated.contains("pub struct OuterBumps"),
-            "expected outer bumps struct: {generated}"
-        );
-        assert!(
-            generated.contains("pub inner : < Inner as anchor_lang :: Bumps > :: Bumps"),
-            "expected nested field to retain the inner bumps type: {generated}"
-        );
-        assert!(
-            generated.contains(
-                "let (__nested_inner , __anchor_bump_cache_inner , _) = < Inner as anchor_lang :: \
-                 TryAccounts > :: validate_accounts"
-            ),
-            "expected nested validate_accounts call to keep the returned bumps value: {generated}"
-        );
-        assert!(
-            generated.contains(
-                "let mut __anchor_bump_cache_inner : < Inner as anchor_lang :: Bumps > :: Bumps = \
-                 :: core :: default :: Default :: default() ;"
-            ),
-            "expected nested bump cache local declaration: {generated}"
-        );
-        assert!(
-            generated
-                .contains("let __bumps = OuterBumps { inner : __anchor_bump_cache_inner , } ;"),
-            "expected final outer bumps assembly to include the nested bump cache: {generated}"
-        );
     }
 }

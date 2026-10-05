@@ -1009,7 +1009,7 @@ pub struct Inner {
 #[derive(Accounts)]
 pub struct Outer {
     pub authority: UncheckedAccount,
-    pub inner: Nested<Inner>,
+    pub inner: Inner,
 }
 
 pub fn nested_bump(ctx: &Context<'_, Outer>) -> u8 {
@@ -1038,7 +1038,7 @@ pub struct Inner {
 #[derive(Accounts)]
 pub struct Outer {
     pub authority: UncheckedAccount,
-    pub inner: Nested<Inner>,
+    pub inner: Inner,
 }
 
 pub fn nested_bump(ctx: &Context<'_, Outer>) -> u8 {
@@ -2311,7 +2311,7 @@ pub struct Inner {
 #[derive(Accounts)]
 pub struct Outer {
     #[account(constraint = missing_symbol_that_should_not_compile())]
-    pub inner: Nested<Inner>,
+    pub inner: Inner,
 }
 "#,
     )

@@ -3,7 +3,7 @@
 use {
     crate::{
         AccountBitvec, AccountMeta, AccountView, Address, AnchorAccount, CpiHandle, CpiHandleMut,
-        Nested, Result,
+        Result,
     },
     alloc::vec::Vec,
 };
@@ -130,52 +130,6 @@ impl<T: AnchorAccount> AccountField for Option<T> {
                 is_signer: false,
             }),
         }
-    }
-}
-
-impl<T: AccountField> crate::Bumps for Nested<T> {
-    type Bumps = T::Bumps;
-}
-
-impl<T: AccountField> AccountField for Nested<T> {
-    const HEADER_SIZE: usize = T::HEADER_SIZE;
-    const MUT_MASK: [u64; 4] = T::MUT_MASK;
-    const HAS_DYNAMIC_MUT_MASK: bool = T::HAS_DYNAMIC_MUT_MASK;
-    type Target = T;
-    fn constraint_target(&self) -> Option<&T> {
-        Some(&self.0)
-    }
-    type Client = T::Client;
-    type Cpi<'a> = T::Cpi<'a>;
-    type CpiMut<'a> = T::CpiMut<'a>;
-    fn load(
-        program_id: &Address,
-        views: &[AccountView],
-        duplicates: Option<&AccountBitvec>,
-        base_offset: usize,
-        ix_data: &[u8],
-    ) -> Result<(Self, Self::Bumps)> {
-        let (inner, bumps) = T::load(program_id, views, duplicates, base_offset, ix_data)?;
-        Ok((Nested(inner), bumps))
-    }
-    fn active_mut_mask(&self) -> [u64; 4] {
-        self.0.active_mut_mask()
-    }
-    fn update(&mut self) -> Result<()> {
-        self.0.update()
-    }
-    fn exit(&mut self, ix_data: &[u8]) -> Result<()> {
-        self.0.exit(ix_data)
-    }
-    fn append_client_metas(
-        client: &Self::Client,
-        program_id: &Address,
-        writable: bool,
-        signer: bool,
-        signer_override: Option<bool>,
-        out: &mut Vec<AccountMeta>,
-    ) {
-        T::append_client_metas(client, program_id, writable, signer, signer_override, out);
     }
 }
 
