@@ -16,8 +16,6 @@ The minor version will be incremented upon a breaking change and the patch versi
 
 ### Fixes
 
-- lang-v2: Skip serialized account writeback after ownership changes when the encoded bytes are unchanged; reject changed bytes without writing foreign-owned data.
-
 - ts: Resolve every event CPI account pair of an instruction, not just the first ([#5117](https://github.com/otter-sec/anchor/pull/5117)).
 - ts: Encode signed integer PDA seeds as two's complement ([#5114](https://github.com/otter-sec/anchor/pull/5114)).
 - lang-v2: Restore `AnchorSerialize` and `AnchorDeserialize` as traits for generic bounds alongside the derive macros ([#5078](https://github.com/otter-sec/anchor/pull/5078)).
