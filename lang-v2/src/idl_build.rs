@@ -44,6 +44,11 @@ extern crate alloc;
             `#[account]` / `#[event]`"
 )]
 pub trait IdlAccountType {
+    /// Account groups return their recursively assembled instruction accounts.
+    fn __idl_nested_accounts() -> Option<alloc::string::String> {
+        None
+    }
+
     /// `{"name":"X","discriminator":[…]}` for the program-level `accounts[]`.
     /// `None` for types that don't appear there (`IdlType` plain types,
     /// view wrappers, primitives, collections).
@@ -52,6 +57,9 @@ pub trait IdlAccountType {
     /// view wrappers, primitives, and collection forwarders.
     const __IDL_TYPE_DEF: Option<&'static str> = None;
     const __IDL_IS_SIGNER: bool = false;
+
+    /// Whether an account field uses the program-address sentinel for absence.
+    const __IDL_IS_OPTIONAL: bool = false;
     const __IDL_ADDRESS: Option<&'static str> = None;
 
     /// Dynamic accessor for the `accounts[]` entry. Defaults to the trait
@@ -311,6 +319,9 @@ impl<T: IdlAccountType + ?Sized> IdlAccountType for &T {
 
 #[doc(hidden)]
 impl<T: IdlAccountType> IdlAccountType for Option<T> {
+    const __IDL_IS_OPTIONAL: bool = true;
+    const __IDL_IS_SIGNER: bool = T::__IDL_IS_SIGNER;
+    const __IDL_ADDRESS: Option<&'static str> = T::__IDL_ADDRESS;
     fn __register_idl_deps(
         accounts: &mut alloc::vec::Vec<&'static str>,
         types: &mut alloc::vec::Vec<&'static str>,
@@ -341,11 +352,11 @@ where
     T: bytemuck::Pod + IdlAccountType,
 {
     const __IDL_TYPE_DEF: Option<&'static str> = Some(
-        "{\"name\":\"PodVec\",\"generics\":[{\"kind\":\"type\",\"name\":\"T\"},\
-         {\"kind\":\"const\",\"name\":\"MAX\",\"type\":\"usize\"}],\
-         \"serialization\":\"bytemuckunsafe\",\"repr\":{\"kind\":\"c\"},\
-         \"type\":{\"kind\":\"struct\",\"fields\":[{\"name\":\"len\",\"type\":{\"defined\":{\"name\":\"PodU16\"}}},\
-         {\"name\":\"data\",\"type\":{\"array\":[{\"generic\":\"T\"},{\"generic\":\"MAX\"}]}}]}}",
+        "{\"name\":\"PodVec\",\"generics\":[{\"kind\":\"type\",\"name\":\"T\"},{\"kind\":\"const\"\
+         ,\"name\":\"MAX\",\"type\":\"usize\"}],\"serialization\":\"bytemuckunsafe\",\"repr\":{\"\
+         kind\":\"c\"},\"type\":{\"kind\":\"struct\",\"fields\":[{\"name\":\"len\",\"type\":{\"\
+         defined\":{\"name\":\"PodU16\"}}},{\"name\":\"data\",\"type\":{\"array\":[{\"generic\":\"\
+         T\"},{\"generic\":\"MAX\"}]}}]}}",
     );
 
     fn __register_idl_deps(

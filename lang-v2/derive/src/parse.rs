@@ -1161,7 +1161,8 @@ fn validate_associated_token_init_refs(
             return Err(syn::Error::new(
                 ident.span(),
                 format!(
-                    "`associated_token` constraints cannot reference optional account `{ident}` during init"
+                    "`associated_token` constraints cannot reference optional account `{ident}` \
+                     during init"
                 ),
             ));
         }
@@ -1218,34 +1219,6 @@ fn wrap_init_body_with_constraints(
             __init
         }
     }
-}
-
-pub fn is_nested_type(ty: &Type) -> bool {
-    if let Type::Path(tp) = ty {
-        if let Some(seg) = tp.path.segments.last() {
-            return seg.ident == "Nested";
-        }
-    }
-    false
-}
-
-/// Pull the first generic arg out of a `Nested<T>` type path, e.g.
-/// `Nested<InnerAccounts>` → `InnerAccounts`. Returns `None` for anything
-/// else. Used by the `HEADER_SIZE` codegen to walk into nested account
-/// structs and sum their compile-time header counts.
-pub fn extract_nested_inner_type(ty: &Type) -> Option<&Type> {
-    if let Type::Path(tp) = ty {
-        if let Some(seg) = tp.path.segments.last() {
-            if seg.ident == "Nested" {
-                if let syn::PathArguments::AngleBracketed(args) = &seg.arguments {
-                    if let Some(syn::GenericArgument::Type(inner)) = args.args.first() {
-                        return Some(inner);
-                    }
-                }
-            }
-        }
-    }
-    None
 }
 
 /// Extracts the inner `T` from `Option<T>` for optional-account field detection.
@@ -1699,10 +1672,7 @@ fn reject_optional_sibling_seeds(
 ) -> syn::Result<()> {
     for seed in seeds {
         let Expr::Path(ep) = seed else { continue };
-        if ep.qself.is_some()
-            || ep.path.leading_colon.is_some()
-            || ep.path.segments.len() != 1
-        {
+        if ep.qself.is_some() || ep.path.leading_colon.is_some() || ep.path.segments.len() != 1 {
             continue;
         }
         let seg = &ep.path.segments[0];
@@ -1716,8 +1686,8 @@ fn reject_optional_sibling_seeds(
         {
             return Err(syn::Error::new(
                 ident.span(),
-                "optional account fields cannot be used as PDA seeds; \
-                 use a non-optional account for seed derivation",
+                "optional account fields cannot be used as PDA seeds; use a non-optional account \
+                 for seed derivation",
             ));
         }
     }
@@ -2507,89 +2477,46 @@ pub fn parse_field(
         )
     });
 
-    // --- Load ---
-    if is_nested_type(field_ty) {
-        if field
-            .attrs
-            .iter()
-            .any(|attr| attr.path().is_ident("account"))
-        {
-            return Err(syn::Error::new(
-                field_name.span(),
-                "`#[account(...)]` attributes are not supported on `Nested<T>` fields; put \
-                 constraints on the fields inside the nested `Accounts` struct",
-            ));
-        }
-
-        let inner_ty = extract_nested_inner_type(field_ty)
-            .expect("is_nested_type was true but extract_nested_inner_type returned None");
-        let nested_bumps = bump_cache_ident(field_name);
-        let assert_no_nested_ix_args = Ident::new(
-            &format!("__anchor_assert_no_nested_ix_args_{field_name}"),
-            field_name.span(),
-        );
-        // Nested<Inner> — delegate to Inner::validate_accounts, which advances
-        // the shared cursor by Inner::HEADER_SIZE without firing inner
-        // update-hooks yet. The outer walk_n covers only direct
-        // (non-nested) fields; the nested validate_accounts picks up where
-        // the outer left off, and the outer update phase later calls
-        // Inner::update_accounts exactly once.
-        //
-        // Constraint processing and exit are handled by the inner struct's own
-        // validate_accounts / exit_accounts — the outer derives don't need to
-        // re-check them.
-        // TODO: passing `__base_offset + #offset_expr` means the nested
-        // struct's bitvec lookups hit the correct global indices. This is
-        // correct but adds a runtime addition per dup-check inside the
-        // nested struct. A future optimization could pre-shift the bitvec
-        // or use a wrapper that offsets transparently.
+    // Unconstrained fields compose through a single resolved-type protocol.
+    // Both leaf accounts and derived account groups implement AccountField.
+    if !field
+        .attrs
+        .iter()
+        .any(|attr| attr.path().is_ident("account"))
+    {
+        let bump_cache = bump_cache_ident(field_name);
         let load = quote! {
-            let (__nested_inner, #nested_bumps, __nested_ix_args) =
-                <#inner_ty as anchor_lang::TryAccounts>::validate_accounts(
-                    __program_id,
-                    &__views[#offset_expr .. #offset_expr + <#inner_ty as anchor_lang::TryAccounts>::HEADER_SIZE],
-                    __duplicates,
-                    __base_offset + #offset_expr,
-                    __ix_data,
-                )?;
-            // A nested Accounts type currently has no way to return its
-            // parsed arguments to handler dispatch. Reject such schemas at
-            // compile time instead of validating one interpretation of the
-            // bytes and letting the handler consume another.
-            #[inline(always)]
-            fn #assert_no_nested_ix_args(_: ()) {}
-            #assert_no_nested_ix_args(__nested_ix_args);
-            let #field_name = anchor_lang::Nested(__nested_inner);
+            let (mut #field_name, #bump_cache) = <#field_ty as anchor_lang::AccountField>::load(
+                __program_id,
+                &__views[#offset_expr .. #offset_expr + <#field_ty as anchor_lang::AccountField>::HEADER_SIZE],
+                __duplicates, __base_offset + #offset_expr, __ix_data,
+            )?;
         };
-        let exit = Some(quote! {
-            self.#field_name.0.exit_accounts(__ix_data)?;
-        });
         return Ok(AccountField {
             name: field_name.clone(),
             ty: field.ty.clone(),
             load,
             deferred_load: None,
             constraints: vec![],
-            update: Some(quote! {
-                self.#field_name.0.update_accounts()?;
-            }),
-            exit,
+            update: Some(
+                quote! { <#field_ty as anchor_lang::AccountField>::update(&mut self.#field_name)?; },
+            ),
+            exit: Some(
+                quote! { <#field_ty as anchor_lang::AccountField>::exit(&mut self.#field_name, __ix_data)?; },
+            ),
             has_bump: false,
-            is_optional: false,
+            is_optional,
             offset_expr,
-            // Nested children contribute via their own `MUT_MASK` shifted
-            // into the parent's; they don't set a bit at the nested field's
-            // own offset.
             contributes_mut_bit: false,
             contributes_active_mut_bit: false,
-            idl_writable: false,
-            idl_init_signer: false,
-            idl_has_one: vec![],
-            idl_address: None,
-            idl_address_expr: None,
-            idl_address_v1_source: None,
-            idl_docs: vec![],
-            idl_pda: None,
+            idl_writable,
+            idl_init_signer,
+            idl_has_one,
+            idl_address,
+            idl_address_expr,
+            idl_address_v1_source,
+            idl_docs,
+            idl_pda,
             idl_field_ty: Some(field_ty.clone()),
         });
     }
@@ -3966,7 +3893,8 @@ mod tests {
         };
         assert!(
             err.to_string().contains(
-                "`extensions::metadata_pointer_metadata_address` cannot reference `mint` while that account is still being initialized"
+                "`extensions::metadata_pointer_metadata_address` cannot reference `mint` while \
+                 that account is still being initialized"
             ),
             "unexpected error: {err}"
         );
@@ -4027,7 +3955,8 @@ mod tests {
         };
         assert!(
             err.to_string().contains(
-                "`extensions::metadata_pointer_authority` cannot reference `mint` while that account is still being initialized"
+                "`extensions::metadata_pointer_authority` cannot reference `mint` while that \
+                 account is still being initialized"
             ),
             "unexpected error: {err}"
         );

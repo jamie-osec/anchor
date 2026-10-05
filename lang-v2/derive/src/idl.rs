@@ -409,13 +409,8 @@ pub struct AccountsJsonField<'a> {
     /// Runtime-resolved static address expression. Evaluated inside
     /// `__idl_accounts()` and rendered as base58.
     pub address_override_expr: Option<&'a TokenStream2>,
-    /// Set when this field is a `Nested<Inner>`, carrying the inner
-    /// struct type. The emission splices the inner struct's own
-    /// `__idl_accounts()` into the outer array instead of producing a
-    /// single account entry for the `Nested` wrapper, so the IDL's
-    /// `accounts[]` list flattens the nested block in source order —
-    /// matching how the runtime actually consumes accounts.
-    pub nested_inner_ty: Option<&'a Type>,
+    /// Resolved field type used to compose nested account groups.
+    pub composition_ty: &'a Type,
 }
 
 /// Build a `fn __idl_accounts() -> alloc::string::String` body that assembles
@@ -432,33 +427,6 @@ pub fn build_accounts_emission(fields: &[AccountsJsonField<'_>]) -> TokenStream2
     let parts: Vec<TokenStream2> = fields
         .iter()
         .map(|f| {
-            // `Nested<Inner>` flattens at IDL time. Ask the inner struct
-            // for its own `__idl_accounts()` string, strip the outer
-            // `[` / `]`, and splice the element sequence in place. The
-            // outer's join-with-`,` loop then produces a single flat
-            // array in source order.
-            if let Some(inner) = f.nested_inner_ty {
-                return quote! {
-                    {
-                        let __inner = <#inner>::__idl_accounts();
-                        // Strip the bracketing `[`/`]` produced by the
-                        // inner emission. Use char-indexed slicing
-                        // rather than `trim_matches`, which would also
-                        // eat balanced brackets from inside string
-                        // literals (there are none today, but the
-                        // narrow form is future-proof).
-                        let __bytes = __inner.as_bytes();
-                        if __bytes.len() >= 2
-                            && __bytes[0] == b'['
-                            && __bytes[__bytes.len() - 1] == b']'
-                        {
-                            __inner[1..__inner.len() - 1].to_string()
-                        } else {
-                            __inner
-                        }
-                    }
-                };
-            }
             let name = f.name;
             let writable_json = if f.writable { ",\"writable\":true" } else { "" };
             let optional_json = if f.is_optional {
@@ -492,7 +460,7 @@ pub fn build_accounts_emission(fields: &[AccountsJsonField<'_>]) -> TokenStream2
                 },
             };
             let init_signer = f.init_signer;
-            if let Some(ty) = f.field_ty {
+            let leaf = if let Some(ty) = f.field_ty {
                 let addr_json_expr = if let Some(address_expr) = f.address_override_expr {
                     quote! {
                         let __addr: anchor_lang::Address =
@@ -532,6 +500,7 @@ pub fn build_accounts_emission(fields: &[AccountsJsonField<'_>]) -> TokenStream2
                         let __signer = <#ty as anchor_lang::IdlAccountType>::__IDL_IS_SIGNER
                             || #init_signer;
                         let __signer_json: &str = if __signer { ",\"signer\":true" } else { "" };
+                        let __optional_json: &str = if <#ty as anchor_lang::IdlAccountType>::__IDL_IS_OPTIONAL { ",\"optional\":true" } else { #optional_json };
                         #addr_json_expr
                         #pda_json_expr
                         anchor_lang::__alloc::format!(
@@ -540,7 +509,7 @@ pub fn build_accounts_emission(fields: &[AccountsJsonField<'_>]) -> TokenStream2
                             #writable_json,
                             __signer_json,
                             __addr_json,
-                            #optional_json,
+                            __optional_json,
                             #relations_json,
                             #docs_json,
                             __pda_json,
@@ -583,6 +552,12 @@ pub fn build_accounts_emission(fields: &[AccountsJsonField<'_>]) -> TokenStream2
                         )
                     }
                 }
+            };
+            let ty = f.composition_ty;
+            quote! {
+                if let Some(__inner) = <#ty as anchor_lang::IdlAccountType>::__idl_nested_accounts() {
+                    __inner.strip_prefix('[').and_then(|s| s.strip_suffix(']')).unwrap_or(&__inner).to_string()
+                } else { #leaf }
             }
         })
         .collect();

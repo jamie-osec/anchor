@@ -599,18 +599,6 @@ fn with_ix_lifetime(ty: &Type, ix: &syn::Lifetime) -> Type {
     }
 }
 
-fn nested_client_accounts_type(ty: &Type) -> Option<TokenStream2> {
-    let inner = parse::extract_nested_inner_type(ty)?;
-    let inner_path = QualifiedTypePath::from_type(inner)?;
-    let inner_ident = &inner_path.leaf_ident;
-    let module_path = inner_path.helper_module_path("__client_accounts_", 1, inner_ident.span());
-    Some(quote! { #module_path::#inner_ident })
-}
-
-fn idl_field_ty(field: &parse::AccountField) -> Option<&Type> {
-    field.idl_field_ty.as_ref()
-}
-
 fn cfg_attrs(attrs: &[syn::Attribute]) -> Vec<syn::Attribute> {
     attrs
         .iter()
@@ -689,28 +677,15 @@ fn cfg_variant_dep_walkers(
 }
 
 fn client_meta_signer_expr(field: &parse::AccountField) -> TokenStream2 {
+    let ty = &field.ty;
     let init_signer = field.idl_init_signer;
-    match idl_field_ty(field) {
-        Some(ty) => quote! {
-            if <#ty as anchor_lang::AnchorAccount>::IS_SIGNER || #init_signer {
-                _is_signer.unwrap_or(true)
-            } else {
-                false
-            }
-        },
-        None if init_signer => quote! { _is_signer.unwrap_or(true) },
-        None => quote! { false },
-    }
+    quote! { (<#ty as anchor_lang::AccountField>::IS_SIGNER || #init_signer) && _is_signer.unwrap_or(true) }
 }
 
 fn cpi_meta_signer_expr(field: &parse::AccountField) -> TokenStream2 {
+    let ty = &field.ty;
     let init_signer = field.idl_init_signer;
-    match idl_field_ty(field) {
-        Some(ty) => quote! {
-            <#ty as anchor_lang::AnchorAccount>::IS_SIGNER || #init_signer
-        },
-        None => quote! { #init_signer },
-    }
+    quote! { <#ty as anchor_lang::AccountField>::IS_SIGNER || #init_signer }
 }
 
 struct ArgsDeser {
@@ -915,20 +890,14 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
     };
     let ix_arg_names: Vec<String> = ix_args.iter().map(|(n, _)| n.to_string()).collect();
 
-    // Compute the views-slice offset for each field. Direct fields occupy 1
-    // slot; `Nested<Inner>` fields occupy `Inner::HEADER_SIZE` slots. Each
-    // offset is a const expression resolved at monomorphization time.
-    let mut offset_exprs: Vec<proc_macro2::TokenStream> = Vec::new();
-    let mut current_offset: proc_macro2::TokenStream = quote::quote! { 0usize };
-    for f in named_fields.named.iter() {
+    // Every field reports its flattened width through its resolved Rust type.
+    let mut offset_exprs = Vec::new();
+    let mut current_offset = quote! { 0usize };
+    for f in &named_fields.named {
+        let ty = &f.ty;
         offset_exprs.push(current_offset.clone());
-        if let Some(inner_ty) = parse::extract_nested_inner_type(&f.ty) {
-            current_offset = quote::quote! {
-                #current_offset + <#inner_ty as anchor_lang::TryAccounts>::HEADER_SIZE
-            };
-        } else {
-            current_offset = quote::quote! { #current_offset + 1 };
-        }
+        current_offset =
+            quote! { #current_offset + <#ty as anchor_lang::AccountField>::HEADER_SIZE };
     }
     let field_offsets: Vec<(String, proc_macro2::TokenStream)> = raw_field_names
         .iter()
@@ -1008,194 +977,100 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
     let constraints: Vec<_> = fields.iter().flat_map(|f| &f.constraints).collect();
     let updates: Vec<_> = fields.iter().filter_map(|f| f.update.as_ref()).collect();
     let exits: Vec<_> = fields.iter().filter_map(|f| f.exit.as_ref()).collect();
-    // Bump-cache surface:
-    //   - direct PDA fields keep their existing `u8` / `Option<u8>` entries;
-    //     optional accounts still use `Option<u8>` so the sentinel-`None`
-    //     path mirrors v1's `bumps.rs:36` handling
-    //   - `Nested<Inner>` fields preserve the inner `Inner::Bumps` payload so
-    //     handlers can reach it through `ctx.bumps.<nested>.*`
-    //
-    // Direct fields still use per-field mutable locals during parsing; nested
-    // fields bind the inner bumps value returned by `Inner::try_accounts`.
-    let bump_fields: Vec<proc_macro2::TokenStream> = fields
+    // Unit-valued leaf entries let bump caches compose without identifying
+    // aggregate fields. PDA constraints supply their own cached bump value.
+    let bump_fields: Vec<_> = fields
         .iter()
-        .filter_map(|f| {
+        .map(|f| {
             let n = &f.name;
+            let ty = &f.ty;
             if f.has_bump {
-                Some(if f.is_optional {
+                if f.is_optional {
                     quote! { pub #n: Option<u8> }
                 } else {
                     quote! { pub #n: u8 }
-                })
+                }
             } else {
-                parse::extract_nested_inner_type(&f.ty)
-                    .map(|inner_ty| quote! { pub #n: <#inner_ty as anchor_lang::Bumps>::Bumps })
+                quote! { pub #n: <#ty as anchor_lang::Bumps>::Bumps }
             }
         })
         .collect();
-    let nested_bump_default_bounds: Vec<proc_macro2::TokenStream> = fields
+    let bump_cache_locals: Vec<_> = fields
         .iter()
-        .filter_map(|f| {
-            parse::extract_nested_inner_type(&f.ty).map(|inner_ty| {
-                quote! { <#inner_ty as anchor_lang::Bumps>::Bumps: ::core::default::Default }
-            })
-        })
-        .collect();
-    let bump_cache_locals: Vec<proc_macro2::TokenStream> = fields
-        .iter()
-        .filter(|f| f.has_bump || parse::extract_nested_inner_type(&f.ty).is_some())
         .map(|f| {
-            let bump_cache = parse::bump_cache_ident(&f.name);
-            if let Some(inner_ty) = parse::extract_nested_inner_type(&f.ty) {
-                quote! {
-                    let mut #bump_cache: <#inner_ty as anchor_lang::Bumps>::Bumps =
-                        ::core::default::Default::default();
-                }
-            } else if f.is_optional {
-                quote! {
-                    let mut #bump_cache: ::core::option::Option<u8> = ::core::default::Default::default();
+            let cache = parse::bump_cache_ident(&f.name);
+            let ty = &f.ty;
+            let bump_ty = if f.has_bump {
+                if f.is_optional {
+                    quote! { Option<u8> }
+                } else {
+                    quote! { u8 }
                 }
             } else {
-                quote! {
-                    let mut #bump_cache: u8 = ::core::default::Default::default();
-                }
-            }
+                quote! { <#ty as anchor_lang::Bumps>::Bumps }
+            };
+            quote! { let mut #cache: #bump_ty = ::core::default::Default::default(); }
         })
         .collect();
-    let bump_cache_fields: Vec<proc_macro2::TokenStream> = fields
+    let bump_cache_fields: Vec<_> = fields
         .iter()
-        .filter(|f| f.has_bump || parse::extract_nested_inner_type(&f.ty).is_some())
         .map(|f| {
             let n = &f.name;
-            let bump_cache = parse::bump_cache_ident(n);
-            quote! { #n: #bump_cache }
+            let cache = parse::bump_cache_ident(n);
+            quote! { #n: #cache }
         })
         .collect();
-    let bump_default_fields: Vec<proc_macro2::TokenStream> = fields
+    let bump_default_fields: Vec<_> = fields
         .iter()
-        .filter(|f| f.has_bump || parse::extract_nested_inner_type(&f.ty).is_some())
         .map(|f| {
             let n = &f.name;
             quote! { #n: ::core::default::Default::default() }
         })
         .collect();
-
-    // Compile-time sum for `<T as TryAccounts>::HEADER_SIZE`:
-    //   - 1 per non-`Nested<_>` field (consumes one account view)
-    //   - `<Inner as TryAccounts>::HEADER_SIZE` per `Nested<Inner>` field,
-    //     which recursively expands at monomorphization time.
-    // The direct-field count is a single literal so the emitted
-    // const is short in the common (no-nested) case.
-    let direct_count: usize = fields
-        .iter()
-        .filter(|f| !parse::is_nested_type(&f.ty))
-        .count();
-    let nested_inner_types: Vec<&syn::Type> = fields
-        .iter()
-        .filter_map(|f| parse::extract_nested_inner_type(&f.ty))
-        .collect();
-    let header_size_expr = if nested_inner_types.is_empty() {
-        quote::quote! { #direct_count }
-    } else {
-        quote::quote! {
-            #direct_count #(+ <#nested_inner_types as anchor_lang::TryAccounts>::HEADER_SIZE)*
+    let field_types: Vec<_> = fields.iter().map(|f| &f.ty).collect();
+    let header_size_expr =
+        quote! { 0usize #(+ <#field_types as anchor_lang::AccountField>::HEADER_SIZE)* };
+    let mut_mask_steps: Vec<_> = fields.iter().map(|f| {
+        let ty = &f.ty;
+        let offset = &f.offset_expr;
+        let direct = f.contributes_mut_bit;
+        quote! {
+            if #direct { __mask = anchor_lang::mut_mask_set_bit(__mask, #offset); }
+            __mask = anchor_lang::mut_mask_or_shifted(__mask, <#ty as anchor_lang::AccountField>::MUT_MASK, #offset);
         }
-    };
-
-    // Compile-time `MUT_MASK` composition:
-    //   - bit at `offset` per direct mut field (non-Option, non-`unsafe(dup)`)
-    //   - `<Inner as TryAccounts>::MUT_MASK << child_offset` per `Nested<Inner>`
-    // Folded into a single `const` expression so LLVM sees a literal at
-    // `run_handler`'s inline site — zero runtime composition cost, and the
-    // `intersects(&T::MUT_MASK)` call const-folds away entirely when the
-    // resulting mask is all-zero.
-    let mut_mask_steps: Vec<proc_macro2::TokenStream> = fields
+    }).collect();
+    let mut_mask_expr = quote! {{
+        let mut __mask = [0u64; 4];
+        #(#mut_mask_steps)*
+        __mask
+    }};
+    let dynamic_mut_mask_terms: Vec<_> = fields
         .iter()
-        .filter_map(|f| {
-            let offset = &f.offset_expr;
-            if f.contributes_mut_bit {
-                Some(quote! {
-                    __mask = anchor_lang::mut_mask_set_bit(__mask, #offset);
-                })
-            } else if let Some(inner_ty) = parse::extract_nested_inner_type(&f.ty) {
-                Some(quote! {
-                    __mask = anchor_lang::mut_mask_or_shifted(
-                        __mask,
-                        <#inner_ty as anchor_lang::TryAccounts>::MUT_MASK,
-                        #offset,
-                    );
-                })
-            } else {
-                None
-            }
+        .map(|f| {
+            let ty = &f.ty;
+            let direct = f.contributes_active_mut_bit;
+            quote! { #direct || <#ty as anchor_lang::AccountField>::HAS_DYNAMIC_MUT_MASK }
         })
         .collect();
-    let mut_mask_expr = if mut_mask_steps.is_empty() {
-        quote::quote! { [0u64; 4] }
-    } else {
-        quote::quote! {
-            {
-                let mut __mask = [0u64; 4];
-                #(#mut_mask_steps)*
-                __mask
+    let has_dynamic_mut_mask_expr = quote! { false #(|| (#dynamic_mut_mask_terms))* };
+    let active_mut_mask_steps: Vec<_> = fields.iter().map(|f| {
+        let ty = &f.ty;
+        let n = &f.name;
+        let offset = &f.offset_expr;
+        let direct = if f.contributes_active_mut_bit {
+            quote! { if self.#n.is_some() { __mask = anchor_lang::mut_mask_set_bit(__mask, #offset); } }
+        } else { quote! {} };
+        quote! {
+            #direct
+            if <#ty as anchor_lang::AccountField>::HAS_DYNAMIC_MUT_MASK {
+                __mask = anchor_lang::mut_mask_or_shifted(__mask, <#ty as anchor_lang::AccountField>::active_mut_mask(&self.#n), #offset);
             }
         }
-    };
-    let dynamic_mut_mask_terms: Vec<proc_macro2::TokenStream> = fields
-        .iter()
-        .filter_map(|f| {
-            if f.contributes_active_mut_bit {
-                Some(quote::quote! { true })
-            } else {
-                parse::extract_nested_inner_type(&f.ty).map(|inner_ty| {
-                    quote::quote! {
-                        <#inner_ty as anchor_lang::TryAccounts>::HAS_DYNAMIC_MUT_MASK
-                    }
-                })
-            }
-        })
-        .collect();
-    let has_dynamic_mut_mask_expr = if dynamic_mut_mask_terms.is_empty() {
-        quote::quote! { false }
-    } else {
-        quote::quote! {
-            false #(|| #dynamic_mut_mask_terms)*
-        }
-    };
-    let active_mut_mask_steps: Vec<proc_macro2::TokenStream> = fields
-        .iter()
-        .filter_map(|f| {
-            let field_name = &f.name;
-            let offset = &f.offset_expr;
-            if f.contributes_active_mut_bit {
-                Some(quote! {
-                    if self.#field_name.is_some() {
-                        __mask = anchor_lang::mut_mask_set_bit(__mask, #offset);
-                    }
-                })
-            } else if let Some(inner_ty) = parse::extract_nested_inner_type(&f.ty) {
-                Some(quote! {
-                    if <#inner_ty as anchor_lang::TryAccounts>::HAS_DYNAMIC_MUT_MASK {
-                        __mask = anchor_lang::mut_mask_or_shifted(
-                            __mask,
-                            <#inner_ty as anchor_lang::TryAccounts>::active_mut_mask(&self.#field_name.0),
-                            #offset,
-                        );
-                    }
-                })
-            } else {
-                None
-            }
-        })
-        .collect();
-    let active_mut_mask_body = if active_mut_mask_steps.is_empty() {
-        quote::quote! { Self::MUT_MASK }
-    } else {
-        quote::quote! {
-            let mut __mask = Self::MUT_MASK;
-            #(#active_mut_mask_steps)*
-            __mask
-        }
+    }).collect();
+    let active_mut_mask_body = quote! {
+        let mut __mask = Self::MUT_MASK;
+        #(#active_mut_mask_steps)*
+        __mask
     };
 
     // IDL collection — the accounts-JSON emission is a runtime function
@@ -1264,33 +1139,16 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
                 field_ty: &f.idl_field_ty,
                 address_override: f.idl_address.as_deref(),
                 address_override_expr: f.idl_address_expr.as_ref(),
-                // `Nested<Inner>` flattens at IDL emission time by calling
-                // into `Inner::__idl_accounts()`. Grab the inner `Type` so
-                // the emitter can synthesize that call.
-                nested_inner_ty: parse::extract_nested_inner_type(&f.ty),
+                composition_ty: &f.ty,
             }
         })
         .collect();
     let idl_accounts_fn = idl::build_accounts_emission(&accounts_fields);
-    // Most field types register transitive IDL deps through
-    // `IdlAccountType::__register_idl_deps`. `Nested<Inner>` is special:
-    // `#[derive(Accounts)]` emits an inherent `Inner::__idl_register_deps`
-    // helper, not an `IdlAccountType` impl for `Inner`, so route those
-    // fields to the inner helper directly.
-    let idl_dep_walkers: Vec<TokenStream2> = fields
+    let idl_dep_walkers: Vec<_> = fields
         .iter()
-        .filter_map(|f| {
-            if let Some(inner_ty) = parse::extract_nested_inner_type(&f.ty) {
-                Some(quote! {
-                    <#inner_ty>::__idl_register_deps(accounts, types);
-                })
-            } else {
-                f.idl_field_ty.as_ref().map(|ty| {
-                    quote! {
-                        <#ty as anchor_lang::IdlAccountType>::__register_idl_deps(accounts, types);
-                    }
-                })
-            }
+        .map(|f| {
+            let ty = &f.ty;
+            quote! { <#ty as anchor_lang::IdlAccountType>::__register_idl_deps(accounts, types); }
         })
         .collect();
 
@@ -1315,10 +1173,7 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
             #[derive(Clone)]
             pub struct #bumps_name { #(#bump_fields,)* }
 
-            impl ::core::default::Default for #bumps_name
-            where
-                #(#nested_bump_default_bounds,)*
-            {
+            impl ::core::default::Default for #bumps_name {
                 fn default() -> Self {
                     Self {
                         #(#bump_default_fields,)*
@@ -1499,14 +1354,9 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         .iter()
         .filter(|(_, kind)| matches!(kind, FieldKind::Required))
         .map(|(f, _)| {
-            let fname = &f.name;
-            if let Some(nested_ty) = nested_client_accounts_type(&f.ty) {
-                quote! { pub #fname: #nested_ty }
-            } else if f.is_optional {
-                quote! { pub #fname: Option<anchor_lang::Address> }
-            } else {
-                quote! { pub #fname: anchor_lang::Address }
-            }
+            let n = &f.name;
+            let ty = &f.ty;
+            quote! { pub #n: <#ty as anchor_lang::AccountField>::Client }
         })
         .collect();
 
@@ -1548,12 +1398,8 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         .iter()
         .filter(|(_, kind)| matches!(kind, FieldKind::Required))
         .map(|(f, _)| {
-            let fname = &f.name;
-            if nested_client_accounts_type(&f.ty).is_some() {
-                quote! { let #fname = &self.#fname; }
-            } else {
-                quote! { let #fname = self.#fname; }
-            }
+            let n = &f.name;
+            quote! { let #n = &self.#n; }
         })
         .collect();
 
@@ -1582,45 +1428,16 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         .collect();
 
     // Build AccountMeta entries in original field order, using bare idents.
-    let client_meta_steps: Vec<_> = field_kinds
-        .iter()
-        .map(|(field, _kind)| {
-            let writable = field.idl_writable;
-            let signer_expr = client_meta_signer_expr(field);
-            let field_ident = &field.name;
-            if nested_client_accounts_type(&field.ty).is_some() {
-                quote! {
-                    __metas.extend(anchor_lang::ToAccountMetas::to_account_metas(
-                        #field_ident,
-                        _is_signer,
-                    ));
-                }
-            } else if field.is_optional {
-                quote! {
-                    match #field_ident {
-                        Some(__addr) => __metas.push(anchor_lang::AccountMeta {
-                            pubkey: __addr,
-                            is_writable: #writable,
-                            is_signer: #signer_expr,
-                        }),
-                        None => __metas.push(anchor_lang::AccountMeta {
-                            pubkey: #accounts_program_id,
-                            is_writable: false,
-                            is_signer: false,
-                        }),
-                    }
-                }
-            } else {
-                quote! {
-                    __metas.push(anchor_lang::AccountMeta {
-                        pubkey: #field_ident,
-                        is_writable: #writable,
-                        is_signer: #signer_expr,
-                    });
-                }
-            }
-        })
-        .collect();
+    let client_meta_steps: Vec<_> = field_kinds.iter().map(|(field, kind)| {
+        let ty = &field.ty;
+        let n = &field.name;
+        let writable = field.idl_writable;
+        let signer = client_meta_signer_expr(field);
+        let client = if matches!(kind, FieldKind::Required) { quote! { #n } } else { quote! { &#n } };
+        quote! {
+            <#ty as anchor_lang::AccountField>::append_client_metas(#client, &#accounts_program_id, #writable, #signer, _is_signer, &mut __metas);
+        }
+    }).collect();
 
     // PDA finder functions for seed-bearing fields.
     let pda_fns: Vec<TokenStream2> = fields
@@ -1723,61 +1540,23 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         })
         .collect();
 
-    // Full struct: all fields as Address, user fills every one manually.
     let all_client_fields: Vec<_> = fields
         .iter()
         .map(|f| {
-            let fname = &f.name;
-            if let Some(nested_ty) = nested_client_accounts_type(&f.ty) {
-                quote! { pub #fname: #nested_ty }
-            } else if f.is_optional {
-                quote! { pub #fname: Option<anchor_lang::Address> }
-            } else {
-                quote! { pub #fname: anchor_lang::Address }
-            }
+            let n = &f.name;
+            let ty = &f.ty;
+            quote! { pub #n: <#ty as anchor_lang::AccountField>::Client }
         })
         .collect();
-
-    // Full struct to_account_metas: straightforward self.field access.
-    let full_meta_steps: Vec<_> = fields
-        .iter()
-        .map(|field| {
-            let writable = field.idl_writable;
-            let signer_expr = client_meta_signer_expr(field);
-            let field_ident = &field.name;
-            if nested_client_accounts_type(&field.ty).is_some() {
-                quote! {
-                    __metas.extend(anchor_lang::ToAccountMetas::to_account_metas(
-                        &self.#field_ident,
-                        _is_signer,
-                    ));
-                }
-            } else if field.is_optional {
-                quote! {
-                    match self.#field_ident {
-                        Some(__addr) => __metas.push(anchor_lang::AccountMeta {
-                            pubkey: __addr,
-                            is_writable: #writable,
-                            is_signer: #signer_expr,
-                        }),
-                        None => __metas.push(anchor_lang::AccountMeta {
-                            pubkey: #accounts_program_id,
-                            is_writable: false,
-                            is_signer: false,
-                        }),
-                    }
-                }
-            } else {
-                quote! {
-                    __metas.push(anchor_lang::AccountMeta {
-                        pubkey: self.#field_ident,
-                        is_writable: #writable,
-                        is_signer: #signer_expr,
-                    });
-                }
-            }
-        })
-        .collect();
+    let full_meta_steps: Vec<_> = fields.iter().map(|field| {
+        let ty = &field.ty;
+        let n = &field.name;
+        let writable = field.idl_writable;
+        let signer = client_meta_signer_expr(field);
+        quote! {
+            <#ty as anchor_lang::AccountField>::append_client_metas(&self.#n, &#accounts_program_id, #writable, #signer, _is_signer, &mut __metas);
+        }
+    }).collect();
 
     let resolved_name = syn::Ident::new(&format!("{name}Resolved"), name.span());
 
@@ -1803,43 +1582,14 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
             .iter()
             .map(|f| {
                 let n = &f.name;
-                if parse::is_nested_type(&f.ty) {
-                    let inner_ty = parse::extract_nested_inner_type(&f.ty).expect(
-                        "is_nested_type was true but extract_nested_inner_type returned None",
-                    );
-                    let inner_path = QualifiedTypePath::from_type(inner_ty)
-                        .expect("Nested<T> inner type must be a path");
-                    let inner_ident = &inner_path.leaf_ident;
-                    let inner_mod = inner_path.helper_module_path("__cpi_accounts_", 1, n.span());
-                    quote! {
-                        #[nested]
-                        pub #n: #inner_mod::#inner_ident<'a>
-                    }
-                } else if f.is_optional && f.idl_writable {
-                    let signer_expr = cpi_meta_signer_expr(f);
-                    quote! {
-                        #[signer(#signer_expr)]
-                        pub #n: ::core::option::Option<anchor_lang::CpiHandleMut<'a>>
-                    }
-                } else if f.is_optional {
-                    let signer_expr = cpi_meta_signer_expr(f);
-                    quote! {
-                        #[signer(#signer_expr)]
-                        pub #n: ::core::option::Option<anchor_lang::CpiHandle<'a>>
-                    }
-                } else if f.idl_writable {
-                    let signer_expr = cpi_meta_signer_expr(f);
-                    quote! {
-                        #[signer(#signer_expr)]
-                        pub #n: anchor_lang::CpiHandleMut<'a>
-                    }
+                let ty = &f.ty;
+                let signer = cpi_meta_signer_expr(f);
+                let cpi_ty = if f.idl_writable {
+                    quote! { <#ty as anchor_lang::AccountField>::CpiMut<'a> }
                 } else {
-                    let signer_expr = cpi_meta_signer_expr(f);
-                    quote! {
-                        #[signer(#signer_expr)]
-                        pub #n: anchor_lang::CpiHandle<'a>
-                    }
-                }
+                    quote! { <#ty as anchor_lang::AccountField>::Cpi<'a> }
+                };
+                quote! { #[signer(#signer)] pub #n: #cpi_ty }
             })
             .collect();
         // An empty Accounts struct would otherwise emit `pub struct Foo<'a> {}`,
@@ -1902,6 +1652,31 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         }
     };
 
+    let field_impl = if ix_args.is_empty() {
+        quote! {
+            impl anchor_lang::AccountField for #name {
+                const HEADER_SIZE: usize = <Self as anchor_lang::TryAccounts>::HEADER_SIZE;
+                const MUT_MASK: [u64; 4] = <Self as anchor_lang::TryAccounts>::MUT_MASK;
+                const HAS_DYNAMIC_MUT_MASK: bool = <Self as anchor_lang::TryAccounts>::HAS_DYNAMIC_MUT_MASK;
+                type Client = #client_mod_name::#name;
+                type Cpi<'a> = #cpi_mod_name::#name<'a>;
+                type CpiMut<'a> = #cpi_mod_name::#name<'a>;
+                fn load(program_id: &anchor_lang::Address, views: &[anchor_lang::AccountView], duplicates: Option<&anchor_lang::AccountBitvec>, base_offset: usize, ix_data: &[u8]) -> anchor_lang::Result<(Self, Self::Bumps)> {
+                    let (accounts, bumps, ()) = <Self as anchor_lang::TryAccounts>::validate_accounts(program_id, views, duplicates, base_offset, ix_data)?;
+                    Ok((accounts, bumps))
+                }
+                fn active_mut_mask(&self) -> [u64; 4] { <Self as anchor_lang::TryAccounts>::active_mut_mask(self) }
+                fn update(&mut self) -> anchor_lang::Result<()> { <Self as anchor_lang::TryAccounts>::update_accounts(self) }
+                fn exit(&mut self, ix_data: &[u8]) -> anchor_lang::Result<()> { <Self as anchor_lang::TryAccounts>::exit_accounts(self, ix_data) }
+                fn append_client_metas(client: &Self::Client, _: &anchor_lang::Address, _: bool, _: bool, signer_override: Option<bool>, out: &mut anchor_lang::__alloc::vec::Vec<anchor_lang::AccountMeta>) {
+                    out.extend(anchor_lang::ToAccountMetas::to_account_metas(client, signer_override));
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     quote! {
         pub mod #client_mod_name {
             extern crate alloc;
@@ -1925,6 +1700,13 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         #cpi_accounts_mod
 
         #bumps_def
+        #field_impl
+
+        #[cfg(feature = "idl-build")]
+        impl anchor_lang::IdlAccountType for #name {
+            fn __idl_nested_accounts() -> Option<anchor_lang::__alloc::string::String> { Some(Self::__idl_accounts()) }
+            fn __register_idl_deps(accounts: &mut anchor_lang::__alloc::vec::Vec<&'static str>, types: &mut anchor_lang::__alloc::vec::Vec<&'static str>) { Self::__idl_register_deps(accounts, types); }
+        }
 
         impl anchor_lang::Bumps for #name {
             type Bumps = #bumps_name;
@@ -4772,13 +4554,6 @@ struct QualifiedTypePath {
 }
 
 impl QualifiedTypePath {
-    fn from_type(ty: &Type) -> Option<Self> {
-        let Type::Path(type_path) = ty else {
-            return None;
-        };
-        Self::from_path(&type_path.path)
-    }
-
     fn from_path(path: &syn::Path) -> Option<Self> {
         let leaf_ident = path.segments.last()?.ident.clone();
         Some(Self {

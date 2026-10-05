@@ -1,0 +1,166 @@
+//! Account composition shared by individual wrappers and derived account groups.
+
+use {
+    crate::{
+        AccountBitvec, AccountMeta, AccountView, Address, AnchorAccount, CpiHandle, CpiHandleMut,
+        Nested, Result,
+    },
+    alloc::vec::Vec,
+};
+
+/// A field in an `Accounts` struct. Account groups implement this through
+/// `#[derive(Accounts)]`, so nesting requires no marker attribute or wrapper.
+pub trait AccountField: crate::Bumps<Bumps: Default + Clone> + Sized {
+    const HEADER_SIZE: usize;
+    const MUT_MASK: [u64; 4] = [0; 4];
+    const HAS_DYNAMIC_MUT_MASK: bool = false;
+    const IS_SIGNER: bool = false;
+    type Client;
+    type Cpi<'a>;
+    type CpiMut<'a>;
+
+    fn load(
+        program_id: &Address,
+        views: &[AccountView],
+        duplicates: Option<&AccountBitvec>,
+        base_offset: usize,
+        ix_data: &[u8],
+    ) -> Result<(Self, Self::Bumps)>;
+    fn active_mut_mask(&self) -> [u64; 4] {
+        Self::MUT_MASK
+    }
+    fn update(&mut self) -> Result<()> {
+        Ok(())
+    }
+    fn exit(&mut self, _ix_data: &[u8]) -> Result<()> {
+        Ok(())
+    }
+    fn append_client_metas(
+        client: &Self::Client,
+        program_id: &Address,
+        writable: bool,
+        signer: bool,
+        signer_override: Option<bool>,
+        out: &mut Vec<AccountMeta>,
+    );
+}
+
+impl<T: AnchorAccount> AccountField for T {
+    const HEADER_SIZE: usize = 1;
+    const IS_SIGNER: bool = T::IS_SIGNER;
+    type Client = Address;
+    type Cpi<'a> = CpiHandle<'a>;
+    type CpiMut<'a> = CpiHandleMut<'a>;
+    #[inline(always)]
+    fn load(
+        _: &Address,
+        views: &[AccountView],
+        _: Option<&AccountBitvec>,
+        _: usize,
+        _: &[u8],
+    ) -> Result<(Self, ())> {
+        Ok((T::load(views[0])?, ()))
+    }
+    #[inline(always)]
+    fn append_client_metas(
+        client: &Address,
+        _: &Address,
+        writable: bool,
+        signer: bool,
+        signer_override: Option<bool>,
+        out: &mut Vec<AccountMeta>,
+    ) {
+        let _ = signer_override;
+        out.push(AccountMeta {
+            pubkey: *client,
+            is_writable: writable,
+            is_signer: signer,
+        });
+    }
+}
+
+impl<T: AnchorAccount> AccountField for Option<T> {
+    const HEADER_SIZE: usize = 1;
+    const IS_SIGNER: bool = T::IS_SIGNER;
+    type Client = Option<Address>;
+    type Cpi<'a> = Option<CpiHandle<'a>>;
+    type CpiMut<'a> = Option<CpiHandleMut<'a>>;
+    #[inline(always)]
+    fn load(
+        program_id: &Address,
+        views: &[AccountView],
+        _: Option<&AccountBitvec>,
+        _: usize,
+        _: &[u8],
+    ) -> Result<(Self, ())> {
+        let view = views[0];
+        let account = if crate::address_eq(view.address(), program_id) {
+            None
+        } else {
+            Some(T::load(view)?)
+        };
+        Ok((account, ()))
+    }
+    #[inline(always)]
+    fn append_client_metas(
+        client: &Option<Address>,
+        program_id: &Address,
+        writable: bool,
+        signer: bool,
+        signer_override: Option<bool>,
+        out: &mut Vec<AccountMeta>,
+    ) {
+        match client {
+            Some(address) => {
+                T::append_client_metas(address, program_id, writable, signer, signer_override, out)
+            }
+            None => out.push(AccountMeta {
+                pubkey: *program_id,
+                is_writable: false,
+                is_signer: false,
+            }),
+        }
+    }
+}
+
+impl<T: AccountField> crate::Bumps for Nested<T> {
+    type Bumps = T::Bumps;
+}
+
+impl<T: AccountField> AccountField for Nested<T> {
+    const HEADER_SIZE: usize = T::HEADER_SIZE;
+    const MUT_MASK: [u64; 4] = T::MUT_MASK;
+    const HAS_DYNAMIC_MUT_MASK: bool = T::HAS_DYNAMIC_MUT_MASK;
+    type Client = T::Client;
+    type Cpi<'a> = T::Cpi<'a>;
+    type CpiMut<'a> = T::CpiMut<'a>;
+    fn load(
+        program_id: &Address,
+        views: &[AccountView],
+        duplicates: Option<&AccountBitvec>,
+        base_offset: usize,
+        ix_data: &[u8],
+    ) -> Result<(Self, Self::Bumps)> {
+        let (inner, bumps) = T::load(program_id, views, duplicates, base_offset, ix_data)?;
+        Ok((Nested(inner), bumps))
+    }
+    fn active_mut_mask(&self) -> [u64; 4] {
+        self.0.active_mut_mask()
+    }
+    fn update(&mut self) -> Result<()> {
+        self.0.update()
+    }
+    fn exit(&mut self, ix_data: &[u8]) -> Result<()> {
+        self.0.exit(ix_data)
+    }
+    fn append_client_metas(
+        client: &Self::Client,
+        program_id: &Address,
+        writable: bool,
+        signer: bool,
+        signer_override: Option<bool>,
+        out: &mut Vec<AccountMeta>,
+    ) {
+        T::append_client_metas(client, program_id, writable, signer, signer_override, out);
+    }
+}

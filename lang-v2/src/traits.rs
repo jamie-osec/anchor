@@ -871,6 +871,9 @@ impl<T> core::ops::DerefMut for Nested<T> {
 
 #[doc(hidden)]
 impl<T: crate::IdlAccountType> crate::IdlAccountType for Nested<T> {
+    fn __idl_nested_accounts() -> Option<alloc::string::String> {
+        T::__idl_nested_accounts()
+    }
     const __IDL_ACCOUNT_ENTRY: Option<&'static str> = T::__IDL_ACCOUNT_ENTRY;
     const __IDL_TYPE_DEF: Option<&'static str> = T::__IDL_TYPE_DEF;
     fn __idl_account_entry() -> Option<&'static str> {
