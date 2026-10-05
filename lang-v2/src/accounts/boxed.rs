@@ -156,6 +156,15 @@ impl<T: Space> Space for Box<T> {
     const INIT_SPACE: usize = T::INIT_SPACE;
 }
 
+impl<T: crate::Id> crate::Id for Box<T> {
+    #[inline(always)]
+    fn id() -> Address {
+        T::id()
+    }
+
+    const IDL_ADDRESS: &'static str = T::IDL_ADDRESS;
+}
+
 impl<T: Discriminator> Discriminator for Box<T> {
     const DISCRIMINATOR: &'static [u8] = T::DISCRIMINATOR;
 }

@@ -1,5 +1,75 @@
 use std::{fs, path::PathBuf, process::Command};
 
+#[test]
+#[cfg_attr(miri, ignore = "spawns cargo")]
+fn fixed_address_resolution_requires_a_single_address_client() {
+    compile_fail_case(
+        "resolved_group_with_id",
+        r#"
+use anchor_lang::prelude::*;
+declare_id!("11111111111111111111111111111111");
+#[derive(Accounts)]
+pub struct Inner { pub signer: Signer }
+impl Id for Inner {
+    fn id() -> Address { crate::ID }
+}
+#[derive(Accounts)]
+pub struct Outer {
+    #[account(resolve)]
+    pub inner: Inner,
+}
+"#,
+        &["type mismatch resolving", "__anchor_resolve"],
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore = "spawns cargo")]
+fn resolved_builders_diagnose_unsupported_seeds_and_cycles() {
+    compile_fail_case(
+        "resolved_pda_explicit_bump",
+        r#"
+use anchor_lang::prelude::*;
+declare_id!("11111111111111111111111111111111");
+#[derive(Accounts)]
+pub struct Bad {
+    #[account(seeds = [b"data"], bump = 1, resolve)]
+    pub data: UncheckedAccount,
+}
+"#,
+        &["resolve requires canonical PDA seeds"],
+    );
+    compile_fail_case(
+        "resolved_pda_instruction_seed",
+        r#"
+use anchor_lang::prelude::*;
+declare_id!("11111111111111111111111111111111");
+#[derive(Accounts)]
+#[instruction(value: u64)]
+pub struct Bad {
+    #[account(seeds = [value.to_le_bytes().as_ref()], bump, resolve)]
+    pub data: UncheckedAccount,
+}
+"#,
+        &["resolve requires canonical PDA seeds"],
+    );
+    compile_fail_case(
+        "resolved_pda_cycle",
+        r#"
+use anchor_lang::prelude::*;
+declare_id!("11111111111111111111111111111111");
+#[derive(Accounts)]
+pub struct Bad {
+    #[account(seeds = [other.address().as_ref()], bump, resolve)]
+    pub data: UncheckedAccount,
+    #[account(seeds = [data.address().as_ref()], bump, resolve)]
+    pub other: UncheckedAccount,
+}
+"#,
+        &["resolved PDA accounts have a cyclic dependency"],
+    );
+}
+
 fn cargo_case(
     name: &str,
     source: &str,

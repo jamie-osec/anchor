@@ -123,7 +123,7 @@ fn automatic_nesting_composes_idl_metadata() {
     assert!(json.contains("\"name\":\"absent\",\"signer\":true,\"optional\":true"));
 }
 
-type SystemProgramAlias = Program<System>;
+type SystemProgramAlias = Box<Program<System>>;
 #[derive(Accounts)]
 pub struct AliasedResolved {
     #[account(resolve)]
@@ -133,6 +133,8 @@ pub struct AliasedResolved {
 
 #[test]
 fn resolved_program_alias_uses_trait_address_and_preserves_optional_presence() {
+    assert_eq!(<SystemProgramAlias as Id>::id(), System::id());
+    assert_eq!(<SystemProgramAlias as Id>::IDL_ADDRESS, System::IDL_ADDRESS);
     let client: <AliasedResolved as TryAccounts>::ResolvedClient =
         __client_accounts_aliasedresolved::AliasedResolvedResolved { optional: None };
     let metas = client.to_account_metas(None);

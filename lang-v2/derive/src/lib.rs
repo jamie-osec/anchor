@@ -1192,11 +1192,9 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
 
     // --- Client-side struct for off-chain usage (tests, CPI, SDK) ---
     //
-    // The struct only contains fields the user must provide (Signer, raw
-    // accounts, optional Program/PDA presence, etc.). Non-optional derivable
-    // fields (Program<T>, PDAs) are computed inside `to_account_metas()` so
-    // the user never has to fill them. Optional Program/PDA stay on the
-    // struct as `Option<Address>` so `None` can emit the program-id sentinel.
+    // Fields explicitly marked `resolve` are computed inside
+    // `to_account_metas()`. Other fields use AccountField::Client, including
+    // optional account presence and nested account groups.
     let client_mod_name = syn::Ident::new(
         &format!("__client_accounts_{}", name.to_string().to_lowercase()),
         name.span(),
@@ -1336,6 +1334,20 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         })
         .collect();
 
+    for ((_, kind), raw_field) in field_kinds.iter().zip(&named_fields.named) {
+        let attrs = parse::parse_account_attrs(&raw_field.attrs)
+            .expect("parse_field already validated account attributes");
+        if attrs.resolve && matches!(kind, FieldKind::Required) {
+            return syn::Error::new_spanned(
+                raw_field,
+                "resolve requires canonical PDA seeds built from constants and sibling account \
+                 addresses; provide this account explicitly for instruction arguments, account \
+                 data, opaque seed expressions, or an explicit bump",
+            )
+            .to_compile_error();
+        }
+    }
+
     // Client struct fields: only the ones the user must provide.
     let client_fields: Vec<_> = field_kinds
         .iter()
@@ -1379,6 +1391,16 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
             }
         }
     }
+    if let Some((field, _)) = field_kinds
+        .iter()
+        .find(|(field, _)| !resolved.contains(&field.name.to_string()))
+    {
+        return syn::Error::new(
+            field.name.span(),
+            "resolved PDA accounts have a cyclic dependency",
+        )
+        .to_compile_error();
+    }
 
     // Inside to_account_metas: copy required fields to locals, then derive the rest.
     let required_locals: Vec<_> = field_kinds
@@ -1395,9 +1417,8 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         .filter_map(|&i| {
             let (f, kind) = &field_kinds[i];
             let ident = &f.name;
-            // Non-optional Program/PDA locals are bare Address values.
-            // Optional accounts never reach FieldKind::Program/Pda — they stay
-            // FieldKind::Required so callers can pass None for the sentinel.
+            // Resolved accounts have bare Address locals. The resolved trait
+            // or the PDA projection rejects optional account types.
             match kind {
                 FieldKind::Program(expr) => Some(quote! { let #ident = #expr; }),
                 FieldKind::Pda {
