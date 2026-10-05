@@ -2078,3 +2078,34 @@ const _: usize = State::INIT_SPACE;
         &["too many max_len capacities"],
     );
 }
+
+#[test]
+#[cfg_attr(miri, ignore = "spawns cargo")]
+fn program_account_aliases_project_client_and_cpi_types() {
+    compile_pass_case(
+        "program_account_alias_projections",
+        r#"
+use anchor_lang::prelude::*;
+declare_id!("11111111111111111111111111111111");
+#[derive(Accounts)]
+pub struct Original { pub signer: Signer }
+type PublicAccounts = Original;
+#[program(interface, program_id = crate::ID)]
+pub mod interface {
+    use super::*;
+    pub fn call(ctx: &mut Context<PublicAccounts>) -> Result<()> {
+        let _ = ctx;
+        Ok(())
+    }
+}
+pub fn build() {
+    let accounts = accounts::PublicAccounts { signer: crate::ID };
+    let _ = accounts.to_account_metas(None);
+    let _ = accounts::PublicAccountsResolved { signer: crate::ID };
+}
+pub fn cpi_fields<'a>(signer: CpiHandle<'a>) -> cpi::accounts::PublicAccounts<'a> {
+    cpi::accounts::PublicAccounts { signer }
+}
+"#,
+    );
+}

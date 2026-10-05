@@ -19,6 +19,18 @@ use {
 /// `HEADER_SIZE` is computed recursively at compile time: 1 per direct
 /// field, `+ <Inner as TryAccounts>::HEADER_SIZE` per `Nested<Inner>`.
 pub trait TryAccounts: Bumps + Sized {
+    /// Program ID used by generated clients and CPI account metadata.
+    const PROGRAM_ID: Address;
+
+    /// Complete client account addresses in declaration order.
+    type Client: crate::ToAccountMetas;
+
+    /// Client account addresses with explicitly resolved fields omitted.
+    type ResolvedClient: crate::ToAccountMetas;
+
+    /// CPI handles for the complete instruction account group.
+    type Cpi<'a>: crate::ToCpiAccounts<'a>;
+
     const HEADER_SIZE: usize;
 
     /// Bit `i` is set iff account-view index `i` (global, across nested

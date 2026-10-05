@@ -1699,6 +1699,11 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         }
 
         impl anchor_lang::TryAccounts for #name {
+            const PROGRAM_ID: anchor_lang::Address = #accounts_program_id;
+            type Client = #client_mod_name::#name;
+            type ResolvedClient = #client_mod_name::#resolved_name;
+            type Cpi<'a> = #cpi_mod_name::#name<'a>;
+
             const HEADER_SIZE: usize = #header_size_expr;
             const MUT_MASK: [u64; 4] = #mut_mask_expr;
             const HAS_DYNAMIC_MUT_MASK: bool = #has_dynamic_mut_mask_expr;
@@ -4483,45 +4488,18 @@ impl QualifiedTypePath {
         })
     }
 
-    fn helper_module_path(
-        &self,
-        prefix: &str,
-        relative_depth: usize,
-        span: proc_macro2::Span,
-    ) -> TokenStream2 {
-        let helper_ident = Ident::new(
-            &format!("{prefix}{}", self.leaf_ident.to_string().to_lowercase()),
-            span,
-        );
-
-        let mut prefix_segments: Vec<_> = self.path.segments.iter().cloned().collect();
-        prefix_segments.pop();
-
-        let is_absolute = self.path.leading_colon.is_some()
-            || prefix_segments
-                .first()
-                .map(|seg| seg.ident == "crate")
-                .unwrap_or(false);
-
-        if prefix_segments
-            .first()
-            .map(|seg| seg.ident == "self")
-            .unwrap_or(false)
-        {
-            prefix_segments.remove(0);
+    fn scoped_path(&self, relative_depth: usize) -> TokenStream2 {
+        let mut segments: Vec<_> = self.path.segments.iter().cloned().collect();
+        let absolute = self.path.leading_colon.is_some()
+            || segments.first().is_some_and(|seg| seg.ident == "crate");
+        if segments.first().is_some_and(|seg| seg.ident == "self") {
+            segments.remove(0);
         }
-
-        let super_prefix: Vec<_> = if is_absolute {
-            Vec::new()
-        } else {
-            (0..relative_depth).map(|_| quote! { super :: }).collect()
-        };
-
-        quote! {
-            #(#super_prefix)*
-            #(#prefix_segments ::)*
-            #helper_ident
-        }
+        let supers = if absolute { 0 } else { relative_depth };
+        let prefix: Vec<_> = (0..supers).map(|_| quote! { super:: }).collect();
+        let leading_colon = &self.path.leading_colon;
+        let path: syn::punctuated::Punctuated<_, syn::Token![::]> = segments.into_iter().collect();
+        quote! { #leading_colon #(#prefix)* #path }
     }
 }
 
@@ -4910,30 +4888,24 @@ fn process_handler(
         }
     };
 
-    // Client accounts re-export.
-    let client_mod = accounts_type.helper_module_path("__client_accounts_", 1, fn_name.span());
+    // Associated projections preserve aliases and ordinary Rust name resolution.
+    let client_accounts_ty = accounts_type.scoped_path(1);
+    let cpi_accounts_ty = accounts_type.scoped_path(2);
+    let accounts_ty_from_cpi = accounts_type.scoped_path(1);
     let resolved_type =
         syn::Ident::new(&format!("{accounts_ident}Resolved"), accounts_ident.span());
     let accounts_reexport = quote! {
-        pub use #client_mod::#accounts_ident;
-        pub use #client_mod::#resolved_type;
+        pub type #accounts_ident = <#client_accounts_ty as anchor_lang::TryAccounts>::Client;
+        pub type #resolved_type = <#client_accounts_ty as anchor_lang::TryAccounts>::ResolvedClient;
     };
-
-    // CPI accounts re-export — `__cpi_accounts_<lowercase>` is emitted by
-    // `#[derive(Accounts)]` at the same scope as the program's outputs.
-    let cpi_mod = accounts_type.helper_module_path("__cpi_accounts_", 2, fn_name.span());
     let cpi_accounts_reexport = quote! {
-        pub use #cpi_mod::#accounts_ident;
+        pub type #accounts_ident<'a> = <#cpi_accounts_ty as anchor_lang::TryAccounts>::Cpi<'a>;
     };
-    // Emitted in `cpi` (which `use super::*`s), not `cpi::accounts`, so a
-    // user `program_id = declared::ID` path resolves the same way the
-    // instruction builder's `#program_id` does.
-    let cpi_mod_from_cpi = accounts_type.helper_module_path("__cpi_accounts_", 1, fn_name.span());
     let accounts_program_id_check = if config.mode == ProgramMode::Interface {
         quote! {
             const _: () = {
                 let __interface_id = (#program_id).to_bytes();
-                let __accounts_id = #cpi_mod_from_cpi::__ANCHOR_ACCOUNTS_PROGRAM_ID.to_bytes();
+                let __accounts_id = <#accounts_ty_from_cpi as anchor_lang::TryAccounts>::PROGRAM_ID.to_bytes();
                 let mut __i = 0;
                 while __i < 32 {
                     if __interface_id[__i] != __accounts_id[__i] {
@@ -6729,21 +6701,18 @@ mod tests {
     }
 
     #[test]
-    fn qualified_type_helper_module_path_tracks_original_scope() {
+    fn qualified_type_projection_tracks_original_scope() {
         let path: syn::Path = syn::parse_quote!(crate::shared::Inner);
-        let qualified = QualifiedTypePath::from_path(&path).expect("qualified path should parse");
-        let client_path =
-            qualified.helper_module_path("__client_accounts_", 1, proc_macro2::Span::call_site());
-        let cpi_path =
-            qualified.helper_module_path("__cpi_accounts_", 2, proc_macro2::Span::call_site());
-
+        let qualified = QualifiedTypePath::from_path(&path).unwrap();
         assert_eq!(
-            quote!(#client_path::Inner).to_string(),
-            "crate :: shared :: __client_accounts_inner :: Inner"
+            qualified.scoped_path(2).to_string(),
+            "crate :: shared :: Inner"
         );
+        let path: syn::Path = syn::parse_quote!(shared::Alias);
+        let qualified = QualifiedTypePath::from_path(&path).unwrap();
         assert_eq!(
-            quote!(#cpi_path::Inner).to_string(),
-            "crate :: shared :: __cpi_accounts_inner :: Inner"
+            qualified.scoped_path(2).to_string(),
+            "super :: super :: shared :: Alias"
         );
     }
 
@@ -6873,7 +6842,7 @@ mod tests {
         let generated = impl_program(&module, &config).to_string();
 
         assert!(
-            generated.contains("__ANCHOR_ACCOUNTS_PROGRAM_ID"),
+            generated.contains("as anchor_lang :: TryAccounts > :: PROGRAM_ID"),
             "interface mode should compare against the Accounts-side program id const: {generated}"
         );
         assert!(

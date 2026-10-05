@@ -74,7 +74,7 @@ fn automatic_nesting_preserves_runtime_client_and_cpi_order() {
     assert_eq!(accounts.after.address(), views[4].address());
     let _: () = bumps.common.signer;
 
-    let client = __client_accounts_automatic::Automatic {
+    let client: <Automatic as TryAccounts>::Client = __client_accounts_automatic::Automatic {
         before: *views[0].address(),
         common: shared::__client_accounts_common::Common {
             writable: *views[1].address(),
@@ -94,7 +94,7 @@ fn automatic_nesting_preserves_runtime_client_and_cpi_order() {
     assert!(!client.to_account_metas(Some(false))[2].is_signer);
 
     let mut writable = views[1];
-    let cpi = __cpi_accounts_automatic::Automatic {
+    let cpi: <Automatic as TryAccounts>::Cpi<'_> = __cpi_accounts_automatic::Automatic {
         before: views[0].to_cpi_handle(),
         common: shared::__cpi_accounts_common::Common {
             writable: writable.to_cpi_handle_mut(),
@@ -133,7 +133,8 @@ pub struct AliasedResolved {
 
 #[test]
 fn resolved_program_alias_uses_trait_address_and_preserves_optional_presence() {
-    let client = __client_accounts_aliasedresolved::AliasedResolvedResolved { optional: None };
+    let client: <AliasedResolved as TryAccounts>::ResolvedClient =
+        __client_accounts_aliasedresolved::AliasedResolvedResolved { optional: None };
     let metas = client.to_account_metas(None);
     assert_eq!(metas[0].pubkey, System::id());
     assert_eq!(metas[1].pubkey, ID);
