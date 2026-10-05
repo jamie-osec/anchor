@@ -855,6 +855,8 @@ pub trait AccountConstraint<A> {
     }
 }
 
+/// Compatibility wrapper for account groups. New groups can contain other
+/// `Accounts` structs directly, without this wrapper.
 pub struct Nested<T>(pub T);
 
 impl<T> Deref for Nested<T> {

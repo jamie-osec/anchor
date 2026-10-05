@@ -874,7 +874,7 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         .collect();
 
     if named_fields.named.len() > 255 {
-        // Syntactic top-level field cap. Flattened Nested account counts are
+        // Syntactic top-level field cap. Flattened account group counts are
         // separately bounded by the HEADER_SIZE assert emitted on the
         // TryAccounts impl (duplicate-tracking / u8 offset domain is 256 bits).
         return syn::Error::new(name.span(), "`Accounts` derive supports at most 255 fields")
@@ -1074,9 +1074,9 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
 
     // IDL collection — the accounts-JSON emission is a runtime function
     // (not a `&'static str` const) so it can read
-    // `<FieldTy as IdlAccountType>::__IDL_IS_SIGNER / __IDL_ADDRESS` off
-    // the wrapper type. Compile-time flags (writable, init_signer,
-    // optional, relations) are baked directly into the format strings, so
+    // signer, optional, address, and group metadata off the resolved field
+    // type. Attribute flags (writable, init_signer, relations) are baked
+    // directly into the format strings, so
     // the runtime only pays for trait dispatch + concatenation.
     let field_names_str: Vec<String> = fields.iter().map(|f| f.name.to_string()).collect();
 
@@ -1573,7 +1573,7 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
     // Emits a sibling `__cpi_accounts_<name>` module containing a struct of
     // `CpiHandle<'a>` / `CpiHandleMut<'a>` fields and a `ToCpiAccounts<'a>`
     // impl driven by each field's compile-time writable / signer flags.
-    // `Nested<T>` fields hold T's generated CPI accounts struct and flatten through `ToCpiAccounts`,
+    // Account groups project their generated CPI types and flatten through ToCpiAccounts,
     // matching the account ordering used by `TryAccounts`. Optional accounts
     // are emitted as `Option<CpiHandle<'a>>` or `Option<CpiHandleMut<'a>>`;
     // `None` emits the program-id sentinel account meta and omits the handle,
@@ -1790,7 +1790,7 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
 
         // Flattened declared-account count must fit the 256-bit duplicate
         // bitvec and u8 field-offset domain. Top-level field count alone is
-        // not enough: Nested<Inner> expands to Inner::HEADER_SIZE slots.
+        // not enough: child groups can expand to multiple slots.
         const _: () = assert!(
             <#name as anchor_lang::TryAccounts>::HEADER_SIZE <= 255,
             "`Accounts` flattened HEADER_SIZE must be <= 255 (duplicate-tracking domain)"
@@ -2142,6 +2142,7 @@ pub fn account(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// #[derive(Clone, Copy, Pod, Zeroable, IdlType)]
 /// #[idl(bytemuck)]
 /// pub struct Inner { pub a: u64, pub b: u64 }
+/// impl anchor_lang::PodLayout for Inner {}
 ///
 /// #[event(bytemuck)]
 /// pub struct NestedEvent {

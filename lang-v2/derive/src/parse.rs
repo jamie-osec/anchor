@@ -1155,9 +1155,7 @@ fn wrap_init_body_with_constraints(
 
 pub struct AccountField {
     pub name: Ident,
-    /// The field's original `syn::Type` — used by `impl_accounts` to build
-    /// the `HEADER_SIZE` compile-time sum (1 per direct field, +
-    /// `<Inner as TryAccounts>::HEADER_SIZE` per `Nested<Inner>`).
+    /// Original Rust type, used for the AccountField associated projections.
     pub ty: Type,
     pub load: TokenStream2,
     pub deferred_load: Option<TokenStream2>,
@@ -1169,18 +1167,13 @@ pub struct AccountField {
     /// Offset expression for this field within the enclosing struct's
     /// views slice (a compile-time usize). Retained so the trait-impl
     /// emitter can fold direct-mut fields into `MUT_MASK` at the right
-    /// bit position and shift each `Nested<U>` child's `MUT_MASK` by
+    /// bit position and shift each account group's `MUT_MASK` by
     /// this offset.
     pub offset_expr: TokenStream2,
-    /// `true` iff this field contributes a `1` to the enclosing struct's
-    /// `MUT_MASK`: a non-`Option<_>` mut field without `unsafe(dup)`.
-    /// `Option<T>` mut fields are excluded because a `None` slot (the
-    /// client sends `program_id` as the address) should still silence the
-    /// dup check; the derive keeps an inline per-field `get()` inside the
-    /// `Some(...)` branch for those.
+    /// Mutable field without `unsafe(dup)`. AccountSlot::IS_OPTIONAL determines
+    /// whether it contributes to the static mask or the active mask.
     pub contributes_mut_bit: bool,
-    /// `true` iff this optional field contributes to the runtime active
-    /// mutable mask when it loads as `Some`.
+    /// Mutable slot that contributes to the active mask when optional and present.
     pub contributes_active_mut_bit: bool,
     // IDL metadata
     pub idl_writable: bool,

@@ -396,9 +396,8 @@ pub fn build_accounts_emission(fields: &[AccountsJsonField<'_>]) -> TokenStream2
             let mut __s = anchor_lang::__alloc::string::String::from("[");
             let mut __first = true;
             for __p in &__parts {
-                // A `Nested<Inner>` whose inner has zero fields contributes
-                // an empty part — skip it so we don't emit `,,` or a leading
-                // comma.
+                // A cfg-disabled field contributes an empty part. Skip it
+                // so we don't emit `,,` or a leading comma.
                 if __p.is_empty() { continue; }
                 if !__first { __s.push(','); }
                 __first = false;
