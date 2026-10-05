@@ -4817,6 +4817,21 @@ fn process_handler(
         let tuple_ty = quote! { (#(#extra_arg_types,)*) };
         let args_deser = emit_args_deser(&extra_args, "__Args", false);
         let deser_args = args_deser.deser;
+        // As in v1, Accounts may declare only the prefix its constraints need.
+        // Type-check each accepted prefix; reuse a complete decoded tuple below.
+        let prefix_coercions = (0..extra_arg_types.len()).map(|count| {
+            let prefix = &extra_arg_types[..count];
+            quote! {
+                impl<'ix> __AnchorIxArgCoerce<'ix> for (#(#prefix,)*) {
+                    #[inline(always)]
+                    fn __coerce(self, __ix_data: &'ix [u8]) -> anchor_lang::Result<#tuple_ty> {
+                        let _ = self;
+                        #deser_args
+                        Ok((#(#extra_arg_names,)*))
+                    }
+                }
+            }
+        });
         quote! {
             #(#handler_cfg_attrs)*
             #handler_inline_attr
@@ -4833,12 +4848,12 @@ fn process_handler(
                     fn __coerce(self, __ix_data: &'ix [u8]) -> anchor_lang::Result<#tuple_ty>;
                 }
 
-                impl<'ix, __AnchorIxArgs> __AnchorIxArgCoerce<'ix> for __AnchorIxArgs {
+                #(#prefix_coercions)*
+
+                impl<'ix> __AnchorIxArgCoerce<'ix> for #tuple_ty {
                     #[inline(always)]
-                    fn __coerce(self, __ix_data: &'ix [u8]) -> anchor_lang::Result<#tuple_ty> {
-                        let _ = self;
-                        #deser_args
-                        Ok((#(#extra_arg_names,)*))
+                    fn __coerce(self, _: &'ix [u8]) -> anchor_lang::Result<#tuple_ty> {
+                        Ok(self)
                     }
                 }
 
@@ -6700,10 +6715,12 @@ mod tests {
             "expected fallback coercion trait in wrapper: {wrapper}"
         );
         assert!(
-            wrapper.contains(
-                "impl < 'ix , __AnchorIxArgs > __AnchorIxArgCoerce < 'ix > for __AnchorIxArgs"
-            ),
-            "expected generic instruction-arg coercion impl in wrapper: {wrapper}"
+            wrapper.contains("impl < 'ix > __AnchorIxArgCoerce < 'ix > for ()"),
+            "expected fallback for accounts without instruction args: {wrapper}"
+        );
+        assert!(
+            wrapper.contains("for (u64 , u8 ,)"),
+            "expected exact argument tuple: {wrapper}"
         );
     }
 

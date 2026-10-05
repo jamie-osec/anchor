@@ -1991,7 +1991,7 @@ pub struct Bad {
 }
 
 #[test]
-fn missing_instruction_args_do_not_compile() {
+fn instruction_arg_prefix_compiles() {
     CompileCase::new(
         "missing_instruction_args",
         r#"
@@ -2017,7 +2017,7 @@ pub struct Bad {
 }
 "#,
     )
-    .expect_fail(&["the trait bound", "__AnchorIxArgCoerce"]);
+    .expect_pass();
 }
 
 #[test]
