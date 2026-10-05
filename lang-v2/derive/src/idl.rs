@@ -385,7 +385,6 @@ pub struct AccountsJsonField<'a> {
     /// True when the field type is `Option<T>`. Surfaces as
     /// `"optional":true` in the emitted JSON (matches
     /// `IdlInstructionAccount.optional` in `idl/spec/src/lib.rs:89`).
-    pub is_optional: bool,
     /// Names of sibling fields whose `has_one` chain targets this field.
     /// Emitted as `"relations":[...]`. Matches v1's semantics: relations
     /// live on the *target* account (the account being referenced), not
@@ -429,11 +428,6 @@ pub fn build_accounts_emission(fields: &[AccountsJsonField<'_>]) -> TokenStream2
         .map(|f| {
             let name = f.name;
             let writable_json = if f.writable { ",\"writable\":true" } else { "" };
-            let optional_json = if f.is_optional {
-                ",\"optional\":true"
-            } else {
-                ""
-            };
             let relations_json = if f.relations.is_empty() {
                 String::new()
             } else {
@@ -500,7 +494,7 @@ pub fn build_accounts_emission(fields: &[AccountsJsonField<'_>]) -> TokenStream2
                         let __signer = <#ty as anchor_lang::IdlAccountType>::__IDL_IS_SIGNER
                             || #init_signer;
                         let __signer_json: &str = if __signer { ",\"signer\":true" } else { "" };
-                        let __optional_json: &str = if <#ty as anchor_lang::IdlAccountType>::__IDL_IS_OPTIONAL { ",\"optional\":true" } else { #optional_json };
+                        let __optional_json: &str = if <#ty as anchor_lang::IdlAccountType>::__IDL_IS_OPTIONAL { ",\"optional\":true" } else { "" };
                         #addr_json_expr
                         #pda_json_expr
                         anchor_lang::__alloc::format!(
@@ -545,7 +539,7 @@ pub fn build_accounts_emission(fields: &[AccountsJsonField<'_>]) -> TokenStream2
                             #writable_json,
                             #signer_json,
                             __addr_json,
-                            #optional_json,
+                            "",
                             #relations_json,
                             #docs_json,
                             __pda_json,

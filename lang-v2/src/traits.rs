@@ -669,7 +669,8 @@ pub trait Owner {
     const OWNER: Address;
 }
 
-/// Declares the on-chain address for a program marker type.
+/// Declares the on-chain address for a program marker or account wrapper.
+/// Fixed-address wrappers implement this for `#[account(resolve)]` clients.
 ///
 /// `Address` is re-exported from `pinocchio`, which itself re-exports
 /// `solana_address::Address`. That means built-in markers such as

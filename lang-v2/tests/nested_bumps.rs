@@ -122,3 +122,20 @@ fn automatic_nesting_composes_idl_metadata() {
     assert!(json.contains("\"name\":\"signer\",\"signer\":true"));
     assert!(json.contains("\"name\":\"absent\",\"signer\":true,\"optional\":true"));
 }
+
+type SystemProgramAlias = Program<System>;
+#[derive(Accounts)]
+pub struct AliasedResolved {
+    #[account(resolve)]
+    pub system_program: SystemProgramAlias,
+    pub optional: OptionalSigner,
+}
+
+#[test]
+fn resolved_program_alias_uses_trait_address_and_preserves_optional_presence() {
+    let client = __client_accounts_aliasedresolved::AliasedResolvedResolved { optional: None };
+    let metas = client.to_account_metas(None);
+    assert_eq!(metas[0].pubkey, System::id());
+    assert_eq!(metas[1].pubkey, ID);
+    assert!(!metas[1].is_signer);
+}

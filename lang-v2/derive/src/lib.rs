@@ -1130,7 +1130,6 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
                 name,
                 writable: f.idl_writable,
                 init_signer: f.idl_init_signer,
-                is_optional: f.is_optional,
                 relations,
                 docs: &f.idl_docs,
                 pda_json: pda_jsons[i].clone(),
@@ -1218,40 +1217,29 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         .iter()
         .zip(named_fields.named.iter())
         .map(|(f, raw_field)| {
-            let base_ty = match parse::extract_option_inner(&f.ty) {
-                Some(inner) => inner,
-                None => &f.ty,
-            };
-            let ty_name = parse::field_ty_str(base_ty);
-
-            // Optional Program<T> / seed PDAs must stay caller-provided on the
-            // *Resolved builder so `None` can emit the program-id sentinel.
-            // Auto-deriving them as `Some(address)` made that sentinel arm
-            // unreachable while the full (non-Resolved) builder could still
-            // represent absence.
-            if f.is_optional {
-                return (f, FieldKind::Required);
-            }
-
-            if ty_name == "Program" {
-                if let Type::Path(tp) = base_ty {
-                    if let Some(seg) = tp.path.segments.last() {
-                        if let syn::PathArguments::AngleBracketed(args) = &seg.arguments {
-                            if let Some(syn::GenericArgument::Type(inner)) = args.args.first() {
-                                return (
-                                    f,
-                                    FieldKind::Program(quote! {
-                                        <#inner as anchor_lang::Id>::id()
-                                    }),
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-
             let attrs = parse::parse_account_attrs(&raw_field.attrs)
                 .expect("parse_field already validated account attributes");
+            if !attrs.resolve {
+                return (f, FieldKind::Required);
+            }
+            if attrs.seeds.is_none() {
+                let ty = &f.ty;
+                return (
+                    f,
+                    FieldKind::Program(
+                        quote! {{
+                            fn __anchor_resolve<T>() -> anchor_lang::Address
+                            where
+                                T: anchor_lang::AccountField<Client = anchor_lang::Address>
+                                    + anchor_lang::Id,
+                            {
+                                <T as anchor_lang::Id>::id()
+                            }
+                            __anchor_resolve::<#ty>()
+                        }},
+                    ),
+                );
+            }
             if let Some(ref seeds_expr) = attrs.seeds {
                 // `bump = <expr>` is verified on-chain; client auto-derive
                 // would use the canonical bump and can mismatch.

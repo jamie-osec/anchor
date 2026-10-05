@@ -132,7 +132,7 @@ None of these carry an `'info` lifetime — pinocchio's account model is static-
 
 ## CPI Semantics
 
-Same `CpiContext` shape as v1. The big caller-side win is the generated **`Resolved`** struct: alongside the full accounts struct for each handler, the derive emits a variant with only the fields a caller actually has to provide. The standard system and token programs auto-fill when you build the instruction metas, and PDAs derive in topological order so dependent seeds still work.
+Same `CpiContext` shape as v1. The big caller-side win is the generated **`Resolved`** struct: alongside the full accounts struct for each handler, the derive emits a variant with only the fields a caller actually has to provide. Fields marked `#[account(resolve)]` are computed when you build the instruction metas. Program accounts resolve through `ResolveAccount`, and seed-constrained PDAs derive in dependency order. Optional fields remain caller-provided; their presence is never inferred.
 
 For example, the [multisig bench's `Create`](../bench/programs/multisig/anchor-v2/src/instructions/create.rs) takes `creator` (signer), `config` (PDA from `[b"multisig", creator]`), and `system_program`. The caller only passes `creator`:
 

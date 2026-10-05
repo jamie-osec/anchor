@@ -54,6 +54,7 @@ pub struct AccountAttrs {
     pub is_zeroed: bool,
     pub is_executable: bool,
     pub is_dup: bool,
+    pub resolve: bool,
     pub init_span: Option<proc_macro2::Span>,
     pub init_if_needed_span: Option<proc_macro2::Span>,
     /// None = no bump attr, Some(None) = `bump` without value, Some(Some(expr)) = `bump = expr`
@@ -113,6 +114,7 @@ pub fn parse_account_attrs(attrs: &[Attribute]) -> syn::Result<AccountAttrs> {
         is_zeroed: false,
         is_executable: false,
         is_dup: false,
+        resolve: false,
         init_span: None,
         init_if_needed_span: None,
         bump: None,
@@ -204,6 +206,12 @@ pub fn parse_account_attrs(attrs: &[Attribute]) -> syn::Result<AccountAttrs> {
                         } else {
                             result.bump = Some(None);
                         }
+                    }
+                    "resolve" => {
+                        if result.resolve {
+                            return Err(duplicate_singleton(ident.span(), "resolve"));
+                        }
+                        result.resolve = true;
                     }
                     "signer" => {
                         if result.is_signer {
@@ -702,15 +710,6 @@ fn reject_obvious_non_bool_constraint(expr: &Expr) -> syn::Result<()> {
     Ok(())
 }
 
-pub fn field_ty_str(ty: &Type) -> String {
-    if let Type::Path(tp) = ty {
-        if let Some(seg) = tp.path.segments.last() {
-            return seg.ident.to_string();
-        }
-    }
-    String::new()
-}
-
 /// Namespaced constraints whose values are threaded as init-time `Params`
 /// fields via `AccountInitialize::Params`. Only built-in namespaces that
 /// correspond to SPL account types belong here — every other namespace
@@ -1154,25 +1153,6 @@ fn wrap_init_body_with_constraints(
     }
 }
 
-/// Extracts the inner `T` from `Option<T>` for optional-account field detection.
-/// Users write `pub foo: Option<Account<Bar>>` in their Accounts struct; the
-/// derive constructs `None` when the client passes the program's own address
-/// as the sentinel, otherwise `Some(Bar::load(view)?)`.
-pub fn extract_option_inner(ty: &Type) -> Option<&Type> {
-    if let Type::Path(tp) = ty {
-        if let Some(seg) = tp.path.segments.last() {
-            if seg.ident == "Option" {
-                if let syn::PathArguments::AngleBracketed(args) = &seg.arguments {
-                    if let Some(syn::GenericArgument::Type(inner)) = args.args.first() {
-                        return Some(inner);
-                    }
-                }
-            }
-        }
-    }
-    None
-}
-
 pub struct AccountField {
     pub name: Ident,
     /// The field's original `syn::Type` — used by `impl_accounts` to build
@@ -1185,8 +1165,6 @@ pub struct AccountField {
     pub update: Option<TokenStream2>,
     pub exit: Option<TokenStream2>,
     pub has_bump: bool,
-    /// True when the field type is `Option<T>` (optional account).
-    pub is_optional: bool,
     /// Offset expression for this field within the enclosing struct's
     /// views slice (a compile-time usize). Retained so the trait-impl
     /// emitter can fold direct-mut fields into `MUT_MASK` at the right
@@ -2325,7 +2303,6 @@ pub fn parse_field(
     } else {
         None
     };
-    let is_optional = extract_option_inner(field_ty).is_some();
     // Explicit signer constraint or fresh-keypair init (no seeds) — caller
     // signs the tx. Distinct from `Signer`-type fields, which the IDL picks
     // up through `IdlAccountType::__IDL_IS_SIGNER` at runtime.
@@ -2425,7 +2402,6 @@ pub fn parse_field(
                 quote! { <#field_ty as anchor_lang::AccountField>::exit(&mut self.#field_name, __ix_data)?; },
             ),
             has_bump: false,
-            is_optional,
             offset_expr,
             contributes_mut_bit: false,
             contributes_active_mut_bit: false,
@@ -3152,7 +3128,6 @@ pub fn parse_field(
         update,
         exit,
         has_bump,
-        is_optional,
         offset_expr,
         contributes_mut_bit,
         contributes_active_mut_bit,
