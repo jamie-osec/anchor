@@ -709,10 +709,14 @@ fn exit_after_owner_change_compares_stale_byte_cleanup() {
         let mut buf = AccountBuffer::<256>::new();
         setup_shrinkable_bytes_buf(&mut buf, &tail, &[0xAA, 0xBB]);
         let mut acct = unsafe { BorshAccount::<ShrinkableBytes>::load_mut(buf.view()) }.unwrap();
-        acct.items.clear();
+        // Release the live data guard before changing bytes through the fixture.
+        // Retain the snapshot and original serialized length for the comparison.
+        acct.release_borrow().unwrap();
         // Match the shorter value's length prefix in the live buffer. The
         // old serialized tail still needs cleanup, independently of that prefix.
         set_data_bytes(&mut buf, 8, &0u32.to_le_bytes());
+        acct.reacquire_guard_only().unwrap();
+        acct.items.clear();
         buf.set_owner(FOREIGN_PROGRAM_ID);
         let before = read_data_bytes(&buf, 0, 16);
 
@@ -744,7 +748,10 @@ fn exit_after_owner_change_rejects_stale_snapshot() {
     setup_counter_buf(&mut buf, 42);
     let mut acct = unsafe { BorshAccount::<Counter>::load_mut(buf.view()) }.unwrap();
     // The typed snapshot is untouched, but the live payload differs.
+    // Fixture writes must happen without a live mutable data guard.
+    acct.release_borrow().unwrap();
     set_data_bytes(&mut buf, 8, &777u64.to_le_bytes());
+    acct.reacquire_guard_only().unwrap();
     buf.set_owner(FOREIGN_PROGRAM_ID);
 
     assert_eq!(acct.exit(), Err(ProgramError::IllegalOwner));
