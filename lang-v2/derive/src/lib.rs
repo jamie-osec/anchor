@@ -59,10 +59,7 @@ pub fn anchor_deserialize(input: TokenStream) -> TokenStream {
     derive_wincode_schema(input, quote!(anchor_lang::wincode::SchemaRead))
 }
 
-fn derive_wincode_schema(
-    input: TokenStream,
-    schema_derive: TokenStream2,
-) -> TokenStream {
+fn derive_wincode_schema(input: TokenStream, schema_derive: TokenStream2) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     quote! {
         #[derive(#schema_derive)]
@@ -91,16 +88,6 @@ pub fn __erase(_: TokenStream, _: TokenStream) -> TokenStream {
 pub fn derive_to_cpi_accounts(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     TokenStream::from(impl_to_cpi_accounts(&input))
-}
-
-#[derive(Clone, Copy)]
-enum CpiFieldKind {
-    Readonly,
-    Writable,
-    OptionalReadonly,
-    OptionalWritable,
-    Nested,
-    Phantom,
 }
 
 struct SignerExpr {
@@ -172,8 +159,9 @@ fn unsupported_wincode_from_cfg_attr_args(
                 }
             }
             syn::Meta::List(list) if list.path.is_ident("cfg_attr") => {
-                let Ok(nested) = syn::punctuated::Punctuated::<syn::Meta, syn::Token![,]>::parse_terminated
-                    .parse2(list.tokens.clone())
+                let Ok(nested) =
+                    syn::punctuated::Punctuated::<syn::Meta, syn::Token![,]>::parse_terminated
+                        .parse2(list.tokens.clone())
                 else {
                     continue;
                 };
@@ -297,32 +285,29 @@ fn impl_to_cpi_accounts(input: &DeriveInput) -> TokenStream2 {
         Data::Struct(s) => match &s.fields {
             Fields::Named(fields) => &fields.named,
             _ => {
-                return syn::Error::new_spanned(
-                    input,
-                    "ToCpiAccounts can only be derived for structs with named fields",
-                )
-                .to_compile_error();
+                return syn::Error::new_spanned(input, "ToCpiAccounts requires named fields")
+                    .to_compile_error()
             }
         },
         _ => {
             return syn::Error::new_spanned(input, "ToCpiAccounts can only be derived for structs")
-                .to_compile_error();
+                .to_compile_error()
         }
     };
-
-    let accounts_program_id = match accounts_program_id_expr(input) {
+    let program_id = match accounts_program_id_expr(input) {
         Ok(expr) => expr,
         Err(err) => return err.to_compile_error(),
     };
-
-    let mut cpi_fields = Vec::new();
-    let mut cpi_lifetime = None::<syn::Lifetime>;
+    let lifetime: syn::Lifetime = syn::parse_quote!('__anchor_cpi);
+    let mut generics = input.generics.clone();
+    generics.params.insert(0, syn::parse_quote!('__anchor_cpi));
+    let mut metas = Vec::new();
+    let mut handles = Vec::new();
+    let mut flags = Vec::new();
     for field in fields {
-        let ident = field
-            .ident
-            .as_ref()
-            .expect("named fields always have identifiers");
-        let account_meta = match account_meta_attrs(field) {
+        let ident = field.ident.as_ref().expect("named field");
+        let ty = &field.ty;
+        let attrs = match account_meta_attrs(field) {
             Ok(attrs) => attrs,
             Err(err) => return err.to_compile_error(),
         };
@@ -334,182 +319,79 @@ fn impl_to_cpi_accounts(input: &DeriveInput) -> TokenStream2 {
             Ok(nested) => nested,
             Err(err) => return err.to_compile_error(),
         };
-        if account_meta.skip {
-            if signer.present {
-                return syn::Error::new_spanned(
-                    field,
-                    "#[account_meta(skip)] cannot be combined with #[signer]",
-                )
+        if (attrs.skip || nested) && signer.present {
+            return syn::Error::new_spanned(field, "skip and nested fields cannot have #[signer]")
                 .to_compile_error();
-            }
+        }
+        if attrs.skip {
             if nested {
-                return syn::Error::new_spanned(
-                    field,
-                    "#[account_meta(skip)] cannot be combined with #[nested]",
-                )
-                .to_compile_error();
+                return syn::Error::new_spanned(field, "skip cannot be combined with #[nested]")
+                    .to_compile_error();
             }
             continue;
         }
-        if nested && signer.present {
-            return syn::Error::new_spanned(field, "#[nested] cannot be combined with #[signer]")
-                .to_compile_error();
+        generics
+            .make_where_clause()
+            .predicates
+            .push(syn::parse_quote!(#ty: anchor_lang::CpiField<#lifetime>));
+        if attrs.duplicate_readonly {
+            generics
+                .make_where_clause()
+                .predicates
+                .push(syn::parse_quote!(#ty: anchor_lang::CpiReadonlyField<#lifetime>));
+            metas.push(quote! {
+                __accounts.push(anchor_lang::pinocchio::instruction::InstructionAccount::readonly(
+                    <#ty as anchor_lang::CpiReadonlyField<#lifetime>>::readonly_handle(&self.#ident).address(),
+                ));
+            });
+            handles.push(quote! {
+                __handles.push(<#ty as anchor_lang::CpiReadonlyField<#lifetime>>::readonly_handle(&self.#ident));
+            });
+            flags.push(quote! { __flags.push(false); });
         }
-        let (kind, lifetime) = match cpi_field_kind(&field.ty, nested) {
-            Ok(kind) => kind,
-            Err(err) => return err.to_compile_error(),
-        };
-        if matches!(kind, CpiFieldKind::Phantom) && signer.present {
-            return syn::Error::new_spanned(
-                field,
-                "PhantomData fields cannot be combined with #[signer]",
-            )
-            .to_compile_error();
-        }
-        if let Some(existing) = &cpi_lifetime {
-            if existing.ident != lifetime.ident {
-                return syn::Error::new_spanned(
-                    &field.ty,
-                    "all CpiHandle and CpiHandleMut fields must use the same lifetime",
-                )
-                .to_compile_error();
-            }
-        } else {
-            cpi_lifetime = Some(lifetime);
-        }
-        if !matches!(kind, CpiFieldKind::Phantom) {
-            if account_meta.duplicate_readonly {
-                if !matches!(kind, CpiFieldKind::Readonly | CpiFieldKind::Writable) {
-                    return syn::Error::new_spanned(
-                        field,
-                        "#[account_meta(duplicate_readonly)] requires a direct CpiHandle or \
-                         CpiHandleMut field",
-                    )
-                    .to_compile_error();
-                }
-                cpi_fields.push((ident, CpiFieldKind::Readonly, quote! { false }));
-            }
-            cpi_fields.push((ident, kind, signer.expr));
-        }
-    }
-
-    let Some(cpi_lifetime) = cpi_lifetime else {
-        return syn::Error::new_spanned(
-            input,
-            "ToCpiAccounts requires at least one CpiHandle or CpiHandleMut field",
-        )
-        .to_compile_error();
-    };
-
-    let name = &input.ident;
-    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-
-    let meta_steps = cpi_fields.iter().map(|(ident, kind, signer)| {
-        let writable = matches!(
-            kind,
-            CpiFieldKind::Writable | CpiFieldKind::OptionalWritable
-        );
-        match kind {
-            CpiFieldKind::Phantom => quote! {},
-            CpiFieldKind::Nested => quote! {
-                __accounts.extend(anchor_lang::ToCpiAccounts::to_instruction_accounts(&self.#ident));
-            },
-            CpiFieldKind::Readonly | CpiFieldKind::Writable => quote! {
-                __accounts.push(
-                    anchor_lang::pinocchio::instruction::InstructionAccount::new(
-                        self.#ident.address(),
-                        #writable,
-                        #signer,
-                    ),
-                );
-            },
-            CpiFieldKind::OptionalReadonly | CpiFieldKind::OptionalWritable => quote! {
-                match self.#ident {
-                    ::core::option::Option::Some(__account) => {
-                        __accounts.push(
-                            anchor_lang::pinocchio::instruction::InstructionAccount::new(
-                                __account.address(),
-                                #writable,
-                                #signer,
-                            ),
-                        );
-                    }
-                    ::core::option::Option::None => {
-                        __accounts.push(
-                            anchor_lang::pinocchio::instruction::InstructionAccount::readonly(
-                                &#accounts_program_id,
-                            ),
-                        );
-                    }
-                }
-            },
-        }
-    });
-
-    let handle_steps = cpi_fields.iter().map(|(ident, kind, _)| match kind {
-        CpiFieldKind::Phantom => quote! {},
-        CpiFieldKind::Nested => quote! {
-            __handles.extend(anchor_lang::ToCpiAccounts::to_cpi_handles(&self.#ident));
-        },
-        CpiFieldKind::Readonly => quote! {
-            __handles.push(self.#ident.into_readonly());
-        },
-        CpiFieldKind::Writable => quote! {
-            __handles.push(self.#ident.into());
-        },
-        CpiFieldKind::OptionalReadonly => quote! {
-            if let ::core::option::Option::Some(__account) = self.#ident {
-                __handles.push(__account.into_readonly());
-            }
-        },
-        CpiFieldKind::OptionalWritable => quote! {
-            if let ::core::option::Option::Some(__account) = self.#ident {
-                __handles.push(__account.into());
-            }
-        },
-    });
-
-    let flag_steps = cpi_fields.iter().map(|(ident, kind, _)| match kind {
-        CpiFieldKind::Phantom => quote! {},
-        CpiFieldKind::Nested => quote! {
-            __flags.extend(
-                anchor_lang::ToCpiAccounts::optional_account_sentinel_flags(&self.#ident),
+        let signer = signer.expr;
+        metas.push(quote! {
+            <#ty as anchor_lang::CpiField<#lifetime>>::append_instruction_accounts(
+                &self.#ident, &const { #program_id }, #signer, &mut __accounts,
             );
-        },
-        CpiFieldKind::Readonly | CpiFieldKind::Writable => quote! {
-            __flags.push(false);
-        },
-        CpiFieldKind::OptionalReadonly | CpiFieldKind::OptionalWritable => quote! {
-            __flags.push(self.#ident.is_none());
-        },
-    });
-
+        });
+        handles.push(quote! {
+            <#ty as anchor_lang::CpiField<#lifetime>>::append_cpi_handles(&self.#ident, &mut __handles);
+        });
+        flags.push(quote! {
+            <#ty as anchor_lang::CpiField<#lifetime>>::append_sentinel_flags(&self.#ident, &mut __flags);
+        });
+    }
+    let name = &input.ident;
+    let (_, ty_generics, _) = input.generics.split_for_impl();
+    let (impl_generics, _, where_clause) = generics.split_for_impl();
     quote! {
-        impl #impl_generics anchor_lang::ToCpiAccounts<#cpi_lifetime>
-            for #name #ty_generics #where_clause
-        {
-            fn to_instruction_accounts(
-                &self,
-            ) -> anchor_lang::__alloc::vec::Vec<
-                anchor_lang::pinocchio::instruction::InstructionAccount<#cpi_lifetime>,
-            > {
+        impl #impl_generics anchor_lang::ToCpiAccounts<#lifetime> for #name #ty_generics #where_clause {
+            fn to_instruction_accounts(&self) -> anchor_lang::__alloc::vec::Vec<anchor_lang::pinocchio::instruction::InstructionAccount<#lifetime>> {
                 let mut __accounts = anchor_lang::__alloc::vec::Vec::new();
-                #(#meta_steps)*
+                #(#metas)*
                 __accounts
             }
-
-            fn to_cpi_handles(
-                &self,
-            ) -> anchor_lang::__alloc::vec::Vec<anchor_lang::CpiHandle<#cpi_lifetime>> {
+            fn to_cpi_handles(&self) -> anchor_lang::__alloc::vec::Vec<anchor_lang::CpiHandle<#lifetime>> {
                 let mut __handles = anchor_lang::__alloc::vec::Vec::new();
-                #(#handle_steps)*
+                #(#handles)*
                 __handles
             }
-
             fn optional_account_sentinel_flags(&self) -> anchor_lang::__alloc::vec::Vec<bool> {
                 let mut __flags = anchor_lang::__alloc::vec::Vec::new();
-                #(#flag_steps)*
+                #(#flags)*
                 __flags
+            }
+        }
+        impl #impl_generics anchor_lang::CpiField<#lifetime> for #name #ty_generics #where_clause {
+            fn append_instruction_accounts(&self, _: &#lifetime anchor_lang::Address, _: bool, out: &mut anchor_lang::__alloc::vec::Vec<anchor_lang::pinocchio::instruction::InstructionAccount<#lifetime>>) {
+                out.extend(<Self as anchor_lang::ToCpiAccounts<#lifetime>>::to_instruction_accounts(self));
+            }
+            fn append_cpi_handles(&self, out: &mut anchor_lang::__alloc::vec::Vec<anchor_lang::CpiHandle<#lifetime>>) {
+                out.extend(<Self as anchor_lang::ToCpiAccounts<#lifetime>>::to_cpi_handles(self));
+            }
+            fn append_sentinel_flags(&self, out: &mut anchor_lang::__alloc::vec::Vec<bool>) {
+                out.extend(<Self as anchor_lang::ToCpiAccounts<#lifetime>>::optional_account_sentinel_flags(self));
             }
         }
     }
@@ -642,132 +524,6 @@ fn account_meta_attrs(field: &syn::Field) -> syn::Result<AccountMetaAttrs> {
         ));
     }
     Ok(attrs)
-}
-
-fn cpi_field_kind(ty: &Type, nested: bool) -> syn::Result<(CpiFieldKind, syn::Lifetime)> {
-    if nested {
-        if option_inner(ty).is_some() {
-            return Err(syn::Error::new_spanned(
-                ty,
-                "#[nested] fields cannot be wrapped in Option",
-            ));
-        }
-        let Some(lifetime) = path_type_first_lifetime(ty) else {
-            return Err(syn::Error::new_spanned(
-                ty,
-                "#[nested] fields must name a type carrying the CPI lifetime, e.g. Inner<'a>",
-            ));
-        };
-        return Ok((CpiFieldKind::Nested, lifetime));
-    }
-    if let Some(lifetime) = phantom_data_lifetime(ty) {
-        return Ok((CpiFieldKind::Phantom, lifetime));
-    }
-    if let Some((inner, _)) = option_inner(ty) {
-        let (kind, lifetime) = direct_cpi_field_kind(inner)?;
-        return match kind {
-            CpiFieldKind::Readonly => Ok((CpiFieldKind::OptionalReadonly, lifetime)),
-            CpiFieldKind::Writable => Ok((CpiFieldKind::OptionalWritable, lifetime)),
-            _ => unreachable!("direct_cpi_field_kind never returns optional kinds"),
-        };
-    }
-    direct_cpi_field_kind(ty)
-}
-
-fn phantom_data_lifetime(ty: &Type) -> Option<syn::Lifetime> {
-    let Type::Path(tp) = ty else {
-        return None;
-    };
-    let seg = tp.path.segments.last()?;
-    if seg.ident != "PhantomData" {
-        return None;
-    }
-    let syn::PathArguments::AngleBracketed(args) = &seg.arguments else {
-        return None;
-    };
-    if args.args.len() != 1 {
-        return None;
-    }
-    let syn::GenericArgument::Type(Type::Reference(reference)) = args.args.first()? else {
-        return None;
-    };
-    let Type::Tuple(tuple) = reference.elem.as_ref() else {
-        return None;
-    };
-    if !tuple.elems.is_empty() {
-        return None;
-    }
-    reference.lifetime.clone()
-}
-
-fn direct_cpi_field_kind(ty: &Type) -> syn::Result<(CpiFieldKind, syn::Lifetime)> {
-    let Some((ident, lifetime)) = path_type_ident_and_lifetime(ty) else {
-        return Err(syn::Error::new_spanned(
-            ty,
-            "expected CpiHandle<'a>, CpiHandleMut<'a>, Option<CpiHandle<'a>>, or \
-             Option<CpiHandleMut<'a>>",
-        ));
-    };
-    match ident.to_string().as_str() {
-        "CpiHandle" => Ok((CpiFieldKind::Readonly, lifetime)),
-        "CpiHandleMut" => Ok((CpiFieldKind::Writable, lifetime)),
-        _ => Err(syn::Error::new_spanned(
-            ty,
-            "expected CpiHandle<'a> or CpiHandleMut<'a>",
-        )),
-    }
-}
-
-fn option_inner(ty: &Type) -> Option<(&Type, &syn::Path)> {
-    let Type::Path(tp) = ty else {
-        return None;
-    };
-    let seg = tp.path.segments.last()?;
-    if seg.ident != "Option" {
-        return None;
-    }
-    let syn::PathArguments::AngleBracketed(args) = &seg.arguments else {
-        return None;
-    };
-    if args.args.len() != 1 {
-        return None;
-    }
-    let syn::GenericArgument::Type(inner) = args.args.first()? else {
-        return None;
-    };
-    Some((inner, &tp.path))
-}
-
-fn path_type_ident_and_lifetime(ty: &Type) -> Option<(Ident, syn::Lifetime)> {
-    let Type::Path(tp) = ty else {
-        return None;
-    };
-    let seg = tp.path.segments.last()?;
-    let syn::PathArguments::AngleBracketed(args) = &seg.arguments else {
-        return None;
-    };
-    if args.args.len() != 1 {
-        return None;
-    }
-    let syn::GenericArgument::Lifetime(lifetime) = args.args.first()? else {
-        return None;
-    };
-    Some((seg.ident.clone(), lifetime.clone()))
-}
-
-fn path_type_first_lifetime(ty: &Type) -> Option<syn::Lifetime> {
-    let Type::Path(tp) = ty else {
-        return None;
-    };
-    tp.path.segments.iter().find_map(|seg| {
-        let syn::PathArguments::AngleBracketed(args) = &seg.arguments else {
-            return None;
-        };
-        args.args.iter().find_map(|arg| match arg {
-            syn::GenericArgument::Lifetime(lifetime) => Some(lifetime.clone()),
-            _ => None,
-        })
-    })
 }
 
 /// Returns true if `ty` needs the `'ix` lifetime injected when used as an
@@ -2297,8 +2053,8 @@ pub fn account(attr: TokenStream, item: TokenStream) -> TokenStream {
     if !matches!(fields, Fields::Named(_)) {
         return syn::Error::new(
             name.span(),
-            "`#[account]` only supports structs with named fields (tuple and unit structs are \
-             not supported)",
+            "`#[account]` only supports structs with named fields (tuple and unit structs are not \
+             supported)",
         )
         .to_compile_error()
         .into();
@@ -3422,9 +3178,9 @@ fn instruction_discriminator_validation_tokens(
                 };
                 (
                     format!(
-                        "instruction `{missing_name}` is missing `#[discrim = N]`; all instructions \
-                         in `#[program]` must specify custom discriminators when one instruction \
-                         does"
+                        "instruction `{missing_name}` is missing `#[discrim = N]`; all \
+                         instructions in `#[program]` must specify custom discriminators when one \
+                         instruction does"
                     ),
                     missing_span,
                 )
@@ -5133,9 +4889,7 @@ fn wincode_idl_override_tokens_for_variants(
         .iter()
         .flat_map(|variant| {
             variant.fields.iter().filter_map(move |field| {
-                Some(
-                    unsupported_wincode_idl_attr_error(surface, &field.attrs)?.to_compile_error(),
-                )
+                Some(unsupported_wincode_idl_attr_error(surface, &field.attrs)?.to_compile_error())
             })
         })
         .collect()
@@ -7455,11 +7209,13 @@ mod tests {
         let default_generated = impl_accounts(&default_input).to_string();
         assert!(
             default_generated.contains("pub const __ANCHOR_ACCOUNTS_PROGRAM_ID"),
-            "Accounts derive should expose the program id used for optional sentinels and default PDAs: {default_generated}"
+            "Accounts derive should expose the program id used for optional sentinels and default \
+             PDAs: {default_generated}"
         );
         assert!(
             default_generated.contains("crate :: ID"),
-            "unannotated Accounts should default the exposed program id to crate::ID: {default_generated}"
+            "unannotated Accounts should default the exposed program id to crate::ID: \
+             {default_generated}"
         );
 
         let override_input: syn::DeriveInput = syn::parse_quote! {
@@ -7528,7 +7284,8 @@ mod tests {
 
         assert!(
             !generated.contains("interface program_id does not match accounts_program_id"),
-            "executable programs share crate::ID by construction and should not emit the interface assertion: {generated}"
+            "executable programs share crate::ID by construction and should not emit the \
+             interface assertion: {generated}"
         );
     }
 

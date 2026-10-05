@@ -10,6 +10,7 @@ pub mod accounts;
 pub mod context;
 mod context_cpi;
 pub mod cpi;
+mod cpi_field;
 pub mod cursor;
 mod dispatch;
 pub mod event;
@@ -27,7 +28,6 @@ pub mod testing;
 mod traits;
 
 // Re-export derive macros and bytemuck for generated code
-pub use cpi::realloc_account;
 /// Chunked 4×u64 equality compare for `Address`. Preferred over `==`
 /// on `&Address`. See <https://github.com/anza-xyz/solana-sdk/issues/345>.
 pub use pinocchio::address::address_eq;
@@ -43,6 +43,10 @@ pub use solana_msg;
 #[cfg(feature = "compat")]
 #[doc(hidden)]
 pub use solana_program_log::log as __log_str;
+pub use {
+    cpi::realloc_account,
+    cpi_field::{CpiField, CpiReadonlyField, SingleCpiField},
+};
 
 // Ungated re-export so generated macro code (`#[event]`, `debug!`, etc.)
 // can reach `Vec` without std or `extern crate alloc;` in user crates.
@@ -195,8 +199,9 @@ pub use solana_instruction::account_meta::AccountMeta;
 pub use {
     accounts::{AccountInitialize, SlabInit},
     anchor_derive_accounts::{
-        access_control, account, constant, declare_program, emit, error_code, event, pod_wrapper,
-        program, Accounts, AnchorDeserialize, AnchorSerialize, InitSpace, ToCpiAccounts, __erase,
+        __erase, access_control, account, constant, declare_program, emit, error_code, event,
+        pod_wrapper, program, Accounts, AnchorDeserialize, AnchorSerialize, InitSpace,
+        ToCpiAccounts,
     },
     bytemuck,
     context::{Bumps, Context, MutMask},
@@ -308,8 +313,7 @@ impl<T: Space, const N: usize> Space for [T; N] {
 
 #[doc(hidden)]
 pub mod __private {
-    use crate::CpiHandle;
-    use pinocchio::account::AccountView;
+    use {crate::CpiHandle, pinocchio::account::AccountView};
 
     /// Used by `#[derive(InitSpace)]` on enums to pick the largest variant size.
     pub const fn max(a: usize, b: usize) -> usize {
