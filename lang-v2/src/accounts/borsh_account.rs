@@ -44,6 +44,9 @@ where
 /// byte-identical to borsh, so off-chain clients that decode with a borsh
 /// library still work. Holds a pinocchio borrow guard (`Ref` for `load`,
 /// `RefMut` for `load_mut`); `exit()` serializes through the held `RefMut`.
+/// After an ownership change, `exit()` and `release_borrow()` compare the
+/// encoded bytes without writing: unchanged bytes succeed and changed bytes
+/// return `ProgramError::IllegalOwner`. See [`SerializedAccount`] for details.
 ///
 /// Type alias over [`SerializedAccount<T, BorshSerializer>`]; all inherent
 /// methods (`address`, `release_borrow`, `reacquire_borrow_mut`,
