@@ -1,6 +1,6 @@
 //! Compile-time tests for `#[derive(InitSpace)]`.
 //!
-//! Exercises every branch of `len_from_type` — primitives, arrays, tuples,
+//! Exercises trait composition — primitives, arrays, tuples,
 //! `Option<T>`, `String`, `Vec<T>` with `#[max_len]`, nested structs, and
 //! enums. Each `INIT_SPACE` is a `const` so wrong answers fail at compile
 //! time; runtime assertions double-check the values the derive generated.
@@ -307,4 +307,23 @@ fn aliases_consume_nested_tuple_capacities_in_order() {
         AliasedDynamic::INIT_SPACE,
         2 * (4 + 4 * (1 + (4 + 3) + (4 + 5)))
     );
+}
+
+type CompositeRow = (
+    Box<Inner>,
+    GenericAddressParam<WideAddress>,
+    Variant,
+    Unit,
+    String,
+);
+
+#[derive(InitSpace)]
+struct CompositeRows {
+    #[max_len(2, 5)]
+    _rows: Vec<CompositeRow>,
+}
+
+#[test]
+fn derived_types_preserve_capacities_for_later_tuple_elements() {
+    assert_eq!(CompositeRows::INIT_SPACE, 4 + 2 * (8 + 48 + 17 + 4 + 5));
 }

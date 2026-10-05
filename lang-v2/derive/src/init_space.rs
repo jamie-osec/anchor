@@ -8,10 +8,10 @@
 use {
     proc_macro::TokenStream,
     proc_macro2::TokenStream as TokenStream2,
-    quote::quote,
+    quote::{format_ident, quote},
     syn::{
         parse::ParseStream, parse_macro_input, punctuated::Punctuated, token::Comma, DeriveInput,
-        Expr, Field, Fields, Type,
+        Expr, Field, Fields, GenericParam, Generics, Type,
     },
 };
 
@@ -53,6 +53,30 @@ pub fn expand(item: TokenStream) -> TokenStream {
     }
 
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    let limit = fresh_ident("__ANCHOR_SPACE_LIMIT", &input.generics);
+    let tail = fresh_ident("__AnchorSpaceTail", &input.generics);
+    let mut bounded_generics = input.generics.clone();
+    bounded_generics
+        .params
+        .push(syn::parse_quote!(const #limit: usize));
+    bounded_generics
+        .params
+        .push(syn::parse_quote!(#tail: anchor_lang::SpaceLimits));
+    let (bounded_impl_generics, _, bounded_where_clause) = bounded_generics.split_for_impl();
+    let bounded_name = &input.ident;
+    let bounded_impl = if matches!(input.data, syn::Data::Union(_)) {
+        quote! {}
+    } else {
+        quote! {
+            #[automatically_derived]
+            impl #bounded_impl_generics anchor_lang::BoundedSpace<anchor_lang::Limits<#limit, #tail>>
+                for #bounded_name #ty_generics #bounded_where_clause
+            {
+                const SPACE: usize = <Self as anchor_lang::Space>::INIT_SPACE;
+                type Remaining = anchor_lang::Limits<#limit, #tail>;
+            }
+        }
+    };
     let name = input.ident;
 
     let process_struct_fields = |fields: Punctuated<Field, Comma>| {
@@ -106,7 +130,19 @@ pub fn expand(item: TokenStream) -> TokenStream {
         .to_compile_error(),
     };
 
-    TokenStream::from(expanded)
+    TokenStream::from(quote! { #expanded #bounded_impl })
+}
+
+fn fresh_ident(base: &str, generics: &Generics) -> syn::Ident {
+    let mut name = base.to_owned();
+    while generics.params.iter().any(|param| match param {
+        GenericParam::Type(param) => param.ident == name,
+        GenericParam::Const(param) => param.ident == name,
+        GenericParam::Lifetime(_) => false,
+    }) {
+        name.push('_');
+    }
+    format_ident!("{name}")
 }
 
 fn field_len_tokens(field: Field) -> TokenStream2 {
