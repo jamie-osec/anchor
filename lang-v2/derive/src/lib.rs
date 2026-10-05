@@ -995,6 +995,7 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         .collect();
     let bump_cache_locals: Vec<_> = fields
         .iter()
+        .filter(|field| !field.composed_load)
         .map(|f| {
             let cache = parse::bump_cache_ident(&f.name);
             let ty = &f.ty;
@@ -1638,17 +1639,18 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         }
     };
 
-    let field_impl = if ix_args.is_empty() {
-        quote! {
+    let field_impl = quote! {
             impl anchor_lang::AccountField for #name {
                 const HEADER_SIZE: usize = <Self as anchor_lang::TryAccounts>::HEADER_SIZE;
                 const MUT_MASK: [u64; 4] = <Self as anchor_lang::TryAccounts>::MUT_MASK;
                 const HAS_DYNAMIC_MUT_MASK: bool = <Self as anchor_lang::TryAccounts>::HAS_DYNAMIC_MUT_MASK;
+                type Target = Self;
+                fn constraint_target(&self) -> Option<&Self> { Some(self) }
                 type Client = #client_mod_name::#name;
                 type Cpi<'a> = #cpi_mod_name::#name<'a>;
                 type CpiMut<'a> = #cpi_mod_name::#name<'a>;
                 fn load(program_id: &anchor_lang::Address, views: &[anchor_lang::AccountView], duplicates: Option<&anchor_lang::AccountBitvec>, base_offset: usize, ix_data: &[u8]) -> anchor_lang::Result<(Self, Self::Bumps)> {
-                    let (accounts, bumps, ()) = <Self as anchor_lang::TryAccounts>::validate_accounts(program_id, views, duplicates, base_offset, ix_data)?;
+                    let (accounts, bumps, _) = <Self as anchor_lang::TryAccounts>::validate_accounts(program_id, views, duplicates, base_offset, ix_data)?;
                     Ok((accounts, bumps))
                 }
                 fn active_mut_mask(&self) -> [u64; 4] { <Self as anchor_lang::TryAccounts>::active_mut_mask(self) }
@@ -1658,9 +1660,6 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
                     out.extend(anchor_lang::ToAccountMetas::to_account_metas(client, signer_override));
                 }
             }
-        }
-    } else {
-        quote! {}
     };
 
     quote! {

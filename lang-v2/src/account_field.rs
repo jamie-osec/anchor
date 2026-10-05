@@ -15,6 +15,8 @@ pub trait AccountField: crate::Bumps<Bumps: Default + Clone> + Sized {
     const MUT_MASK: [u64; 4] = [0; 4];
     const HAS_DYNAMIC_MUT_MASK: bool = false;
     const IS_SIGNER: bool = false;
+    type Target;
+    fn constraint_target(&self) -> Option<&Self::Target>;
     type Client;
     type Cpi<'a>;
     type CpiMut<'a>;
@@ -48,6 +50,10 @@ pub trait AccountField: crate::Bumps<Bumps: Default + Clone> + Sized {
 impl<T: AnchorAccount> AccountField for T {
     const HEADER_SIZE: usize = 1;
     const IS_SIGNER: bool = T::IS_SIGNER;
+    type Target = T;
+    fn constraint_target(&self) -> Option<&T> {
+        Some(self)
+    }
     type Client = Address;
     type Cpi<'a> = CpiHandle<'a>;
     type CpiMut<'a> = CpiHandleMut<'a>;
@@ -82,6 +88,10 @@ impl<T: AnchorAccount> AccountField for T {
 impl<T: AnchorAccount> AccountField for Option<T> {
     const HEADER_SIZE: usize = 1;
     const IS_SIGNER: bool = T::IS_SIGNER;
+    type Target = T;
+    fn constraint_target(&self) -> Option<&T> {
+        self.as_ref()
+    }
     type Client = Option<Address>;
     type Cpi<'a> = Option<CpiHandle<'a>>;
     type CpiMut<'a> = Option<CpiHandleMut<'a>>;
@@ -131,6 +141,10 @@ impl<T: AccountField> AccountField for Nested<T> {
     const HEADER_SIZE: usize = T::HEADER_SIZE;
     const MUT_MASK: [u64; 4] = T::MUT_MASK;
     const HAS_DYNAMIC_MUT_MASK: bool = T::HAS_DYNAMIC_MUT_MASK;
+    type Target = T;
+    fn constraint_target(&self) -> Option<&T> {
+        Some(&self.0)
+    }
     type Client = T::Client;
     type Cpi<'a> = T::Cpi<'a>;
     type CpiMut<'a> = T::CpiMut<'a>;

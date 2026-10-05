@@ -139,3 +139,30 @@ fn resolved_program_alias_uses_trait_address_and_preserves_optional_presence() {
     assert_eq!(metas[1].pubkey, ID);
     assert!(!metas[1].is_signer);
 }
+
+#[derive(Accounts)]
+#[instruction(amount: u8)]
+pub struct WithArgs {
+    #[account(constraint = amount == 7)]
+    pub account: UncheckedAccount,
+}
+#[derive(Accounts)]
+pub struct ConstrainedGroup {
+    #[account(constraint = inner.account.address() == &Address::new_from_array([6; 32]))]
+    pub inner: WithArgs,
+}
+
+#[test]
+fn nested_groups_check_their_instruction_args_and_group_constraints() {
+    use anchor_lang::testing::{AccountBuffer, MIN_ACCOUNT_BUF};
+    let buffer = AccountBuffer::<MIN_ACCOUNT_BUF>::new();
+    buffer.init([6; 32], [0; 32], 0, false, false, false);
+    let views = [unsafe { buffer.view() }];
+    assert!(ConstrainedGroup::try_accounts(&ID, &views, None, 0, &[7]).is_ok());
+    assert!(ConstrainedGroup::try_accounts(&ID, &views, None, 0, &[8]).is_err());
+    let other = AccountBuffer::<MIN_ACCOUNT_BUF>::new();
+    other.init([5; 32], [0; 32], 0, false, false, false);
+    assert!(
+        ConstrainedGroup::try_accounts(&ID, &[unsafe { other.view() }], None, 0, &[7]).is_err()
+    );
+}

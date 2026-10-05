@@ -793,8 +793,8 @@ pub struct Bad {
     miri,
     ignore = "spawns cargo and writes temporary workspaces; covered by normal cargo test"
 )]
-fn nested_accounts_reject_instruction_arguments() {
-    compile_fail_case(
+fn nested_accounts_read_instruction_arguments() {
+    compile_pass_case(
         "nested_instruction_args",
         r#"
 use anchor_lang::prelude::*;
@@ -820,10 +820,9 @@ pub struct Inner {
 
 #[derive(Accounts)]
 pub struct Outer {
-    pub inner: Nested<Inner>,
+    pub inner: Inner,
 }
 "#,
-        &["AccountField"],
     );
 }
 

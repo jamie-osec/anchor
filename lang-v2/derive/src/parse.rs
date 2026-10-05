@@ -1165,6 +1165,7 @@ pub struct AccountField {
     pub update: Option<TokenStream2>,
     pub exit: Option<TokenStream2>,
     pub has_bump: bool,
+    pub composed_load: bool,
     /// Offset expression for this field within the enclosing struct's
     /// views slice (a compile-time usize). Retained so the trait-impl
     /// emitter can fold direct-mut fields into `MUT_MASK` at the right
@@ -2376,11 +2377,20 @@ pub fn parse_field(
 
     // Unconstrained fields compose through a single resolved-type protocol.
     // Both leaf accounts and derived account groups implement AccountField.
-    if !field
-        .attrs
-        .iter()
-        .any(|attr| attr.path().is_ident("account"))
-    {
+    let requires_slot = attrs.is_mut
+        || attrs.is_signer
+        || attrs.is_init
+        || attrs.is_init_if_needed
+        || attrs.is_zeroed
+        || attrs.is_executable
+        || attrs.seeds.is_some()
+        || attrs.address.is_some()
+        || attrs.owner.is_some()
+        || attrs.close.is_some()
+        || attrs.realloc.is_some()
+        || !attrs.namespaced.is_empty()
+        || !attrs.has_one.is_empty();
+    if !requires_slot {
         let bump_cache = bump_cache_ident(field_name);
         let load = quote! {
             let (mut #field_name, #bump_cache) = <#field_ty as anchor_lang::AccountField>::load(
@@ -2389,12 +2399,22 @@ pub fn parse_field(
                 __duplicates, __base_offset + #offset_expr, __ix_data,
             )?;
         };
+        let constraints = attrs.raw_constraints.iter().map(|(expr, custom_err)| {
+            let err = custom_err.as_ref().map(|err| quote! { core::convert::Into::into(#err) })
+                .unwrap_or_else(|| quote! { anchor_lang::ErrorCode::ConstraintRaw.into() });
+            quote! {
+                if let Some(#field_name) = <#field_ty as anchor_lang::AccountField>::constraint_target(&#field_name) {
+                    let _ = #field_name;
+                    if !(#expr) { return Err(#err); }
+                }
+            }
+        }).collect();
         return Ok(AccountField {
             name: field_name.clone(),
             ty: field.ty.clone(),
             load,
             deferred_load: None,
-            constraints: vec![],
+            constraints,
             update: Some(
                 quote! { <#field_ty as anchor_lang::AccountField>::update(&mut self.#field_name)?; },
             ),
@@ -2402,6 +2422,7 @@ pub fn parse_field(
                 quote! { <#field_ty as anchor_lang::AccountField>::exit(&mut self.#field_name, __ix_data)?; },
             ),
             has_bump: false,
+            composed_load: true,
             offset_expr,
             contributes_mut_bit: false,
             contributes_active_mut_bit: false,
@@ -3128,6 +3149,7 @@ pub fn parse_field(
         update,
         exit,
         has_bump,
+        composed_load: false,
         offset_expr,
         contributes_mut_bit,
         contributes_active_mut_bit,
