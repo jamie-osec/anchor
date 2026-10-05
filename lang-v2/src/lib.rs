@@ -272,46 +272,8 @@ pub trait InstructionData: Discriminator {
     fn data(&self) -> alloc::vec::Vec<u8>;
 }
 
-/// Compile-time account-size calculation. Derived via `#[derive(InitSpace)]`.
-/// Typically used to size account rent: `space = 8 + MyAccount::INIT_SPACE`.
-///
-/// The derive handles Borsh-size accounting for variable-length fields via a
-/// `#[max_len(N)]` helper attribute on `String` / `Vec<T>` fields. POD accounts
-/// that use the default wincode backing should just use `core::mem::size_of`.
-pub trait Space {
-    const INIT_SPACE: usize;
-}
-
-macro_rules! impl_space_for_primitives {
-    ($($ty:ty => $space:expr),* $(,)?) => {
-        $(
-            impl Space for $ty {
-                const INIT_SPACE: usize = $space;
-            }
-        )*
-    };
-}
-
-impl_space_for_primitives! {
-    bool => 1,
-    i8 => 1,
-    u8 => 1,
-    i16 => 2,
-    u16 => 2,
-    i32 => 4,
-    u32 => 4,
-    f32 => 4,
-    i64 => 8,
-    u64 => 8,
-    f64 => 8,
-    i128 => 16,
-    u128 => 16,
-    Address => 32,
-}
-
-impl<T: Space, const N: usize> Space for [T; N] {
-    const INIT_SPACE: usize = T::INIT_SPACE * N;
-}
+mod space;
+pub use space::{BoundedSpace, Limits, NoLimits, Space, SpaceLimits};
 
 #[doc(hidden)]
 pub mod __private {

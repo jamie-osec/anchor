@@ -291,3 +291,20 @@ struct TupleStruct(u64, u32);
 fn tuple_struct_sums_field_sizes() {
     assert_eq!(TupleStruct::INIT_SPACE, 8 + 4);
 }
+
+type AliasedText = String;
+type AliasedRows = Vec<(Option<AliasedText>, AliasedText)>;
+
+#[derive(InitSpace)]
+struct AliasedDynamic {
+    #[max_len(4, 3, 5)]
+    _rows: [AliasedRows; 2],
+}
+
+#[test]
+fn aliases_consume_nested_tuple_capacities_in_order() {
+    assert_eq!(
+        AliasedDynamic::INIT_SPACE,
+        2 * (4 + 4 * (1 + (4 + 3) + (4 + 5)))
+    );
+}
