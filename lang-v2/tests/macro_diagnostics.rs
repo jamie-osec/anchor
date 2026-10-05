@@ -823,7 +823,7 @@ pub struct Outer {
     pub inner: Nested<Inner>,
 }
 "#,
-        &["expected `()`, found `(u8,)`"],
+        &["AccountField"],
     );
 }
 
@@ -1569,7 +1569,7 @@ pub struct Bad {
     pub system_program: Program<System>,
 }
 "#,
-        &["PDA init payers must be declared as `SystemAccount`"],
+        &["PdaPayer"],
     );
 }
 

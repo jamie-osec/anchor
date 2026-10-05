@@ -164,3 +164,83 @@ impl<T: AccountField> AccountField for Nested<T> {
         T::append_client_metas(client, program_id, writable, signer, signer_override, out);
     }
 }
+
+/// One account slot, either required or optional. Constraints dispatch on
+/// `Account`, after Rust has resolved aliases and qualified paths.
+pub trait AccountSlot: AccountField {
+    type Account: AnchorAccount;
+    type PdaBump: Default + Clone;
+    const IS_OPTIONAL: bool;
+    fn cache_bump(bump: u8) -> Self::PdaBump;
+    fn load_with(
+        view: AccountView,
+        program_id: &Address,
+        load: impl FnOnce(AccountView) -> Result<Self::Account>,
+    ) -> Result<Self>;
+    fn as_account(&self) -> Option<&Self::Account>;
+    #[inline(always)]
+    fn require_account(&self) -> Result<&Self::Account> {
+        self.as_account()
+            .ok_or_else(|| crate::ErrorCode::ConstraintAccountIsNone.into())
+    }
+    fn as_account_mut(&mut self) -> Option<&mut Self::Account>;
+}
+
+impl<T: AnchorAccount> AccountSlot for T {
+    type Account = T;
+    type PdaBump = u8;
+    const IS_OPTIONAL: bool = false;
+    fn cache_bump(bump: u8) -> u8 {
+        bump
+    }
+    #[inline(always)]
+    fn load_with(
+        view: AccountView,
+        _: &Address,
+        load: impl FnOnce(AccountView) -> Result<T>,
+    ) -> Result<Self> {
+        load(view)
+    }
+    #[inline(always)]
+    fn as_account(&self) -> Option<&T> {
+        Some(self)
+    }
+    #[inline(always)]
+    fn as_account_mut(&mut self) -> Option<&mut T> {
+        Some(self)
+    }
+}
+
+impl<T: AnchorAccount> AccountSlot for Option<T> {
+    type Account = T;
+    type PdaBump = Option<u8>;
+    const IS_OPTIONAL: bool = true;
+    fn cache_bump(bump: u8) -> Option<u8> {
+        Some(bump)
+    }
+    #[inline(always)]
+    fn load_with(
+        view: AccountView,
+        program_id: &Address,
+        load: impl FnOnce(AccountView) -> Result<T>,
+    ) -> Result<Self> {
+        if crate::address_eq(view.address(), program_id) {
+            Ok(None)
+        } else {
+            load(view).map(Some)
+        }
+    }
+    #[inline(always)]
+    fn as_account(&self) -> Option<&T> {
+        self.as_ref()
+    }
+    #[inline(always)]
+    fn as_account_mut(&mut self) -> Option<&mut T> {
+        self.as_mut()
+    }
+}
+
+/// A system-owned account suitable for paying for PDA initialization.
+pub trait PdaPayer: AnchorAccount {}
+impl PdaPayer for crate::accounts::SystemAccount {}
+impl<T: PdaPayer> PdaPayer for alloc::boxed::Box<T> {}

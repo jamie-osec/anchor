@@ -946,6 +946,8 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         }
     }
 
+    let field_checks = parse::account_field_checks(&field_summaries);
+
     let fields: Vec<parse::AccountField> = match named_fields
         .named
         .iter()
@@ -985,11 +987,7 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
             let n = &f.name;
             let ty = &f.ty;
             if f.has_bump {
-                if f.is_optional {
-                    quote! { pub #n: Option<u8> }
-                } else {
-                    quote! { pub #n: u8 }
-                }
+                quote! { pub #n: <#ty as anchor_lang::AccountSlot>::PdaBump }
             } else {
                 quote! { pub #n: <#ty as anchor_lang::Bumps>::Bumps }
             }
@@ -1001,11 +999,7 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
             let cache = parse::bump_cache_ident(&f.name);
             let ty = &f.ty;
             let bump_ty = if f.has_bump {
-                if f.is_optional {
-                    quote! { Option<u8> }
-                } else {
-                    quote! { u8 }
-                }
+                quote! { <#ty as anchor_lang::AccountSlot>::PdaBump }
             } else {
                 quote! { <#ty as anchor_lang::Bumps>::Bumps }
             };
@@ -1033,7 +1027,7 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
     let mut_mask_steps: Vec<_> = fields.iter().map(|f| {
         let ty = &f.ty;
         let offset = &f.offset_expr;
-        let direct = f.contributes_mut_bit;
+        let direct = if f.contributes_mut_bit { quote! { !<#ty as anchor_lang::AccountSlot>::IS_OPTIONAL } } else { quote! { false } };
         quote! {
             if #direct { __mask = anchor_lang::mut_mask_set_bit(__mask, #offset); }
             __mask = anchor_lang::mut_mask_or_shifted(__mask, <#ty as anchor_lang::AccountField>::MUT_MASK, #offset);
@@ -1048,7 +1042,11 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         .iter()
         .map(|f| {
             let ty = &f.ty;
-            let direct = f.contributes_active_mut_bit;
+            let direct = if f.contributes_active_mut_bit {
+                quote! { <#ty as anchor_lang::AccountSlot>::IS_OPTIONAL }
+            } else {
+                quote! { false }
+            };
             quote! { #direct || <#ty as anchor_lang::AccountField>::HAS_DYNAMIC_MUT_MASK }
         })
         .collect();
@@ -1058,7 +1056,7 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         let n = &f.name;
         let offset = &f.offset_expr;
         let direct = if f.contributes_active_mut_bit {
-            quote! { if self.#n.is_some() { __mask = anchor_lang::mut_mask_set_bit(__mask, #offset); } }
+            quote! { if <#ty as anchor_lang::AccountSlot>::IS_OPTIONAL && <#ty as anchor_lang::AccountSlot>::as_account(&self.#n).is_some() { __mask = anchor_lang::mut_mask_set_bit(__mask, #offset); } }
         } else { quote! {} };
         quote! {
             #direct
@@ -1700,6 +1698,7 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         #cpi_accounts_mod
 
         #bumps_def
+        #field_checks
         #field_impl
 
         #[cfg(feature = "idl-build")]

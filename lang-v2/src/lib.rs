@@ -7,7 +7,7 @@ extern crate alloc;
 extern crate self as anchor_lang;
 
 mod account_field;
-pub use account_field::AccountField;
+pub use account_field::{AccountField, AccountSlot, PdaPayer};
 pub mod accounts;
 pub mod context;
 mod context_cpi;
