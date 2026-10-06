@@ -626,3 +626,25 @@ fn sixteen_byte_discriminator_rejects_classic_eight_byte_prefix() {
     let err = WideAccount::load(view).err();
     assert_eq!(err, Some(ProgramError::AccountDataTooSmall));
 }
+
+#[test]
+fn custom_codec_exit_after_owner_change_compares_without_writing() {
+    for changed in [false, true] {
+        let mut buf = AccountBuffer::<256>::new();
+        setup_stats_buf(&mut buf, 1, 0xAABB_CCDD);
+        let mut acct = unsafe { StatsAccount::load_mut(buf.view()) }.unwrap();
+        if changed {
+            acct.count = 555;
+        }
+        buf.set_owner([0xFE; 32]);
+        let before = read_data_bytes(&buf, 0, 16);
+
+        let expected = if changed {
+            Err(ProgramError::IllegalOwner)
+        } else {
+            Ok(())
+        };
+        assert_eq!(acct.exit(), expected);
+        assert_eq!(read_data_bytes(&buf, 0, 16), before);
+    }
+}
