@@ -334,12 +334,17 @@ use {proc_macro::TokenStream, quote::ToTokens, syn::parse_macro_input};
 ///             <td>
 ///                 Checks the account owner matches <code>expr</code>.<br>
 ///                 Custom errors are supported via <code>@</code>.<br><br>
+///                 This constraint cannot override the owner of an account type implementing
+///                 <code>Owner</code>. For example, <code>Account&lt;T&gt;</code> checks
+///                 <code>T::owner()</code> first and rejects a different owner.<br><br>
 ///                 Example:
 ///                 <pre><code>
+/// /// CHECK: Only the account owner is checked.
 /// #[account(owner = Token::ID @ MyError::MyErrorCode)]
-/// pub data: Account&lt;'info, MyData&gt;,
+/// pub data: UncheckedAccount&lt;'info&gt;,
+/// /// CHECK: Only the account owner is checked.
 /// #[account(owner = token_program.key())]
-/// pub data_two: Account&lt;'info, MyData&gt;,
+/// pub data_two: UncheckedAccount&lt;'info&gt;,
 /// pub token_program: Program&lt;'info, Token&gt;
 ///                 </code></pre>
 ///             </td>

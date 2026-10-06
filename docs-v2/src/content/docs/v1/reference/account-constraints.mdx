@@ -148,6 +148,16 @@ Checks the account owner matches `expr{:rs}`:
 #[account(owner = <expr> @ <custom_error>)]
 ```
 
+This constraint cannot override the owner of an account type implementing `Owner{:rs}`.
+For example, `Account<T>{:rs}` checks `T::owner(){:rs}` first and rejects a different owner.
+Use an untyped account when supplying the owner check yourself:
+
+```rust showLineNumbers=false
+/// CHECK: Only the account owner is checked.
+#[account(owner = token_program.key())]
+pub data: UncheckedAccount<'info>,
+```
+
 ### `#[account(executable)]{:rs}`
 
 Checks the account is executable (the account is a program):
