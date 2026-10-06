@@ -154,10 +154,24 @@ impl Runner {
 
     pub fn bump_version(&mut self, name: &str) -> Result<()> {
         let version = Version::parse(name)?;
-        if version.as_str() != env!("CARGO_PKG_VERSION") {
+        let metadata: serde_json::Value = serde_json::from_str(
+            &self.output(
+                Command::new("cargo")
+                    .args(["metadata", "--locked", "--no-deps", "--format-version", "1"])
+                    .current_dir(self.repo()),
+            )?,
+        )?;
+        let anchor_version = metadata["packages"]
+            .as_array()
+            .context("Cargo metadata is missing packages")?
+            .iter()
+            .find(|package| package["name"] == "anchor-lang")
+            .and_then(|package| package["version"].as_str())
+            .context("Cargo metadata is missing the anchor-lang version")?;
+        if version.as_str() != anchor_version {
             bail!(
-                "Cannot transition benchmarks to Anchor {version}: the workspace is version {}",
-                env!("CARGO_PKG_VERSION")
+                "Cannot transition benchmarks to Anchor {version}: the workspace is version \
+                 {anchor_version}"
             );
         }
 

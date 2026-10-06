@@ -40,7 +40,10 @@ platform-tools versions. Builds before Anchor 1.2.0 use SBPF v0; newer builds
 use v3. Program revisions live under `fixture/programs/<program>/<revision>`;
 the runner selects the newest revision compatible with the Anchor version.
 
-Compute units are measured in-process with the workspace-pinned LiteSVM. A
+The harness has its own Cargo workspace and lockfile to keep its pinned LiteSVM
+runtime independent of Anchor's Solana dependency cohorts.
+
+Compute units are measured in-process with the pinned LiteSVM. A
 successful run updates `results.json` and regenerates the benchmark Markdown
 files in this directory.
 

@@ -3264,8 +3264,8 @@
     "sbpfVersion": "v3",
     "result": {
       "binarySize": {
-        "bench": 800288,
-        "escrow": 153424
+        "bench": 800480,
+        "escrow": 153616
       },
       "computeUnits": {
         "accountInfo1": 588,

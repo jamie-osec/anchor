@@ -1,8 +1,11 @@
 [package]
 name = "anchor-bench"
-version.workspace = true
+version = "0.1.0"
 publish = false
 edition = "2021"
+
+# Isolate the pinned benchmark runtime from Anchor's Solana dependency cohorts.
+[workspace]
 
 [[bin]]
 name = "anchor-bench"

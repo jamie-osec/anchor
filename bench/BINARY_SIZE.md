@@ -16,15 +16,15 @@ The benchmark harness is located in [/bench](https://github.com/otter-sec/anchor
 
 Solana version: 4.2.0
 
-**Average:** 🟢 **-12,136 (2.48%)** [-2.91%, -0.19%]
+**Average:** 🟢 **-11,944 (2.44%)** [-2.89%, -0.07%]
 
 <details>
 <summary>Program results (2)</summary>
 
 | Program | Binary Size | -                      |
 | ------- | ----------- | ---------------------- |
-| bench   | 800,288     | 🟢 **-23,976 (2.91%)** |
-| escrow  | 153,424     | 🟢 **-296 (0.19%)**    |
+| bench   | 800,480     | 🟢 **-23,784 (2.89%)** |
+| escrow  | 153,616     | 🟢 **-104 (0.07%)**    |
 
 </details>
 
