@@ -16,8 +16,10 @@ pub trait Space {
 }
 
 /// End of a field's `max_len` capacity list.
+#[doc(hidden)]
 pub struct NoLimits;
 /// One capacity, followed by capacities for nested variable-length values.
+#[doc(hidden)]
 pub struct Limits<const N: usize, Tail = NoLimits>(PhantomData<Tail>);
 
 #[doc(hidden)]
@@ -33,6 +35,7 @@ impl<const N: usize, Tail: SpaceLimits> SpaceLimits for Limits<N, Tail> {
 
 /// Maximum serialized size while consuming capacities in depth-first order.
 /// Custom collections can implement this to participate in `InitSpace`.
+#[doc(hidden)]
 #[diagnostic::on_unimplemented(
     message = "`{Self}` cannot compute a size with these max_len capacities",
     note = "provide one #[max_len(...)] capacity per String or Vec layer"

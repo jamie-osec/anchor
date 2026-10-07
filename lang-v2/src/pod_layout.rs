@@ -3,6 +3,7 @@
 /// A POD field whose additional layout invariants can be checked at compile time.
 /// The `Pod` bound supplies the byte-layout guarantee; `CHECK` can enforce
 /// additional restrictions such as a bounded vector's length-prefix capacity.
+#[doc(hidden)]
 #[diagnostic::on_unimplemented(
     message = "`{Self}` is not a supported zero-copy field",
     note = "zero-copy fields require bytemuck::Pod and PodLayout; use fixed arrays or POD \

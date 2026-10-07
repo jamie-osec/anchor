@@ -61,7 +61,7 @@ pub fn expand(item: TokenStream) -> TokenStream {
         .push(syn::parse_quote!(const #limit: usize));
     bounded_generics
         .params
-        .push(syn::parse_quote!(#tail: anchor_lang::SpaceLimits));
+        .push(syn::parse_quote!(#tail: anchor_lang::__private::SpaceLimits));
     let (bounded_impl_generics, _, bounded_where_clause) = bounded_generics.split_for_impl();
     let bounded_name = &input.ident;
     let bounded_impl = if matches!(input.data, syn::Data::Union(_)) {
@@ -69,11 +69,11 @@ pub fn expand(item: TokenStream) -> TokenStream {
     } else {
         quote! {
             #[automatically_derived]
-            impl #bounded_impl_generics anchor_lang::BoundedSpace<anchor_lang::Limits<#limit, #tail>>
+            impl #bounded_impl_generics anchor_lang::__private::BoundedSpace<anchor_lang::__private::Limits<#limit, #tail>>
                 for #bounded_name #ty_generics #bounded_where_clause
             {
                 const SPACE: usize = <Self as anchor_lang::Space>::INIT_SPACE;
-                type Remaining = anchor_lang::Limits<#limit, #tail>;
+                type Remaining = anchor_lang::__private::Limits<#limit, #tail>;
             }
         }
     };
@@ -201,14 +201,14 @@ fn field_len_tokens(field: Field) -> TokenStream2 {
         },
         None => Vec::new(),
     };
-    let mut limits = quote! { anchor_lang::NoLimits };
+    let mut limits = quote! { anchor_lang::__private::NoLimits };
     for capacity in capacities.iter().rev() {
-        limits = quote! { anchor_lang::Limits<{ (#capacity) as usize }, #limits> };
+        limits = quote! { anchor_lang::__private::Limits<{ (#capacity) as usize }, #limits> };
     }
     let ty = field.ty;
     quote! {{
-        assert!(<<#ty as anchor_lang::BoundedSpace<#limits>>::Remaining as anchor_lang::SpaceLimits>::IS_EMPTY, "too many max_len capacities");
-        <#ty as anchor_lang::BoundedSpace<#limits>>::SPACE
+        assert!(<<#ty as anchor_lang::__private::BoundedSpace<#limits>>::Remaining as anchor_lang::__private::SpaceLimits>::IS_EMPTY, "too many max_len capacities");
+        <#ty as anchor_lang::__private::BoundedSpace<#limits>>::SPACE
     }}
 }
 

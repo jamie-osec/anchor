@@ -322,33 +322,33 @@ fn impl_to_cpi_accounts(input: &DeriveInput) -> TokenStream2 {
         generics
             .make_where_clause()
             .predicates
-            .push(syn::parse_quote!(#ty: anchor_lang::CpiField<#lifetime>));
+            .push(syn::parse_quote!(#ty: anchor_lang::__private::CpiField<#lifetime>));
         if attrs.duplicate_readonly {
             generics
                 .make_where_clause()
                 .predicates
-                .push(syn::parse_quote!(#ty: anchor_lang::CpiReadonlyField<#lifetime>));
+                .push(syn::parse_quote!(#ty: anchor_lang::__private::CpiReadonlyField<#lifetime>));
             metas.push(quote! {
                 __accounts.push(anchor_lang::pinocchio::instruction::InstructionAccount::readonly(
-                    <#ty as anchor_lang::CpiReadonlyField<#lifetime>>::readonly_handle(&self.#ident).address(),
+                    <#ty as anchor_lang::__private::CpiReadonlyField<#lifetime>>::readonly_handle(&self.#ident).address(),
                 ));
             });
             handles.push(quote! {
-                __handles.push(<#ty as anchor_lang::CpiReadonlyField<#lifetime>>::readonly_handle(&self.#ident));
+                __handles.push(<#ty as anchor_lang::__private::CpiReadonlyField<#lifetime>>::readonly_handle(&self.#ident));
             });
             flags.push(quote! { __flags.push(false); });
         }
         let signer = signer.expr;
         metas.push(quote! {
-            <#ty as anchor_lang::CpiField<#lifetime>>::append_instruction_accounts(
+            <#ty as anchor_lang::__private::CpiField<#lifetime>>::append_instruction_accounts(
                 &self.#ident, &const { #program_id }, #signer, &mut __accounts,
             );
         });
         handles.push(quote! {
-            <#ty as anchor_lang::CpiField<#lifetime>>::append_cpi_handles(&self.#ident, &mut __handles);
+            <#ty as anchor_lang::__private::CpiField<#lifetime>>::append_cpi_handles(&self.#ident, &mut __handles);
         });
         flags.push(quote! {
-            <#ty as anchor_lang::CpiField<#lifetime>>::append_sentinel_flags(&self.#ident, &mut __flags);
+            <#ty as anchor_lang::__private::CpiField<#lifetime>>::append_sentinel_flags(&self.#ident, &mut __flags);
         });
     }
     let name = &input.ident;
@@ -372,7 +372,7 @@ fn impl_to_cpi_accounts(input: &DeriveInput) -> TokenStream2 {
                 __flags
             }
         }
-        impl #impl_generics anchor_lang::CpiField<#lifetime> for #name #ty_generics #where_clause {
+        impl #impl_generics anchor_lang::__private::CpiField<#lifetime> for #name #ty_generics #where_clause {
             fn append_instruction_accounts(&self, _: &#lifetime anchor_lang::Address, _: bool, out: &mut anchor_lang::__alloc::vec::Vec<anchor_lang::pinocchio::instruction::InstructionAccount<#lifetime>>) {
                 out.extend(<Self as anchor_lang::ToCpiAccounts<#lifetime>>::to_instruction_accounts(self));
             }
@@ -648,13 +648,13 @@ fn cfg_variant_dep_walkers(
 fn client_meta_signer_expr(field: &parse::AccountField) -> TokenStream2 {
     let ty = &field.ty;
     let init_signer = field.idl_init_signer;
-    quote! { (<#ty as anchor_lang::AccountField>::IS_SIGNER || #init_signer) && _is_signer.unwrap_or(true) }
+    quote! { (<#ty as anchor_lang::__private::AccountField>::IS_SIGNER || #init_signer) && _is_signer.unwrap_or(true) }
 }
 
 fn cpi_meta_signer_expr(field: &parse::AccountField) -> TokenStream2 {
     let ty = &field.ty;
     let init_signer = field.idl_init_signer;
-    quote! { <#ty as anchor_lang::AccountField>::IS_SIGNER || #init_signer }
+    quote! { <#ty as anchor_lang::__private::AccountField>::IS_SIGNER || #init_signer }
 }
 
 struct ArgsDeser {
@@ -866,7 +866,7 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         let ty = &f.ty;
         offset_exprs.push(current_offset.clone());
         current_offset =
-            quote! { #current_offset + <#ty as anchor_lang::AccountField>::HEADER_SIZE };
+            quote! { #current_offset + <#ty as anchor_lang::__private::AccountField>::HEADER_SIZE };
     }
     let field_offsets: Vec<(String, proc_macro2::TokenStream)> = raw_field_names
         .iter()
@@ -956,7 +956,7 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
             let n = &f.name;
             let ty = &f.ty;
             if f.has_bump {
-                quote! { pub #n: <#ty as anchor_lang::AccountSlot>::PdaBump }
+                quote! { pub #n: <#ty as anchor_lang::__private::AccountSlot>::PdaBump }
             } else {
                 quote! { pub #n: <#ty as anchor_lang::Bumps>::Bumps }
             }
@@ -969,7 +969,7 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
             let cache = parse::bump_cache_ident(&f.name);
             let ty = &f.ty;
             let bump_ty = if f.has_bump {
-                quote! { <#ty as anchor_lang::AccountSlot>::PdaBump }
+                quote! { <#ty as anchor_lang::__private::AccountSlot>::PdaBump }
             } else {
                 quote! { <#ty as anchor_lang::Bumps>::Bumps }
             };
@@ -993,14 +993,14 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         .collect();
     let field_types: Vec<_> = fields.iter().map(|f| &f.ty).collect();
     let header_size_expr =
-        quote! { 0usize #(+ <#field_types as anchor_lang::AccountField>::HEADER_SIZE)* };
+        quote! { 0usize #(+ <#field_types as anchor_lang::__private::AccountField>::HEADER_SIZE)* };
     let mut_mask_steps: Vec<_> = fields.iter().map(|f| {
         let ty = &f.ty;
         let offset = &f.offset_expr;
-        let direct = if f.contributes_mut_bit { quote! { !<#ty as anchor_lang::AccountSlot>::IS_OPTIONAL } } else { quote! { false } };
+        let direct = if f.contributes_mut_bit { quote! { !<#ty as anchor_lang::__private::AccountSlot>::IS_OPTIONAL } } else { quote! { false } };
         quote! {
             if #direct { __mask = anchor_lang::mut_mask_set_bit(__mask, #offset); }
-            __mask = anchor_lang::mut_mask_or_shifted(__mask, <#ty as anchor_lang::AccountField>::MUT_MASK, #offset);
+            __mask = anchor_lang::mut_mask_or_shifted(__mask, <#ty as anchor_lang::__private::AccountField>::MUT_MASK, #offset);
         }
     }).collect();
     let mut_mask_expr = quote! {{
@@ -1013,11 +1013,11 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         .map(|f| {
             let ty = &f.ty;
             let direct = if f.contributes_active_mut_bit {
-                quote! { <#ty as anchor_lang::AccountSlot>::IS_OPTIONAL }
+                quote! { <#ty as anchor_lang::__private::AccountSlot>::IS_OPTIONAL }
             } else {
                 quote! { false }
             };
-            quote! { #direct || <#ty as anchor_lang::AccountField>::HAS_DYNAMIC_MUT_MASK }
+            quote! { #direct || <#ty as anchor_lang::__private::AccountField>::HAS_DYNAMIC_MUT_MASK }
         })
         .collect();
     let has_dynamic_mut_mask_expr = quote! { false #(|| (#dynamic_mut_mask_terms))* };
@@ -1026,12 +1026,12 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         let n = &f.name;
         let offset = &f.offset_expr;
         let direct = if f.contributes_active_mut_bit {
-            quote! { if <#ty as anchor_lang::AccountSlot>::IS_OPTIONAL && <#ty as anchor_lang::AccountSlot>::as_account(&self.#n).is_some() { __mask = anchor_lang::mut_mask_set_bit(__mask, #offset); } }
+            quote! { if <#ty as anchor_lang::__private::AccountSlot>::IS_OPTIONAL && <#ty as anchor_lang::__private::AccountSlot>::as_account(&self.#n).is_some() { __mask = anchor_lang::mut_mask_set_bit(__mask, #offset); } }
         } else { quote! {} };
         quote! {
             #direct
-            if <#ty as anchor_lang::AccountField>::HAS_DYNAMIC_MUT_MASK {
-                __mask = anchor_lang::mut_mask_or_shifted(__mask, <#ty as anchor_lang::AccountField>::active_mut_mask(&self.#n), #offset);
+            if <#ty as anchor_lang::__private::AccountField>::HAS_DYNAMIC_MUT_MASK {
+                __mask = anchor_lang::mut_mask_or_shifted(__mask, <#ty as anchor_lang::__private::AccountField>::active_mut_mask(&self.#n), #offset);
             }
         }
     }).collect();
@@ -1198,7 +1198,7 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
                         quote! {{
                             fn __anchor_resolve<T>() -> anchor_lang::Address
                             where
-                                T: anchor_lang::AccountField<Client = anchor_lang::Address>
+                                T: anchor_lang::__private::AccountField<Client = anchor_lang::Address>
                                     + anchor_lang::Id,
                             {
                                 <T as anchor_lang::Id>::id()
@@ -1324,7 +1324,7 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         .map(|(f, _)| {
             let n = &f.name;
             let ty = &f.ty;
-            quote! { pub #n: <#ty as anchor_lang::AccountField>::Client }
+            quote! { pub #n: <#ty as anchor_lang::__private::AccountField>::Client }
         })
         .collect();
 
@@ -1412,7 +1412,7 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         let signer = client_meta_signer_expr(field);
         let client = if matches!(kind, FieldKind::Required) { quote! { #n } } else { quote! { &#n } };
         quote! {
-            <#ty as anchor_lang::AccountField>::append_client_metas(#client, &#accounts_program_id, #writable, #signer, _is_signer, &mut __metas);
+            <#ty as anchor_lang::__private::AccountField>::append_client_metas(#client, &#accounts_program_id, #writable, #signer, _is_signer, &mut __metas);
         }
     }).collect();
 
@@ -1522,7 +1522,7 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         .map(|f| {
             let n = &f.name;
             let ty = &f.ty;
-            quote! { pub #n: <#ty as anchor_lang::AccountField>::Client }
+            quote! { pub #n: <#ty as anchor_lang::__private::AccountField>::Client }
         })
         .collect();
     let full_meta_steps: Vec<_> = fields.iter().map(|field| {
@@ -1531,7 +1531,7 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
         let writable = field.idl_writable;
         let signer = client_meta_signer_expr(field);
         quote! {
-            <#ty as anchor_lang::AccountField>::append_client_metas(&self.#n, &#accounts_program_id, #writable, #signer, _is_signer, &mut __metas);
+            <#ty as anchor_lang::__private::AccountField>::append_client_metas(&self.#n, &#accounts_program_id, #writable, #signer, _is_signer, &mut __metas);
         }
     }).collect();
 
@@ -1562,9 +1562,9 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
                 let ty = &f.ty;
                 let signer = cpi_meta_signer_expr(f);
                 let cpi_ty = if f.idl_writable {
-                    quote! { <#ty as anchor_lang::AccountField>::CpiMut<'a> }
+                    quote! { <#ty as anchor_lang::__private::AccountField>::CpiMut<'a> }
                 } else {
-                    quote! { <#ty as anchor_lang::AccountField>::Cpi<'a> }
+                    quote! { <#ty as anchor_lang::__private::AccountField>::Cpi<'a> }
                 };
                 quote! { #[signer(#signer)] pub #n: #cpi_ty }
             })
@@ -1630,7 +1630,7 @@ fn impl_accounts(input: &DeriveInput) -> TokenStream2 {
     };
 
     let field_impl = quote! {
-            impl anchor_lang::AccountField for #name {
+            impl anchor_lang::__private::AccountField for #name {
                 const HEADER_SIZE: usize = <Self as anchor_lang::TryAccounts>::HEADER_SIZE;
                 const MUT_MASK: [u64; 4] = <Self as anchor_lang::TryAccounts>::MUT_MASK;
                 const HAS_DYNAMIC_MUT_MASK: bool = <Self as anchor_lang::TryAccounts>::HAS_DYNAMIC_MUT_MASK;
@@ -1983,7 +1983,7 @@ pub fn account(attr: TokenStream, item: TokenStream) -> TokenStream {
                     quote! {
                         #(#cfg_attrs)*
                         const _: fn() = || {
-                            fn assert_pod<T: anchor_lang::PodLayout>() {}
+                            fn assert_pod<T: anchor_lang::__private::PodLayout>() {}
                             assert_pod::<#ty>();
                         };
                     }
@@ -2002,7 +2002,7 @@ pub fn account(attr: TokenStream, item: TokenStream) -> TokenStream {
                     quote! {
                         #(#cfg_attrs)*
                         {
-                            let () = <#ty as anchor_lang::PodLayout>::CHECK;
+                            let () = <#ty as anchor_lang::__private::PodLayout>::CHECK;
                             __size += core::mem::size_of::<#ty>();
                         }
                     }
@@ -2030,7 +2030,7 @@ pub fn account(attr: TokenStream, item: TokenStream) -> TokenStream {
                 };
                 unsafe impl anchor_lang::bytemuck::Pod for #name {}
                 unsafe impl anchor_lang::bytemuck::Zeroable for #name {}
-                impl anchor_lang::PodLayout for #name {}
+                impl anchor_lang::__private::PodLayout for #name {}
             },
         )
     };
@@ -2111,7 +2111,7 @@ pub fn account(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// #[derive(Clone, Copy, Pod, Zeroable, IdlType)]
 /// #[idl(bytemuck)]
 /// pub struct Inner { pub a: u64, pub b: u64 }
-/// impl anchor_lang::PodLayout for Inner {}
+/// impl anchor_lang::__private::PodLayout for Inner {}
 ///
 /// #[event(bytemuck)]
 /// pub struct NestedEvent {
@@ -4036,7 +4036,7 @@ fn gen_declare_program_pod_impls(
         return Ok(quote! {
             unsafe impl #impl_generics anchor_lang::bytemuck::Pod for #ident #ty_generics #where_clause {}
             unsafe impl #impl_generics anchor_lang::bytemuck::Zeroable for #ident #ty_generics #where_clause {}
-            impl #impl_generics anchor_lang::PodLayout for #ident #ty_generics #where_clause {}
+            impl #impl_generics anchor_lang::__private::PodLayout for #ident #ty_generics #where_clause {}
         });
     }
 
@@ -4069,7 +4069,7 @@ fn gen_declare_program_pod_impls(
     let layout_where_clause = if where_clause.is_empty() {
         quote! {}
     } else {
-        quote! { #where_clause, #(#field_types: anchor_lang::PodLayout,)* }
+        quote! { #where_clause, #(#field_types: anchor_lang::__private::PodLayout,)* }
     };
     // Item-level `const _: ()` is always evaluated. An unused associated const
     // on an `impl` is not, so the previous padding `assert!` never ran.
@@ -4103,9 +4103,9 @@ fn gen_declare_program_pod_impls(
         #touch_no_padding
         unsafe impl #impl_generics anchor_lang::bytemuck::Pod for #ident #ty_generics #where_clause {}
         unsafe impl #impl_generics anchor_lang::bytemuck::Zeroable for #ident #ty_generics #where_clause {}
-        impl #impl_generics anchor_lang::PodLayout for #ident #ty_generics #layout_where_clause {
+        impl #impl_generics anchor_lang::__private::PodLayout for #ident #ty_generics #layout_where_clause {
             const CHECK: () = {
-                #(let () = <#field_types as anchor_lang::PodLayout>::CHECK;)*
+                #(let () = <#field_types as anchor_lang::__private::PodLayout>::CHECK;)*
                 let () = Self::__ANCHOR_DECLARE_PROGRAM_NO_PADDING;
             };
         }
@@ -5765,7 +5765,7 @@ pub fn event(attr: TokenStream, item: TokenStream) -> TokenStream {
                     quote! {
                         #(#cfg_attrs)*
                         const _: fn() = || {
-                            fn assert_pod<T: anchor_lang::PodLayout>() {}
+                            fn assert_pod<T: anchor_lang::__private::PodLayout>() {}
                             assert_pod::<#ty>();
                         };
                     }
@@ -5779,7 +5779,7 @@ pub fn event(attr: TokenStream, item: TokenStream) -> TokenStream {
                     quote! {
                         #(#cfg_attrs)*
                         {
-                            let () = <#ty as anchor_lang::PodLayout>::CHECK;
+                            let () = <#ty as anchor_lang::__private::PodLayout>::CHECK;
                             __size += ::core::mem::size_of::<#ty>();
                         }
                     }
@@ -5863,7 +5863,7 @@ pub fn event(attr: TokenStream, item: TokenStream) -> TokenStream {
                 // bytemuck's generic trait errors.
                 unsafe impl anchor_lang::bytemuck::Pod for #name {}
                 unsafe impl anchor_lang::bytemuck::Zeroable for #name {}
-                impl anchor_lang::PodLayout for #name {}
+                impl anchor_lang::__private::PodLayout for #name {}
 
                 #discriminator_impl
 

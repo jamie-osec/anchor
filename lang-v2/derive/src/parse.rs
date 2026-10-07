@@ -859,7 +859,7 @@ fn emit_constraint_expected_binding(
     match builtin_constraint_value_kind(&nc.namespace, &nc.raw_key) {
         Some(BuiltinConstraintValueKind::Address) => {
             let expected_value = if expr_as_known_field_ident(value, field_names).is_some() {
-                quote! { *anchor_lang::AnchorAccount::account(anchor_lang::AccountSlot::require_account(&(#value_expr))?).address() }
+                quote! { *anchor_lang::AnchorAccount::account(anchor_lang::__private::AccountSlot::require_account(&(#value_expr))?).address() }
             } else {
                 quote! { core::convert::Into::<anchor_lang::Address>::into(#value_expr) }
             };
@@ -1006,7 +1006,7 @@ fn field_readonly_cpi_handle_expr(
         .find(|summary| summary.name == *ident)
         .map(|summary| {
             let slot_ty = &summary.ty;
-            let field_ty = quote! { <#slot_ty as anchor_lang::AccountSlot>::Account };
+            let field_ty = quote! { <#slot_ty as anchor_lang::__private::AccountSlot>::Account };
             let is_mut = summary.attrs.is_mut;
             quote! {
                 anchor_lang::__private::readonly_cpi_handle_for_account_field(
@@ -1368,12 +1368,12 @@ pub fn account_field_checks(fields: &[FieldSummary]) -> TokenStream2 {
             if let Some(dependency) = fields.iter().find(|field| field.name == *ident) {
                 let dep_ty = &dependency.ty;
                 let condition = if conditional {
-                    quote! { <#ty as anchor_lang::AccountSlot>::IS_OPTIONAL || }
+                    quote! { <#ty as anchor_lang::__private::AccountSlot>::IS_OPTIONAL || }
                 } else {
                     quote! {}
                 };
                 checks.push(quote_spanned! { ident.span() =>
-                    const _: () = assert!(#condition !<#dep_ty as anchor_lang::AccountSlot>::IS_OPTIONAL, #message);
+                    const _: () = assert!(#condition !<#dep_ty as anchor_lang::__private::AccountSlot>::IS_OPTIONAL, #message);
                 });
             }
         };
@@ -1726,7 +1726,7 @@ fn emit_seeds_check(
     let bump_cache = bump_cache_ident(field_name);
     let (seed_bindings, seed_refs) = materialize_seed_refs(seeds, field_names);
     let wrap_bump =
-        |b: TokenStream2| quote! { <#slot_ty as anchor_lang::AccountSlot>::cache_bump(#b) };
+        |b: TokenStream2| quote! { <#slot_ty as anchor_lang::__private::AccountSlot>::cache_bump(#b) };
     // Try to precompute the bump and PDA at expansion time.
     if using_our_program_id {
         if let Some(literal_seeds) = seeds_as_byte_literals(seeds) {
@@ -1827,7 +1827,7 @@ fn emit_payer_signer_seeds_binding(
     let ty = &field.ty;
     let marker = field.attrs.seeds.as_ref().map(|_| {
         quote! {
-            fn __anchor_pda_payer<T: anchor_lang::PdaPayer>() {}
+            fn __anchor_pda_payer<T: anchor_lang::__private::PdaPayer>() {}
             __anchor_pda_payer::<#ty>();
         }
     });
@@ -1991,11 +1991,11 @@ fn emit_init_body(
             let value = &nc.value;
             match builtin_init_param_value_kind(&nc.namespace, &nc.raw_key) {
                 Some(BuiltinInitParamValueKind::AccountView) => quote! {
-                    __p.#key = Some(anchor_lang::AnchorAccount::account(anchor_lang::AccountSlot::require_account(&(#value))?));
+                    __p.#key = Some(anchor_lang::AnchorAccount::account(anchor_lang::__private::AccountSlot::require_account(&(#value))?));
                 },
                 Some(BuiltinInitParamValueKind::Address) => {
                     if expr_as_known_field_ident(value, field_names).is_some() {
-                        quote! { __p.#key = Some(*anchor_lang::AnchorAccount::account(anchor_lang::AccountSlot::require_account(&(#value))?).address()); }
+                        quote! { __p.#key = Some(*anchor_lang::AnchorAccount::account(anchor_lang::__private::AccountSlot::require_account(&(#value))?).address()); }
                     } else { quote! { __p.#key = Some(core::convert::Into::<anchor_lang::Address>::into(#value)); } }
                 },
                 Some(BuiltinInitParamValueKind::Direct) | None => {
@@ -2027,7 +2027,7 @@ fn emit_init_body(
             )
         } else {
             // Opaque expression seeds — runtime find + verify.
-            let bump_assign = quote! { <#slot_ty as anchor_lang::AccountSlot>::cache_bump(__bump) };
+            let bump_assign = quote! { <#slot_ty as anchor_lang::__private::AccountSlot>::cache_bump(__bump) };
             let bump_cache = bump_cache_ident(field_name);
             quote! {
                 let __seed_expr_val = #seeds_expr;
@@ -2275,7 +2275,7 @@ pub fn parse_field(
         ));
     }
     validate_close_destination(&attrs, field_summaries)?;
-    let inner_ty: Type = syn::parse_quote!(<#field_ty as anchor_lang::AccountSlot>::Account);
+    let inner_ty: Type = syn::parse_quote!(<#field_ty as anchor_lang::__private::AccountSlot>::Account);
     let associated_token = parse_associated_token_init(&attrs, field_names)?;
     let init_if_needed_reuse_validation = if attrs.is_init_if_needed {
         Some(emit_init_if_needed_reuse_validation(
@@ -2375,9 +2375,9 @@ pub fn parse_field(
     if !requires_slot {
         let bump_cache = bump_cache_ident(field_name);
         let load = quote! {
-            let (mut #field_name, #bump_cache) = <#field_ty as anchor_lang::AccountField>::load(
+            let (mut #field_name, #bump_cache) = <#field_ty as anchor_lang::__private::AccountField>::load(
                 __program_id,
-                &__views[#offset_expr .. #offset_expr + <#field_ty as anchor_lang::AccountField>::HEADER_SIZE],
+                &__views[#offset_expr .. #offset_expr + <#field_ty as anchor_lang::__private::AccountField>::HEADER_SIZE],
                 __duplicates, __base_offset + #offset_expr, __ix_data,
             )?;
         };
@@ -2385,7 +2385,7 @@ pub fn parse_field(
             let err = custom_err.as_ref().map(|err| quote! { core::convert::Into::into(#err) })
                 .unwrap_or_else(|| quote! { anchor_lang::ErrorCode::ConstraintRaw.into() });
             quote! {
-                if let Some(#field_name) = <#field_ty as anchor_lang::AccountField>::constraint_target(&#field_name) {
+                if let Some(#field_name) = <#field_ty as anchor_lang::__private::AccountField>::constraint_target(&#field_name) {
                     let _ = #field_name;
                     if !(#expr) { return Err(#err); }
                 }
@@ -2398,10 +2398,10 @@ pub fn parse_field(
             deferred_load: None,
             constraints,
             update: Some(
-                quote! { <#field_ty as anchor_lang::AccountField>::update(&mut self.#field_name)?; },
+                quote! { <#field_ty as anchor_lang::__private::AccountField>::update(&mut self.#field_name)?; },
             ),
             exit: Some(
-                quote! { <#field_ty as anchor_lang::AccountField>::exit(&mut self.#field_name, __ix_data)?; },
+                quote! { <#field_ty as anchor_lang::__private::AccountField>::exit(&mut self.#field_name, __ix_data)?; },
             ),
             has_bump: false,
             composed_load: true,
@@ -2521,7 +2521,7 @@ pub fn parse_field(
     let existed_binding = init_if_needed_existed.as_ref().map(|existed| quote! {
         let #existed = {
             let view = __views[#offset_expr];
-            !(<#field_ty as anchor_lang::AccountSlot>::IS_OPTIONAL && anchor_lang::address_eq(view.address(), __program_id))
+            !(<#field_ty as anchor_lang::__private::AccountSlot>::IS_OPTIONAL && anchor_lang::address_eq(view.address(), __program_id))
                 && !view.owned_by(&anchor_lang::programs::System::id())
         };
     });
@@ -2540,7 +2540,7 @@ pub fn parse_field(
     };
     let load = quote! {
         #existed_binding
-        let mut #field_name: #field_ty = <#field_ty as anchor_lang::AccountSlot>::load_with(
+        let mut #field_name: #field_ty = <#field_ty as anchor_lang::__private::AccountSlot>::load_with(
             __views[#offset_expr], __program_id, |__target| {
                 #dup_precheck
                 Ok({ #inner_action })
@@ -2614,7 +2614,7 @@ pub fn parse_field(
                 let seed_constraint = if let Some(Some(ref bump_expr)) = attrs.bump {
                     let bump_cache = bump_cache_ident(field_name);
                     let bump_assign =
-                        quote! { <#field_ty as anchor_lang::AccountSlot>::cache_bump(__bump_val) };
+                        quote! { <#field_ty as anchor_lang::__private::AccountSlot>::cache_bump(__bump_val) };
                     let (seed_bindings, seed_refs) =
                         materialize_seed_refs(&seed_elems, field_names);
                     quote! {
@@ -2654,7 +2654,7 @@ pub fn parse_field(
             } else {
                 // Opaque expression: `seeds = Counter::seeds()` etc.
                 let bump_assign =
-                    quote! { <#field_ty as anchor_lang::AccountSlot>::cache_bump(__bump) };
+                    quote! { <#field_ty as anchor_lang::__private::AccountSlot>::cache_bump(__bump) };
                 let seed_constraint = if let Some(Some(ref bump_expr)) = attrs.bump {
                     let bump_cache = bump_cache_ident(field_name);
                     // Explicit bump + expression seeds: verify with appended bump
@@ -2801,9 +2801,9 @@ pub fn parse_field(
             let mint = &at.mint;
             let authority = &at.authority;
             let token_program = &at.token_program;
-            let mint_addr = quote! { *anchor_lang::AnchorAccount::account(anchor_lang::AccountSlot::require_account(&(#mint))?).address() };
-            let authority_addr = quote! { *anchor_lang::AnchorAccount::account(anchor_lang::AccountSlot::require_account(&(#authority))?).address() };
-            let token_program_addr = quote! { *anchor_lang::AnchorAccount::account(anchor_lang::AccountSlot::require_account(&(#token_program))?).address() };
+            let mint_addr = quote! { *anchor_lang::AnchorAccount::account(anchor_lang::__private::AccountSlot::require_account(&(#mint))?).address() };
+            let authority_addr = quote! { *anchor_lang::AnchorAccount::account(anchor_lang::__private::AccountSlot::require_account(&(#authority))?).address() };
+            let token_program_addr = quote! { *anchor_lang::AnchorAccount::account(anchor_lang::__private::AccountSlot::require_account(&(#token_program))?).address() };
             constraints.push(quote! {
                 {
                     let __associated_token_mint = #mint_addr;
@@ -3024,14 +3024,14 @@ pub fn parse_field(
             .map(|c| {
                 if attrs.is_mut {
                     quote! {
-                        if let Some(#field_name) = <#field_ty as anchor_lang::AccountSlot>::as_account_mut(&mut #field_name) {
+                        if let Some(#field_name) = <#field_ty as anchor_lang::__private::AccountSlot>::as_account_mut(&mut #field_name) {
                             let _ = &#field_name;
                             #c
                         }
                     }
                 } else {
                     quote! {
-                        if let Some(#field_name) = <#field_ty as anchor_lang::AccountSlot>::as_account(&#field_name) {
+                        if let Some(#field_name) = <#field_ty as anchor_lang::__private::AccountSlot>::as_account(&#field_name) {
                             // `#c` may not textually name `#field_name` (e.g. a
                             // literal `constraint = false`, or the derive-
                             // generated duplicate-mut guard that only touches
@@ -3051,7 +3051,7 @@ pub fn parse_field(
             None
         } else {
             Some(quote! {
-                if let Some(#field_name) = <#field_ty as anchor_lang::AccountSlot>::as_account_mut(&mut self.#field_name) {
+                if let Some(#field_name) = <#field_ty as anchor_lang::__private::AccountSlot>::as_account_mut(&mut self.#field_name) {
                     let _ = &#field_name;
                     #(#updates)*
                 }
@@ -3094,7 +3094,7 @@ pub fn parse_field(
 
             if let Some(ref close_target) = attrs.close {
                 quote! {
-                    if let Some(__inner) = <#field_ty as anchor_lang::AccountSlot>::as_account_mut(&mut self.#field_name) {
+                    if let Some(__inner) = <#field_ty as anchor_lang::__private::AccountSlot>::as_account_mut(&mut self.#field_name) {
                         #(#inner_constraint_exits)*
                         anchor_lang::AccountClose::close(
                             __inner,
@@ -3104,14 +3104,14 @@ pub fn parse_field(
                 }
             } else if attrs.is_mut {
                 quote! {
-                    if let Some(__inner) = <#field_ty as anchor_lang::AccountSlot>::as_account_mut(&mut self.#field_name) {
+                    if let Some(__inner) = <#field_ty as anchor_lang::__private::AccountSlot>::as_account_mut(&mut self.#field_name) {
                         #(#inner_constraint_exits)*
                         anchor_lang::AnchorAccount::exit(__inner)?;
                     }
                 }
             } else {
                 quote! {
-                    if let Some(__inner) = <#field_ty as anchor_lang::AccountSlot>::as_account_mut(&mut self.#field_name) {
+                    if let Some(__inner) = <#field_ty as anchor_lang::__private::AccountSlot>::as_account_mut(&mut self.#field_name) {
                         #(#inner_constraint_exits)*
                     }
                 }

@@ -10,6 +10,7 @@ use {
 
 /// A field in an `Accounts` struct. Account groups implement this through
 /// `#[derive(Accounts)]`, so nesting requires no marker attribute or wrapper.
+#[doc(hidden)]
 pub trait AccountField: crate::Bumps<Bumps: Default + Clone> + Sized {
     const HEADER_SIZE: usize;
     const MUT_MASK: [u64; 4] = [0; 4];
@@ -135,6 +136,7 @@ impl<T: AnchorAccount> AccountField for Option<T> {
 
 /// One account slot, either required or optional. Constraints dispatch on
 /// `Account`, after Rust has resolved aliases and qualified paths.
+#[doc(hidden)]
 pub trait AccountSlot: AccountField {
     type Account: AnchorAccount;
     type PdaBump: Default + Clone;
@@ -209,6 +211,7 @@ impl<T: AnchorAccount> AccountSlot for Option<T> {
 }
 
 /// A system-owned account suitable for paying for PDA initialization.
+#[doc(hidden)]
 pub trait PdaPayer: AnchorAccount {}
 impl PdaPayer for crate::accounts::SystemAccount {}
 impl<T: PdaPayer> PdaPayer for alloc::boxed::Box<T> {}

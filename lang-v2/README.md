@@ -224,34 +224,43 @@ Derives emit trait calls on field types and let Rust resolve their meaning.
 Aliases, qualified paths, and custom types therefore use their implementations
 instead of inheriting behavior from their spelling.
 
+The new composition and layout contracts, including the capacity-list types,
+live in the doc-hidden `anchor_lang::__private` module. They remain public for
+generated code and handwritten extensions, but are not exported at the crate
+root or through the prelude. Single-account wrappers still only need to
+implement `AnchorAccount` to obtain the account composition implementations.
+
 | Trait | Responsibility |
 |---|---|
 | `AnchorAccount` | Load and operate on one account; provides the leaf `AccountField` implementation. |
-| `AccountField` | Compose account widths, masks, bumps, hooks, and client/CPI projections; derived for account groups. |
-| `AccountSlot` | Apply constraints to a required or optional single account. |
+| `__private::AccountField` | Compose account widths, masks, bumps, hooks, and client/CPI projections; derived for account groups. |
+| `__private::AccountSlot` | Apply constraints to a required or optional single account. |
+| `__private::PdaPayer` | Mark a system-owned account suitable for paying for PDA initialization. |
 | `TryAccounts` | Validate instruction account groups and project their client, resolved client, and CPI types. |
 | `Bumps` | Associate account fields and groups with their bump caches. |
-| `CpiField` | Append CPI metas, handles, and optional-account sentinel flags. |
+| `__private::CpiField` | Append CPI metas, handles, and optional-account sentinel flags. |
+| `__private::SingleCpiField` / `__private::CpiReadonlyField` | Support optional CPI fields and duplicate readonly handles. |
 | `Id` | Supply the program address used by fixed-address `#[account(resolve)]` fields. |
-| `Space` / `BoundedSpace` | Calculate serialized sizes and consume `max_len` capacities. |
-| `PodLayout` | Check zero-copy field invariants in addition to `bytemuck::Pod`. |
+| `Space` / `__private::BoundedSpace` | Calculate serialized sizes and consume `max_len` capacities. |
+| `__private::PodLayout` | Check zero-copy field invariants in addition to `bytemuck::Pod`. |
 | `IdlAccountType` | Describe resolved types and collect their IDL dependencies. |
 
 `Accounts` supplies the `TryAccounts` projections automatically. Handwritten
 `TryAccounts` implementations must provide `PROGRAM_ID`, `Client`,
 `ResolvedClient`, and `Cpi`, alongside their loading methods. Custom
-`AccountField` implementations obtain their bump type from `Bumps`.
+`__private::AccountField` implementations obtain their bump type from `Bumps`.
 
 `InitSpace` accepts aliases of collections and supplies both size traits for
 derived types. Capacities flow through tuples in field order. A handwritten
-`Space` implementation also works wherever no capacities remain; implement
-`BoundedSpace<Limits<N, Tail>>` when that type must preserve or consume a pending
-capacity list.
+`Space` implementation also works wherever no capacities remain. Import
+`BoundedSpace`, `Limits`, and `SpaceLimits` from `anchor_lang::__private` to
+implement `BoundedSpace<Limits<N, Tail>>` when that type must preserve or consume
+a pending capacity list.
 
 Account, event, and POD-wrapper macros supply `PodLayout` automatically. For a
-handwritten POD field, add `impl anchor_lang::PodLayout for MyPod {}`; override
-`CHECK` when the type has additional invariants. Dynamic collections continue
-to use serialized accounts. Plain serialized types used in IDL metadata need
+handwritten POD field, add `impl anchor_lang::__private::PodLayout for MyPod {}`;
+override `CHECK` when the type has additional invariants. Dynamic collections
+continue to use serialized accounts. Plain serialized types used in IDL metadata need
 `#[derive(IdlType)]`, including custom constant types. Tuple and map metadata
 registers the tuple definitions used by their wire representations.
 

@@ -8,6 +8,7 @@ use {
 };
 
 /// Appends one field's contribution to a CPI account list.
+#[doc(hidden)]
 pub trait CpiField<'a> {
     fn append_instruction_accounts(
         &self,
@@ -21,9 +22,11 @@ pub trait CpiField<'a> {
 
 /// A field contributing exactly one account meta. Only these fields may be
 /// optional: absence contributes one program-id sentinel and no handle.
+#[doc(hidden)]
 pub trait SingleCpiField<'a>: CpiField<'a> {}
 
 /// A direct handle that may also contribute a duplicate readonly account.
+#[doc(hidden)]
 pub trait CpiReadonlyField<'a>: SingleCpiField<'a> {
     fn readonly_handle(&self) -> CpiHandle<'a>;
 }

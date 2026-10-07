@@ -7,10 +7,8 @@ extern crate alloc;
 extern crate self as anchor_lang;
 
 mod pod_layout;
-pub use pod_layout::PodLayout;
 
 mod account_field;
-pub use account_field::{AccountField, AccountSlot, PdaPayer};
 pub mod accounts;
 pub mod context;
 mod context_cpi;
@@ -49,10 +47,7 @@ pub use solana_msg;
 #[cfg(feature = "compat")]
 #[doc(hidden)]
 pub use solana_program_log::log as __log_str;
-pub use {
-    cpi::realloc_account,
-    cpi_field::{CpiField, CpiReadonlyField, SingleCpiField},
-};
+pub use cpi::realloc_account;
 
 // Ungated re-export so generated macro code (`#[event]`, `debug!`, etc.)
 // can reach `Vec` without std or `extern crate alloc;` in user crates.
@@ -277,11 +272,19 @@ pub trait InstructionData: Discriminator {
 }
 
 mod space;
-pub use space::{BoundedSpace, Limits, NoLimits, Space, SpaceLimits};
+pub use space::Space;
 
 #[doc(hidden)]
 pub mod __private {
     use {crate::CpiHandle, pinocchio::account::AccountView};
+
+    // Public for code generated in downstream crates and handwritten extensions.
+    pub use crate::{
+        account_field::{AccountField, AccountSlot, PdaPayer},
+        cpi_field::{CpiField, CpiReadonlyField, SingleCpiField},
+        pod_layout::PodLayout,
+        space::{BoundedSpace, Limits, NoLimits, SpaceLimits},
+    };
 
     /// Used by `#[derive(InitSpace)]` on enums to pick the largest variant size.
     pub const fn max(a: usize, b: usize) -> usize {
