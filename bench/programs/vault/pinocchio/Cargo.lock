@@ -3703,7 +3703,6 @@ name = "vault-pinocchio"
 version = "0.1.0"
 dependencies = [
  "anchor-v2-testing",
- "litesvm",
  "pinocchio",
  "pinocchio-system",
  "solana-account",

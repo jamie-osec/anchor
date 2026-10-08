@@ -20,6 +20,7 @@ name = "token_2022_extensions"
 path = "tests/token_2022_extensions/main.rs"
 
 [dependencies]
+anchor-v2-testing = { path = "../v2-testing", features = ["register-tracing"] }
 anchor-lang = { path = "../lang-v2" }
 account-address-constraints = { path = "programs/account-address-constraints" }
 account-meta-signer-overrides = { path = "programs/account-meta-signer-overrides" }
@@ -55,7 +56,6 @@ spl-ata-test = { path = "programs/spl-ata", features = ["cpi"] }
 token-interface-test = { path = "programs/token-interface", features = ["cpi"] }
 accounts-test = { path = "programs/accounts", features = ["idl-build"] }
 derives-test = { path = "programs/derives" }
-litesvm = { workspace = true, features = ["register-tracing"] }
 pinocchio = { version = "0.11", default-features = false }
 solana-account.workspace = true
 solana-keypair.workspace = true

@@ -1208,7 +1208,6 @@ name = "humidifi-v2"
 version = "0.1.0"
 dependencies = [
  "anchor-v2-testing",
- "litesvm",
  "solana-account",
  "solana-instruction 3.5.1",
  "solana-pubkey 4.3.0",

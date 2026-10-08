@@ -1249,7 +1249,6 @@ version = "0.1.0"
 dependencies = [
  "anchor-lang",
  "anchor-v2-testing",
- "litesvm",
  "pinocchio",
  "pinocchio-system",
  "solana-instruction 3.5.1",

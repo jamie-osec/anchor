@@ -1323,7 +1323,6 @@ dependencies = [
  "anchor-v2-testing",
  "bytemuck",
  "five8 1.0.0",
- "litesvm",
  "solana-instruction 3.5.1",
  "solana-program 4.1.0",
  "solana-pubkey 4.3.0",

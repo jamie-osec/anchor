@@ -8,6 +8,7 @@ publish = false
 
 [features]
 default = []
+register-tracing = ["litesvm/register-tracing"]
 
 # Runtime PC tracing for per-test flamegraphs. Activates litesvm's
 # register-tracing feature and installs a callback that keys trace files
@@ -15,7 +16,7 @@ default = []
 profile = [
     "dep:solana-program-runtime",
     "dep:solana-transaction-context",
-    "litesvm/register-tracing",
+    "register-tracing",
     # Activates sbpf's gdb-stub through LiteSVM. When
     # `VM_DEBUG_PORT` is set in env, every `EbpfVm::new` blocks on that
     # port waiting for a client — this is what `anchor debugger --gdb`

@@ -1178,7 +1178,6 @@ name = "hello-world-quasar-debug"
 version = "0.1.0"
 dependencies = [
  "anchor-v2-testing",
- "litesvm",
  "solana-instruction 3.5.1",
  "solana-pubkey 4.3.0",
 ]

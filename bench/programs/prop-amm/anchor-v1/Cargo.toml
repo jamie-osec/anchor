@@ -22,6 +22,4 @@ anchor-lang = { package = "anchor-lang-v1", path = "../../../../lang" }
 
 [dev-dependencies]
 anchor-v2-testing = { path = "../../../../v2-testing" }
-# FIXME: Update liteSVM once this commit exists on a release
-litesvm = { version = "0.17.0", git = "https://github.com/LiteSVM/litesvm", rev = "980f39121cda14bc78d8c46489d2d12fb0cc6eae" }
 solana-account = "4.5.0"
