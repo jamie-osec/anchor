@@ -544,14 +544,15 @@ pub fn zero_copy(
         if !attr.path().is_ident("derive") {
             continue;
         }
-        if let syn::Meta::List(list) = &attr.meta {
-            let tokens_str = list.tokens.to_string();
-            if tokens_str.contains("bytemuck :: Pod") {
+        if let Err(err) = attr.parse_nested_meta(|meta| {
+            if ends_with_bytemuck_derive(&meta.path, "Pod") {
                 has_pod_attr = true;
-            }
-            if tokens_str.contains("bytemuck :: Zeroable") {
+            } else if ends_with_bytemuck_derive(&meta.path, "Zeroable") {
                 has_zeroable_attr = true;
             }
+            Ok(())
+        }) {
+            return err.into_compile_error().into();
         }
     }
 
@@ -580,15 +581,16 @@ pub fn zero_copy(
 
     #[cfg(feature = "idl-build")]
     {
-        let derive_unsafe = if is_unsafe {
-            // Not a real proc-macro but exists in order to pass the serialization info
+        // Not real proc-macros but exist in order to pass the serialization info,
+        // whichever path the user's own bytemuck derives were written with
+        let derive_serialization = if is_unsafe {
             quote! { #[derive(bytemuck::Unsafe)] }
         } else {
-            quote! {}
+            quote! { #[derive(bytemuck::Pod)] }
         };
 
         let zc_struct = syn::parse_quote! {
-            #derive_unsafe
+            #derive_serialization
             #ret
         };
         let idl_build_impl = anchor_syn::idl::impl_idl_build_struct(&zc_struct);
@@ -600,6 +602,16 @@ pub fn zero_copy(
 
     #[allow(unreachable_code)]
     proc_macro::TokenStream::from(ret)
+}
+
+// Any path ending in `bytemuck::<leaf>`, so re-exports like `crate::bytemuck::Pod` count.
+fn ends_with_bytemuck_derive(path: &syn::Path, leaf: &str) -> bool {
+    let mut segments = path.segments.iter().rev();
+
+    matches!(
+        (segments.next(), segments.next()),
+        (Some(last), Some(parent)) if last.ident == leaf && parent.ident == "bytemuck"
+    )
 }
 
 /// Convenience macro to define a static public key.
