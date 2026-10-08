@@ -26,7 +26,8 @@ pinocchio = { version = "0.11", default-features = false, features = ["copy"] }
 
 [dev-dependencies]
 anchor-v2-testing = { path = "../../../../v2-testing" }
-litesvm = "0.13.1"
+# FIXME: Update liteSVM once this commit exists on a release
+litesvm = { version = "0.17.0", git = "https://github.com/LiteSVM/litesvm", rev = "980f39121cda14bc78d8c46489d2d12fb0cc6eae" }
 
 [lints.rust.unexpected_cfgs]
 level = "allow"

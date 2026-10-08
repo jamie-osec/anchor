@@ -31,6 +31,6 @@ solana-keypair.workspace = true
 solana-message.workspace = true
 solana-signer.workspace = true
 solana-transaction.workspace = true
-# LiteSVM 0.13.1's callbacks use the Agave 4.0 API.
+# Match the Agave runtime API used by LiteSVM's callbacks.
 solana-program-runtime = { workspace = true, optional = true }
 solana-transaction-context = { workspace = true, optional = true }
