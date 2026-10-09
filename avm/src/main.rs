@@ -318,7 +318,7 @@ pub fn entry(opts: Cli) -> Result<()> {
                 output,
             } => {
                 let (res, source) = if let Some(solana) = solana_version {
-                    let res = avm::resolve_platform_tools_for_solana_version(&solana);
+                    let res = avm::resolve_platform_tools_for_solana_version(&solana)?;
                     let source = res.source.describe();
                     (res, source)
                 } else if let Some(anchor) = anchor_version {
@@ -329,10 +329,11 @@ pub fn entry(opts: Cli) -> Result<()> {
                                  --solana-version to choose one explicitly."
                             )
                         })?;
-                    let res = avm::resolve_platform_tools_for_solana_version(&solana);
+                    let res = avm::resolve_platform_tools_for_solana_version(&solana)?;
+                    let source = res.source.describe();
                     (
                         res,
-                        format!("explicit Anchor {anchor} → Solana {solana} → map"),
+                        format!("explicit Anchor {anchor} → Solana {solana}; {source}"),
                     )
                 } else {
                     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
