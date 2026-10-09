@@ -139,6 +139,8 @@ echo "next_lockfile_bump=${{CARGO_UNSTABLE_NEXT_LOCKFILE_BUMP:-}}" >> "$AVM_TEST
             &self.avm_home_bin().join(format!("anchor-{version}")),
             r#"#!/bin/sh
 cargo build-sbf
+cargo build-sbf --tools-version v1.42 -- --features mainnet
+cargo build-sbf --tools-version=v1.46 -- --features testnet
 cargo +nightly test idl
 cargo +nightly-2026-07-01 test already-pinned
 "#,
@@ -608,8 +610,10 @@ fn anchor_stub_pins_only_unversioned_nightly_cargo_invocations() {
 
     assert_eq!(
         fs::read_to_string(&fixture.cargo_log_path).unwrap(),
-        "--help\nbuild-sbf --install-only --tools-version v1.57\nbuild-sbf\n+nightly-2026-06-10 \
-         test idl\n+nightly-2026-07-01 test already-pinned\n"
+        "--help\nbuild-sbf --install-only --tools-version v1.57\nbuild-sbf --tools-version \
+         v1.57\nbuild-sbf --tools-version v1.57 -- --features mainnet\nbuild-sbf --tools-version \
+         v1.57 -- --features testnet\n+nightly-2026-06-10 test idl\n+nightly-2026-07-01 test \
+         already-pinned\n"
     );
     let rustup_log = fs::read_to_string(&fixture.rustup_log_path).unwrap();
     assert!(
@@ -641,7 +645,9 @@ fn anchor_stub_uses_legacy_idl_nightly_for_locked_proc_macro2() {
 
     assert_eq!(
         fs::read_to_string(&fixture.cargo_log_path).unwrap(),
-        "build-sbf\n+nightly-2025-04-15 test idl\n+nightly-2026-07-01 test already-pinned\n"
+        "build-sbf --tools-version v1.57\nbuild-sbf --tools-version v1.57 -- --features \
+         mainnet\nbuild-sbf --tools-version v1.57 -- --features testnet\n+nightly-2025-04-15 test \
+         idl\n+nightly-2026-07-01 test already-pinned\n"
     );
     let rustup_log = fs::read_to_string(&fixture.rustup_log_path).unwrap();
     assert!(

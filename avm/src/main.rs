@@ -15,6 +15,9 @@ use {
 };
 
 const REAL_CARGO_ENV: &str = "AVM_REAL_CARGO";
+const PLATFORM_TOOLS_VERSION_ENV: &str = "AVM_PLATFORM_TOOLS_VERSION";
+const PLATFORM_TOOLS_TOOLCHAIN_ENV: &str = "AVM_PLATFORM_TOOLS_TOOLCHAIN";
+const TRACE_TOOLCHAIN_ENV: &str = "AVM_TRACE_TOOLCHAIN";
 const CARGO_NEXT_LOCKFILE_BUMP_ENV: &str = "CARGO_UNSTABLE_NEXT_LOCKFILE_BUMP";
 
 #[derive(Parser)]
@@ -399,9 +402,7 @@ fn anchor_proxy() -> Result<()> {
         return spawn_anchor(
             avm::nightly_anchor_binary_path(),
             args,
-            platform_tools_guard
-                .as_ref()
-                .is_some_and(|guard| guard.enable_next_lockfile_bump),
+            platform_tools_guard.as_ref(),
         );
     }
 
@@ -418,13 +419,7 @@ fn anchor_proxy() -> Result<()> {
         .map(|solana| ensure_resolved_platform_tools(&cwd, &solana))
         .transpose()?;
 
-    spawn_anchor(
-        binary_path,
-        args,
-        platform_tools_guard
-            .as_ref()
-            .is_some_and(|guard| guard.enable_next_lockfile_bump),
-    )
+    spawn_anchor(binary_path, args, platform_tools_guard.as_ref())
 }
 
 /// Spawn the resolved Anchor CLI with a temporary Cargo proxy first on `PATH`.
@@ -435,7 +430,7 @@ fn anchor_proxy() -> Result<()> {
 fn spawn_anchor(
     binary_path: PathBuf,
     args: Vec<String>,
-    enable_next_lockfile_bump: bool,
+    platform_tools: Option<&PlatformToolsGuard>,
 ) -> Result<()> {
     let cargo_proxy = CargoProxy::new()?;
     let path = env::join_paths(
@@ -456,8 +451,13 @@ fn spawn_anchor(
         // toolchain version, so it must not re-exec via `[toolchain] anchor_version`.
         .env("AVM_ACTIVE", "1")
         .env("CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS", "fallback");
-    if enable_next_lockfile_bump {
-        command.env(CARGO_NEXT_LOCKFILE_BUMP_ENV, "true");
+    if let Some(platform_tools) = platform_tools {
+        command
+            .env(PLATFORM_TOOLS_VERSION_ENV, &platform_tools.version)
+            .env(PLATFORM_TOOLS_TOOLCHAIN_ENV, &platform_tools.toolchain);
+        if platform_tools.enable_next_lockfile_bump {
+            command.env(CARGO_NEXT_LOCKFILE_BUMP_ENV, "true");
+        }
     }
 
     let exit = command
@@ -518,9 +518,8 @@ fn find_real_cargo(current_exe: &Path) -> Result<PathBuf> {
 
 /// Handle an AVM invocation whose executable name is `cargo`.
 ///
-/// Only an unversioned `+nightly` selector is pinned. Every other invocation,
-/// including `cargo build-sbf` and explicitly dated toolchains, is forwarded
-/// unchanged to the real Cargo executable.
+/// Pin an unversioned `+nightly` selector and enforce the selected platform-tools
+/// on actual `build-sbf` invocations, including calls with an existing tools flag.
 fn cargo_proxy() -> Result<()> {
     let real_cargo =
         env::var_os(REAL_CARGO_ENV).ok_or_else(|| anyhow!("{REAL_CARGO_ENV} is not set"))?;
@@ -536,14 +535,80 @@ fn cargo_proxy() -> Result<()> {
         ensure_idl_nightly_installed(&resolution.version)?;
     }
 
+    let enforced = match env::var(PLATFORM_TOOLS_VERSION_ENV) {
+        Ok(version) => pin_build_sbf_tools(&mut args, &version)?,
+        Err(_) => false,
+    };
+    let trace = enforced && env::var_os(TRACE_TOOLCHAIN_ENV).is_some();
+    if trace {
+        eprintln!("AVM build command: cargo {args:?}");
+        trace_platform_tools("before build")?;
+    }
     let status = Command::new(real_cargo)
         .args(args)
         .status()
         .context("running Cargo through AVM proxy")?;
+    if trace {
+        trace_platform_tools("after build")?;
+    }
     if !status.success() {
         std::process::exit(status.code().unwrap_or(1));
     }
 
+    Ok(())
+}
+
+/// Replace tools flags before the Cargo argument separator; leave Cargo's own
+/// arguments untouched. A Rustup selector may precede the subcommand.
+fn pin_build_sbf_tools(args: &mut Vec<OsString>, version: &str) -> Result<bool> {
+    let command_index = usize::from(
+        args.first()
+            .is_some_and(|arg| arg.to_string_lossy().starts_with('+')),
+    );
+    if args.get(command_index).is_none_or(|arg| arg != "build-sbf") {
+        return Ok(false);
+    }
+    let mut index = command_index + 1;
+    while index < args.len() && args[index] != "--" {
+        if args[index] == "--tools-version" {
+            if args
+                .get(index + 1)
+                .is_none_or(|arg| arg == "--" || arg.to_string_lossy().starts_with('-'))
+            {
+                anyhow::bail!("--tools-version requires a value");
+            }
+            args.drain(index..index + 2);
+        } else if args[index]
+            .to_string_lossy()
+            .starts_with("--tools-version=")
+        {
+            args.remove(index);
+        } else {
+            index += 1;
+        }
+    }
+    args.splice(
+        command_index + 1..command_index + 1,
+        ["--tools-version".into(), version.into()],
+    );
+    Ok(true)
+}
+
+/// Record the compiler reached through the alias cargo-build-sbf uses, both
+/// before and after the subprocess, so relinking cannot go unnoticed in CI.
+fn trace_platform_tools(stage: &str) -> Result<()> {
+    let toolchain = env::var(PLATFORM_TOOLS_TOOLCHAIN_ENV)?;
+    eprintln!("AVM toolchain {stage}: {toolchain}");
+    for flags in [vec!["-vV"], vec!["--print", "sysroot"]] {
+        let status = Command::new("rustup")
+            .args(["run", &toolchain, "rustc"])
+            .args(flags)
+            .status()
+            .context("printing the platform-tools compiler")?;
+        if !status.success() {
+            anyhow::bail!("Could not inspect platform-tools compiler {toolchain}");
+        }
+    }
     Ok(())
 }
 
@@ -622,6 +687,8 @@ fn ensure_resolved_solana(
 /// aliases for the duration of the Anchor invocation.
 struct PlatformToolsGuard {
     _lock: fs::File,
+    version: String,
+    toolchain: String,
     enable_next_lockfile_bump: bool,
 }
 
@@ -685,6 +752,8 @@ fn ensure_resolved_platform_tools(
 
     Ok(PlatformToolsGuard {
         _lock: lock,
+        version: resolution.version,
+        toolchain: toolchain_name,
         enable_next_lockfile_bump,
     })
 }
@@ -876,6 +945,52 @@ mod tests {
         let mut dated = vec![OsString::from("+nightly-2026-07-01")];
         assert!(!pin_idl_nightly(&mut dated, "nightly-2025-04-15"));
         assert_eq!(dated[0], "+nightly-2026-07-01");
+    }
+
+    #[test]
+    fn build_sbf_tools_override_handles_selectors_and_preserves_cargo_arguments() {
+        let mut args = [
+            "+stable",
+            "build-sbf",
+            "--tools-version=v1.42",
+            "--arch",
+            "v0",
+            "--tools-version",
+            "v1.46",
+            "--",
+            "--features",
+            "--tools-version=v1.51",
+        ]
+        .map(OsString::from)
+        .to_vec();
+        assert!(pin_build_sbf_tools(&mut args, "v1.57").unwrap());
+        assert_eq!(
+            args,
+            [
+                "+stable",
+                "build-sbf",
+                "--tools-version",
+                "v1.57",
+                "--arch",
+                "v0",
+                "--",
+                "--features",
+                "--tools-version=v1.51",
+            ]
+            .map(OsString::from)
+        );
+        let mut unrelated = ["test", "--tools-version=v1.42"]
+            .map(OsString::from)
+            .to_vec();
+        assert!(!pin_build_sbf_tools(&mut unrelated, "v1.57").unwrap());
+        assert_eq!(
+            unrelated,
+            ["test", "--tools-version=v1.42"].map(OsString::from)
+        );
+        let mut missing = ["build-sbf", "--tools-version", "--"]
+            .map(OsString::from)
+            .to_vec();
+        assert!(pin_build_sbf_tools(&mut missing, "v1.57").is_err());
     }
 
     // --- is_pre_release ---
