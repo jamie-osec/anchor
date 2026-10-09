@@ -141,6 +141,7 @@ echo "next_lockfile_bump=${{CARGO_UNSTABLE_NEXT_LOCKFILE_BUMP:-}}" >> "$AVM_TEST
             &self.avm_home_bin().join(format!("anchor-{version}")),
             r#"#!/bin/sh
 cargo build-sbf
+cargo build-bpf --tools-version=v1.41
 cargo build-sbf --tools-version v1.42 -- --features mainnet
 cargo build-sbf --tools-version=v1.46 -- --features testnet
 cargo +nightly test idl
@@ -613,9 +614,9 @@ fn anchor_stub_pins_only_unversioned_nightly_cargo_invocations() {
     assert_eq!(
         fs::read_to_string(&fixture.cargo_log_path).unwrap(),
         "--help\nbuild-sbf --install-only --tools-version v1.57\nbuild-sbf --tools-version \
-         v1.57\nbuild-sbf --tools-version v1.57 -- --features mainnet\nbuild-sbf --tools-version \
-         v1.57 -- --features testnet\n+nightly-2026-06-10 test idl\n+nightly-2026-07-01 test \
-         already-pinned\n"
+         v1.57\nbuild-bpf --tools-version v1.57\nbuild-sbf --tools-version v1.57 -- --features \
+         mainnet\nbuild-sbf --tools-version v1.57 -- --features testnet\n+nightly-2026-06-10 test \
+         idl\n+nightly-2026-07-01 test already-pinned\n"
     );
     let rustup_log = fs::read_to_string(&fixture.rustup_log_path).unwrap();
     assert!(
@@ -647,9 +648,10 @@ fn anchor_stub_uses_legacy_idl_nightly_for_locked_proc_macro2() {
 
     assert_eq!(
         fs::read_to_string(&fixture.cargo_log_path).unwrap(),
-        "build-sbf --tools-version v1.57\nbuild-sbf --tools-version v1.57 -- --features \
-         mainnet\nbuild-sbf --tools-version v1.57 -- --features testnet\n+nightly-2025-04-15 test \
-         idl\n+nightly-2026-07-01 test already-pinned\n"
+        "build-sbf --tools-version v1.57\nbuild-bpf --tools-version v1.57\nbuild-sbf \
+         --tools-version v1.57 -- --features mainnet\nbuild-sbf --tools-version v1.57 -- \
+         --features testnet\n+nightly-2025-04-15 test idl\n+nightly-2026-07-01 test \
+         already-pinned\n"
     );
     let rustup_log = fs::read_to_string(&fixture.rustup_log_path).unwrap();
     assert!(
@@ -935,6 +937,18 @@ fi
     assert!(!fallback.status.success());
     assert!(String::from_utf8_lossy(&fallback.stderr).contains("SBF compiler used sysroot"));
     assert_success(&run(&old, "x86_64-unknown-linux-gnu"));
+    let probe = Command::new(&wrapper)
+        .args([
+            compiler.as_os_str(),
+            OsStr::new("--target"),
+            OsStr::new("sbf-solana-solana"),
+            OsStr::new("--print=cfg"),
+        ])
+        .env("AVM_TEST_ACTUAL_SYSROOT", &old)
+        .env_remove("AVM_REAL_RUSTC_WRAPPER")
+        .output()
+        .unwrap();
+    assert_success(&probe);
 }
 
 #[test]

@@ -546,7 +546,7 @@ fn find_real_cargo(current_exe: &Path) -> Result<PathBuf> {
 /// Handle an AVM invocation whose executable name is `cargo`.
 ///
 /// Pin an unversioned `+nightly` selector and enforce the selected platform-tools
-/// on actual `build-sbf` invocations, including calls with an existing tools flag.
+/// on actual `build-sbf` and legacy `build-bpf` invocations, including existing flags.
 fn cargo_proxy() -> Result<()> {
     let real_cargo =
         env::var_os(REAL_CARGO_ENV).ok_or_else(|| anyhow!("{REAL_CARGO_ENV} is not set"))?;
@@ -592,7 +592,10 @@ fn pin_build_sbf_tools(args: &mut Vec<OsString>, version: &str) -> Result<bool> 
         args.first()
             .is_some_and(|arg| arg.to_string_lossy().starts_with('+')),
     );
-    if args.get(command_index).is_none_or(|arg| arg != "build-sbf") {
+    if args
+        .get(command_index)
+        .is_none_or(|arg| arg != "build-sbf" && arg != "build-bpf")
+    {
         return Ok(false);
     }
     let mut index = command_index + 1;
@@ -657,9 +660,13 @@ fn rustc_wrapper() -> Result<()> {
                     .map(str::to_owned)
             })
         });
-    if target
-        .as_deref()
-        .is_some_and(|target| target.starts_with("sbf-") || target.starts_with("sbpf"))
+    let compiling = args
+        .iter()
+        .any(|arg| arg.to_string_lossy().starts_with("--emit"));
+    if compiling
+        && target
+            .as_deref()
+            .is_some_and(|target| target.starts_with("sbf-") || target.starts_with("sbpf"))
     {
         let expected = env::var_os(PLATFORM_TOOLS_SYSROOT_ENV)
             .ok_or_else(|| anyhow!("missing selected platform-tools sysroot"))?;
@@ -677,15 +684,11 @@ fn rustc_wrapper() -> Result<()> {
         }
         let marker = env::var_os(COMPILER_TRACE_FILE_ENV)
             .ok_or_else(|| anyhow!("missing compiler trace marker"))?;
-        let compiling = args
-            .iter()
-            .any(|arg| arg.to_string_lossy().starts_with("--emit"));
-        if compiling
-            && fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(marker)
-                .is_ok()
+        if fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(marker)
+            .is_ok()
         {
             eprintln!(
                 "AVM actual SBF compiler: {rustc:?}; target {}; sysroot {}",
@@ -1087,6 +1090,14 @@ mod tests {
                 "--tools-version=v1.51",
             ]
             .map(OsString::from)
+        );
+        let mut legacy = ["build-bpf", "--tools-version=v1.41"]
+            .map(OsString::from)
+            .to_vec();
+        assert!(pin_build_sbf_tools(&mut legacy, "v1.57").unwrap());
+        assert_eq!(
+            legacy,
+            ["build-bpf", "--tools-version", "v1.57"].map(OsString::from)
         );
         let mut unrelated = ["test", "--tools-version=v1.42"]
             .map(OsString::from)
