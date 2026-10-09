@@ -1518,6 +1518,7 @@ Solana version: 1.18.8
 | accountEmpty2               | 1,016         | 🟢 **-259 (20.31%)**   |
 | accountEmptyInit4           | 18,285        | 🟢 **-1,302 (6.65%)**  |
 | accountEmpty4               | 1,737         | 🟢 **-440 (20.21%)**   |
+| accountEmptyInit8           | -             | Removed                |
 | accountEmpty8               | 3,186         | 🟢 **-804 (20.15%)**   |
 | accountSizedInit1           | 5,052         | 🟢 **-541 (9.67%)**    |
 | accountSized1               | 668           | 🟢 **-175 (20.76%)**   |
@@ -1525,6 +1526,7 @@ Solana version: 1.18.8
 | accountSized2               | 1,046         | 🟢 **-271 (20.58%)**   |
 | accountSizedInit4           | 18,621        | 🟢 **-1,388 (6.94%)**  |
 | accountSized4               | 1,807         | 🟢 **-467 (20.54%)**   |
+| accountSizedInit8           | -             | Removed                |
 | accountSized8               | 3,326         | 🟢 **-859 (20.53%)**   |
 | accountUnsizedInit1         | 5,145         | 🟢 **-541 (9.51%)**    |
 | accountUnsized1             | 702           | 🟢 **-168 (19.31%)**   |
@@ -1532,6 +1534,7 @@ Solana version: 1.18.8
 | accountUnsized2             | 1,116         | 🟢 **-263 (19.07%)**   |
 | accountUnsizedInit4         | 19,043        | 🟢 **-1,393 (6.82%)**  |
 | accountUnsized4             | 1,953         | 🟢 **-458 (19.00%)**   |
+| accountUnsizedInit8         | -             | Removed                |
 | accountUnsized8             | 3,626         | 🟢 **-852 (19.03%)**   |
 | boxedAccountEmptyInit1      | 5,010         | 🟢 **-541 (9.75%)**    |
 | boxedAccountEmpty1          | 671           | 🟢 **-185 (21.61%)**   |
@@ -1539,6 +1542,7 @@ Solana version: 1.18.8
 | boxedAccountEmpty2          | 1,052         | 🟢 **-295 (21.90%)**   |
 | boxedAccountEmptyInit4      | 18,366        | 🟢 **-1,420 (7.18%)**  |
 | boxedAccountEmpty4          | 1,811         | 🟢 **-513 (22.07%)**   |
+| boxedAccountEmptyInit8      | -             | Removed                |
 | boxedAccountEmpty8          | 3,357         | 🟢 **-954 (22.13%)**   |
 | boxedAccountSizedInit1      | 5,065         | 🟢 **-567 (10.07%)**   |
 | boxedAccountSized1          | 686           | 🟢 **-192 (21.87%)**   |
@@ -1546,6 +1550,7 @@ Solana version: 1.18.8
 | boxedAccountSized2          | 1,085         | 🟢 **-309 (22.17%)**   |
 | boxedAccountSizedInit4      | 18,609        | 🟢 **-1,513 (7.52%)**  |
 | boxedAccountSized4          | 1,874         | 🟢 **-539 (22.34%)**   |
+| boxedAccountSizedInit8      | -             | Removed                |
 | boxedAccountSized8          | 3,490         | 🟢 **-1,003 (22.32%)** |
 | boxedAccountUnsizedInit1    | 5,153         | 🟢 **-567 (9.91%)**    |
 | boxedAccountUnsized1        | 721           | 🟢 **-187 (20.59%)**   |
@@ -1553,6 +1558,7 @@ Solana version: 1.18.8
 | boxedAccountUnsized2        | 1,157         | 🟢 **-300 (20.59%)**   |
 | boxedAccountUnsizedInit4    | 18,944        | 🟢 **-1,528 (7.46%)**  |
 | boxedAccountUnsized4        | 2,019         | 🟢 **-527 (20.70%)**   |
+| boxedAccountUnsizedInit8    | -             | Removed                |
 | boxedAccountUnsized8        | 3,776         | 🟢 **-983 (20.66%)**   |
 | boxedInterfaceAccountMint1  | 1,372         | 🟢 **-824 (37.52%)**   |
 | boxedInterfaceAccountMint2  | 2,293         | 🟢 **-1,554 (40.40%)** |
@@ -1591,12 +1597,6 @@ Solana version: 1.18.8
 | uncheckedAccount8           | 2,468         | 🟢 **-220 (8.18%)**    |
 | escrow/initialize           | 11,557        | 🟢 **-1,050 (8.33%)**  |
 | escrow/take                 | 9,552         | 🟢 **-1,012 (9.58%)**  |
-| accountEmptyInit8           | -             | Removed                |
-| accountSizedInit8           | -             | Removed                |
-| accountUnsizedInit8         | -             | Removed                |
-| boxedAccountEmptyInit8      | -             | Removed                |
-| boxedAccountSizedInit8      | -             | Removed                |
-| boxedAccountUnsizedInit8    | -             | Removed                |
 
 </details>
 

@@ -270,9 +270,24 @@ fn format_table(header: &str, new: &Values, old: &Values, first: bool) -> Result
         .collect::<Vec<_>>()
         .try_into()
         .map_err(|_| anyhow::anyhow!("Expected a three-column Markdown table: {header}"))?;
-    let mut rows = new
-        .iter()
-        .map(|(name, value)| {
+    let mut names = new.keys().collect::<Vec<_>>();
+    let mut position = 0;
+    // Keep removed results beside their original neighbours, not at the end.
+    for name in old.keys() {
+        if let Some(index) = names.iter().position(|entry| *entry == name) {
+            position = index + 1;
+        } else {
+            names.insert(position, name);
+            position += 1;
+        }
+    }
+
+    let rows = names
+        .into_iter()
+        .map(|name| {
+            let Some(value) = new.get(name) else {
+                return [name.to_owned(), "-".into(), "Removed".into()];
+            };
             let change = match old.get(name) {
                 None => "N/A".into(),
                 Some(previous) if previous == value => if first { "N/A" } else { "-" }.into(),
@@ -281,12 +296,6 @@ fn format_table(header: &str, new: &Values, old: &Values, first: bool) -> Result
             row(name, *value, change)
         })
         .collect::<Vec<_>>();
-    rows.extend(
-        old.iter()
-            .filter(|(name, _)| !new.contains_key(*name))
-            .map(|(name, _)| [name.to_owned(), "-".into(), "Removed".into()]),
-    );
-
     let mut widths = [3; 3];
     for row in std::iter::once(&headers).chain(&rows) {
         for (index, cell) in row.iter().enumerate() {
