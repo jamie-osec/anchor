@@ -3,7 +3,9 @@
 use {
     sha2::{Digest, Sha256},
     std::{
-        env, fs,
+        env,
+        ffi::OsStr,
+        fs,
         os::unix::fs::PermissionsExt,
         path::{Path, PathBuf},
         process::{Command, Output},
@@ -887,6 +889,52 @@ fn avm_platform_tools_resolution_uses_latest_for_every_anchor_version() {
         );
         assert!(stdout.contains(&format!("rustc {rustc}")), "{stdout}");
     }
+}
+
+#[test]
+fn compiler_trace_rejects_fallback_sysroots_only_for_sbf_targets() {
+    let fixture = Fixture::new();
+    let wrapper = fixture.path_bin.join("rustc-wrapper");
+    fs::copy(env!("CARGO_BIN_EXE_avm"), &wrapper).unwrap();
+    make_executable(&wrapper);
+    let compiler = fixture.path_bin.join("fake-rustc");
+    write_executable(
+        &compiler,
+        r#"#!/bin/sh
+if [ "$1" = "--print" ]; then
+    echo "$AVM_TEST_ACTUAL_SYSROOT"
+elif [ "$1" = "-vV" ]; then
+    echo "rustc 1.95.0-dev"
+fi
+"#,
+    );
+    let selected = fixture.cache_platform_tools("v1.57").join("rust");
+    let old = fixture.cache_platform_tools("v1.44").join("rust");
+    let run = |actual: &Path, target: &str| {
+        Command::new(&wrapper)
+            .args([
+                compiler.as_os_str(),
+                OsStr::new("--target"),
+                OsStr::new(target),
+                OsStr::new("--emit=metadata"),
+            ])
+            .env("AVM_TEST_ACTUAL_SYSROOT", actual)
+            .env("AVM_PLATFORM_TOOLS_SYSROOT", &selected)
+            .env(
+                "AVM_COMPILER_TRACE_FILE",
+                fixture.path_bin.join("trace-marker"),
+            )
+            .env_remove("AVM_REAL_RUSTC_WRAPPER")
+            .output()
+            .unwrap()
+    };
+    let correct = run(&selected, "sbpf-solana-solana");
+    assert_success(&correct);
+    assert!(String::from_utf8_lossy(&correct.stderr).contains("AVM actual SBF compiler"));
+    let fallback = run(&old, "sbf-solana-solana");
+    assert!(!fallback.status.success());
+    assert!(String::from_utf8_lossy(&fallback.stderr).contains("SBF compiler used sysroot"));
+    assert_success(&run(&old, "x86_64-unknown-linux-gnu"));
 }
 
 #[test]

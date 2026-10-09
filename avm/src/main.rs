@@ -18,6 +18,9 @@ const REAL_CARGO_ENV: &str = "AVM_REAL_CARGO";
 const PLATFORM_TOOLS_VERSION_ENV: &str = "AVM_PLATFORM_TOOLS_VERSION";
 const PLATFORM_TOOLS_TOOLCHAIN_ENV: &str = "AVM_PLATFORM_TOOLS_TOOLCHAIN";
 const TRACE_TOOLCHAIN_ENV: &str = "AVM_TRACE_TOOLCHAIN";
+const PLATFORM_TOOLS_SYSROOT_ENV: &str = "AVM_PLATFORM_TOOLS_SYSROOT";
+const COMPILER_TRACE_FILE_ENV: &str = "AVM_COMPILER_TRACE_FILE";
+const REAL_RUSTC_WRAPPER_ENV: &str = "AVM_REAL_RUSTC_WRAPPER";
 const CARGO_NEXT_LOCKFILE_BUMP_ENV: &str = "CARGO_UNSTABLE_NEXT_LOCKFILE_BUMP";
 
 #[derive(Parser)]
@@ -455,6 +458,23 @@ fn spawn_anchor(
         command
             .env(PLATFORM_TOOLS_VERSION_ENV, &platform_tools.version)
             .env(PLATFORM_TOOLS_TOOLCHAIN_ENV, &platform_tools.toolchain);
+        if env::var_os(TRACE_TOOLCHAIN_ENV).is_some() {
+            command
+                .env(
+                    "RUSTC_WRAPPER",
+                    cargo_proxy.dir.path().join("rustc-wrapper"),
+                )
+                .env(PLATFORM_TOOLS_SYSROOT_ENV, &platform_tools.sysroot)
+                .env(
+                    COMPILER_TRACE_FILE_ENV,
+                    cargo_proxy.dir.path().join("compiler-traced"),
+                );
+            if let Some(wrapper) =
+                env::var_os("RUSTC_WRAPPER").filter(|wrapper| !wrapper.is_empty())
+            {
+                command.env(REAL_RUSTC_WRAPPER_ENV, wrapper);
+            }
+        }
         if platform_tools.enable_next_lockfile_bump {
             command.env(CARGO_NEXT_LOCKFILE_BUMP_ENV, "true");
         }
@@ -496,6 +516,13 @@ impl CargoProxy {
         #[cfg(windows)]
         fs::copy(&current_exe, &proxy).context("creating temporary Cargo proxy")?;
 
+        let rustc_wrapper = dir.path().join("rustc-wrapper");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&current_exe, &rustc_wrapper)
+            .context("creating temporary Rust compiler wrapper")?;
+        #[cfg(windows)]
+        fs::copy(&current_exe, &rustc_wrapper)
+            .context("creating temporary Rust compiler wrapper")?;
         Ok(Self { dir, real_cargo })
     }
 }
@@ -612,6 +639,83 @@ fn trace_platform_tools(stage: &str) -> Result<()> {
     Ok(())
 }
 
+/// In CI, verify the compiler's sysroot at the moment Cargo invokes it for an
+/// SBF target. Host builds and IDL generation pass through without this check.
+fn rustc_wrapper() -> Result<()> {
+    let mut arguments = env::args_os().skip(1);
+    let rustc = arguments
+        .next()
+        .ok_or_else(|| anyhow!("missing Rust compiler"))?;
+    let args = arguments.collect::<Vec<_>>();
+    let target = args
+        .windows(2)
+        .find_map(|pair| (pair[0] == "--target").then(|| pair[1].to_string_lossy().into_owned()))
+        .or_else(|| {
+            args.iter().find_map(|arg| {
+                arg.to_string_lossy()
+                    .strip_prefix("--target=")
+                    .map(str::to_owned)
+            })
+        });
+    if target
+        .as_deref()
+        .is_some_and(|target| target.starts_with("sbf-") || target.starts_with("sbpf"))
+    {
+        let expected = env::var_os(PLATFORM_TOOLS_SYSROOT_ENV)
+            .ok_or_else(|| anyhow!("missing selected platform-tools sysroot"))?;
+        let output = Command::new(&rustc).args(["--print", "sysroot"]).output()?;
+        if !output.status.success() {
+            anyhow::bail!("Could not inspect the actual SBF compiler sysroot");
+        }
+        let actual = String::from_utf8(output.stdout)?;
+        if !paths_refer_to_same_directory(Path::new(actual.trim()), Path::new(&expected)) {
+            anyhow::bail!(
+                "SBF compiler used sysroot {}, expected {}",
+                actual.trim(),
+                Path::new(&expected).display()
+            );
+        }
+        let marker = env::var_os(COMPILER_TRACE_FILE_ENV)
+            .ok_or_else(|| anyhow!("missing compiler trace marker"))?;
+        let compiling = args
+            .iter()
+            .any(|arg| arg.to_string_lossy().starts_with("--emit"));
+        if compiling
+            && fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(marker)
+                .is_ok()
+        {
+            eprintln!(
+                "AVM actual SBF compiler: {rustc:?}; target {}; sysroot {}",
+                target.unwrap(),
+                actual.trim()
+            );
+            let output = Command::new(&rustc).arg("-vV").output()?;
+            eprint!("{}", String::from_utf8_lossy(&output.stdout));
+            if !output.status.success() {
+                anyhow::bail!("Could not print the actual SBF compiler version");
+            }
+        }
+    }
+    let mut command = if let Some(wrapper) = env::var_os(REAL_RUSTC_WRAPPER_ENV) {
+        let mut command = Command::new(wrapper);
+        command.arg(&rustc);
+        command
+    } else {
+        Command::new(&rustc)
+    };
+    let status = command
+        .args(args)
+        .status()
+        .context("running the actual Rust compiler")?;
+    if !status.success() {
+        std::process::exit(status.code().unwrap_or(1));
+    }
+    Ok(())
+}
+
 /// Rewrite `+nightly` to the pinned IDL nightly and report whether it changed.
 fn pin_idl_nightly(args: &mut [OsString], idl_nightly: &str) -> bool {
     let Some(toolchain) = args.first_mut() else {
@@ -689,6 +793,7 @@ struct PlatformToolsGuard {
     _lock: fs::File,
     version: String,
     toolchain: String,
+    sysroot: PathBuf,
     enable_next_lockfile_bump: bool,
 }
 
@@ -754,6 +859,7 @@ fn ensure_resolved_platform_tools(
         _lock: lock,
         version: resolution.version,
         toolchain: toolchain_name,
+        sysroot: platform_tools_path.join("rust"),
         enable_next_lockfile_bump,
     })
 }
@@ -918,6 +1024,9 @@ fn main() -> Result<()> {
         }
         if stem == "cargo" {
             return cargo_proxy();
+        }
+        if stem == "rustc-wrapper" {
+            return rustc_wrapper();
         }
     }
 
