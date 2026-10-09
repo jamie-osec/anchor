@@ -563,6 +563,11 @@ fn cargo_proxy() -> Result<()> {
         Ok(version) => pin_build_sbf_tools(&mut args, &version)?,
         Err(_) => false,
     };
+    if enforced {
+        if let Ok(arch) = env::var("AVM_DEFAULT_SBF_ARCH") {
+            default_build_sbf_arch(&mut args, &arch);
+        }
+    }
     let trace = enforced && env::var_os(TRACE_TOOLCHAIN_ENV).is_some();
     if trace {
         eprintln!("AVM build command: cargo {args:?}");
@@ -615,6 +620,22 @@ fn pin_build_sbf_tools(args: &mut Vec<OsString>, version: &str) -> Result<bool> 
         ["--tools-version".into(), version.into()],
     );
     Ok(true)
+}
+
+/// Keep the experiment's default bytecode architecture consistent with its
+/// baseline while retaining explicit project architecture choices.
+fn default_build_sbf_arch(args: &mut Vec<OsString>, arch: &str) {
+    let end = args
+        .iter()
+        .position(|arg| arg == "--")
+        .unwrap_or(args.len());
+    if args[..end]
+        .iter()
+        .any(|arg| arg == "--arch" || arg.to_string_lossy().starts_with("--arch="))
+    {
+        return;
+    }
+    args.splice(end..end, ["--arch".into(), arch.into()]);
 }
 
 /// In CI, verify the compiler's sysroot at the moment Cargo invokes it for an
@@ -1030,6 +1051,27 @@ mod tests {
         let mut dated = vec![OsString::from("+nightly-2026-07-01")];
         assert!(!pin_idl_nightly(&mut dated, "nightly-2025-04-15"));
         assert_eq!(dated[0], "+nightly-2026-07-01");
+    }
+
+    #[test]
+    fn default_arch_preserves_explicit_choices_and_cargo_arguments() {
+        let mut args = ["build-sbf", "--", "--features", "mainnet"]
+            .map(OsString::from)
+            .to_vec();
+        default_build_sbf_arch(&mut args, "v0");
+        assert_eq!(
+            args,
+            ["build-sbf", "--arch", "v0", "--", "--features", "mainnet"].map(OsString::from)
+        );
+        for choice in [
+            vec!["build-bpf", "--arch", "v2"],
+            vec!["build-sbf", "--arch=v3"],
+        ] {
+            let mut args = choice.into_iter().map(OsString::from).collect::<Vec<_>>();
+            let original = args.clone();
+            default_build_sbf_arch(&mut args, "v0");
+            assert_eq!(args, original);
+        }
     }
 
     #[test]

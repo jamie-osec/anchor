@@ -216,6 +216,7 @@ jobs:
           BUILD_COMMAND: ${{ matrix.build_command }}
           BUILD_NAME: ${{ matrix.name }}
           AVM_TRACE_TOOLCHAIN: "1"
+          AVM_DEFAULT_SBF_ARCH: v0
           NO_COLOR: "1"
           TERM: dumb
         run: |
