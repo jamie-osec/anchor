@@ -27,7 +27,7 @@ use {
     solana_instruction::Instruction,
     solana_keypair::Keypair,
     solana_loader_v3_interface::{
-        instruction::{self as loader_v3_instruction, MINIMUM_EXTEND_PROGRAM_BYTES},
+        instruction::{self as loader_v3_instruction},
         state::UpgradeableLoaderState,
     },
     solana_message::{Hash, Message},
@@ -56,6 +56,10 @@ use {
         time::Duration,
     },
 };
+
+// SIMD-0431's minimum extension size. The v2 CLI's loader-interface version
+// predates the exported constant, so retain the protocol value locally.
+const MINIMUM_EXTEND_PROGRAM_BYTES: u32 = 10 * 1024;
 
 /// Outer retry cap on the full deploy/upgrade cycle; inner per-batch resign is `max_sign_attempts`.
 const MAX_DEPLOY_ATTEMPTS: u32 = 3;
