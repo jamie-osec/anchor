@@ -1386,8 +1386,9 @@ dependencies = [
 
 [[package]]
 name = "litesvm"
-version = "0.17.0"
-source = "git+https://github.com/LiteSVM/litesvm?rev=980f39121cda14bc78d8c46489d2d12fb0cc6eae#980f39121cda14bc78d8c46489d2d12fb0cc6eae"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f110f47eaae011bdb78f18b8302736e8b45d83874c0990538885ce37d4768e2d"
 dependencies = [
  "agave-feature-set",
  "agave-reserved-account-keys",

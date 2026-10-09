@@ -128,8 +128,7 @@ solana-transaction-context = "4.3.0"
 
 # Non solana crates
 cargo_toml = "0.22.3"
-# FIXME: Update liteSVM once this commit exists on a release
-litesvm = { version = "0.17.0", git = "https://github.com/LiteSVM/litesvm", rev = "980f39121cda14bc78d8c46489d2d12fb0cc6eae" }
+litesvm = "0.18.0"
 
 # Internal anchor crates
 anchor-lang = { path = "lang-v2", version = "=2.0.0-rc.1" }
