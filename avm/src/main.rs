@@ -16,7 +16,6 @@ use {
 
 const REAL_CARGO_ENV: &str = "AVM_REAL_CARGO";
 const PLATFORM_TOOLS_VERSION_ENV: &str = "AVM_PLATFORM_TOOLS_VERSION";
-const PLATFORM_TOOLS_TOOLCHAIN_ENV: &str = "AVM_PLATFORM_TOOLS_TOOLCHAIN";
 const TRACE_TOOLCHAIN_ENV: &str = "AVM_TRACE_TOOLCHAIN";
 const PLATFORM_TOOLS_SYSROOT_ENV: &str = "AVM_PLATFORM_TOOLS_SYSROOT";
 const COMPILER_TRACE_FILE_ENV: &str = "AVM_COMPILER_TRACE_FILE";
@@ -455,9 +454,7 @@ fn spawn_anchor(
         .env("AVM_ACTIVE", "1")
         .env("CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS", "fallback");
     if let Some(platform_tools) = platform_tools {
-        command
-            .env(PLATFORM_TOOLS_VERSION_ENV, &platform_tools.version)
-            .env(PLATFORM_TOOLS_TOOLCHAIN_ENV, &platform_tools.toolchain);
+        command.env(PLATFORM_TOOLS_VERSION_ENV, &platform_tools.version);
         if env::var_os(TRACE_TOOLCHAIN_ENV).is_some() {
             command
                 .env(
@@ -569,15 +566,11 @@ fn cargo_proxy() -> Result<()> {
     let trace = enforced && env::var_os(TRACE_TOOLCHAIN_ENV).is_some();
     if trace {
         eprintln!("AVM build command: cargo {args:?}");
-        trace_platform_tools("before build")?;
     }
     let status = Command::new(real_cargo)
         .args(args)
         .status()
         .context("running Cargo through AVM proxy")?;
-    if trace {
-        trace_platform_tools("after build")?;
-    }
     if !status.success() {
         std::process::exit(status.code().unwrap_or(1));
     }
@@ -622,24 +615,6 @@ fn pin_build_sbf_tools(args: &mut Vec<OsString>, version: &str) -> Result<bool> 
         ["--tools-version".into(), version.into()],
     );
     Ok(true)
-}
-
-/// Record the compiler reached through the alias cargo-build-sbf uses, both
-/// before and after the subprocess, so relinking cannot go unnoticed in CI.
-fn trace_platform_tools(stage: &str) -> Result<()> {
-    let toolchain = env::var(PLATFORM_TOOLS_TOOLCHAIN_ENV)?;
-    eprintln!("AVM toolchain {stage}: {toolchain}");
-    for flags in [vec!["-vV"], vec!["--print", "sysroot"]] {
-        let status = Command::new("rustup")
-            .args(["run", &toolchain, "rustc"])
-            .args(flags)
-            .status()
-            .context("printing the platform-tools compiler")?;
-        if !status.success() {
-            anyhow::bail!("Could not inspect platform-tools compiler {toolchain}");
-        }
-    }
-    Ok(())
 }
 
 /// In CI, verify the compiler's sysroot at the moment Cargo invokes it for an
@@ -795,7 +770,6 @@ fn ensure_resolved_solana(
 struct PlatformToolsGuard {
     _lock: fs::File,
     version: String,
-    toolchain: String,
     sysroot: PathBuf,
     enable_next_lockfile_bump: bool,
 }
@@ -861,7 +835,6 @@ fn ensure_resolved_platform_tools(
     Ok(PlatformToolsGuard {
         _lock: lock,
         version: resolution.version,
-        toolchain: toolchain_name,
         sysroot: platform_tools_path.join("rust"),
         enable_next_lockfile_bump,
     })
