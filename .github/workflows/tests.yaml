@@ -72,14 +72,51 @@ jobs:
       # using singlethreaded testing for avm so that tests that change files do not conflict with each other
       - run: cargo test --package avm -- --test-threads=1
       # Init local borsh package
-      - run: cd ts/packages/borsh && yarn --frozen-lockfile && yarn build
-      - run: cd ts/packages/anchor-errors && yarn --frozen-lockfile && yarn build
-      - run: cd ts/packages/anchor && yarn --frozen-lockfile
+      - uses: nick-fields/retry@14672906e672a08bd6eeb15720e9ed3ce869cdd4 # v2
+        with:
+          retry_wait_seconds: 60
+          timeout_minutes: 5
+          max_attempts: 5
+          retry_on: error
+          shell: bash
+          command: cd ts/packages/borsh && yarn --frozen-lockfile
+      - run: cd ts/packages/borsh && yarn build
+      - uses: nick-fields/retry@14672906e672a08bd6eeb15720e9ed3ce869cdd4 # v2
+        with:
+          retry_wait_seconds: 60
+          timeout_minutes: 5
+          max_attempts: 5
+          retry_on: error
+          shell: bash
+          command: cd ts/packages/anchor-errors && yarn --frozen-lockfile
+      - run: cd ts/packages/anchor-errors && yarn build
+      - uses: nick-fields/retry@14672906e672a08bd6eeb15720e9ed3ce869cdd4 # v2
+        with:
+          retry_wait_seconds: 60
+          timeout_minutes: 5
+          max_attempts: 5
+          retry_on: error
+          shell: bash
+          command: cd ts/packages/anchor && yarn --frozen-lockfile
       - run: cd ts/packages/anchor && yarn test
       - run: cd ts/packages/anchor && yarn lint
-      - run: cd examples/tutorial && yarn --frozen-lockfile
+      - uses: nick-fields/retry@14672906e672a08bd6eeb15720e9ed3ce869cdd4 # v2
+        with:
+          retry_wait_seconds: 60
+          timeout_minutes: 5
+          max_attempts: 5
+          retry_on: error
+          shell: bash
+          command: cd examples/tutorial && yarn --frozen-lockfile
       - run: cd examples/tutorial && yarn lint
-      - run: cd tests && yarn --frozen-lockfile
+      - uses: nick-fields/retry@14672906e672a08bd6eeb15720e9ed3ce869cdd4 # v2
+        with:
+          retry_wait_seconds: 60
+          timeout_minutes: 5
+          max_attempts: 5
+          retry_on: error
+          shell: bash
+          command: cd tests && yarn --frozen-lockfile
       - run: cd tests && yarn lint
       - uses: ./.github/actions/git-diff/
 
@@ -277,7 +314,14 @@ jobs:
 
       - run: surfpool start --ci --offline &
         name: start surfpool
-      - run: cd tests/bpf-upgradeable-state && yarn --frozen-lockfile
+      - uses: nick-fields/retry@14672906e672a08bd6eeb15720e9ed3ce869cdd4 # v2
+        with:
+          retry_wait_seconds: 60
+          timeout_minutes: 5
+          max_attempts: 5
+          retry_on: error
+          shell: bash
+          command: cd tests/bpf-upgradeable-state && yarn --frozen-lockfile
       - run: cd tests/bpf-upgradeable-state
       - run: cd tests/bpf-upgradeable-state && anchor build --skip-lint --ignore-keys
       - run: cd tests/bpf-upgradeable-state && solana program deploy --program-id program_with_different_programdata.json --use-rpc target/deploy/bpf_upgradeable_state.so
@@ -406,12 +450,28 @@ jobs:
         working-directory: /tmp/hello-anchor-${{ matrix.template }}
         run: cargo add anchor-client --manifest-path tests/Cargo.toml --path "$GITHUB_WORKSPACE/client"
 
+      - name: Link generated JS project
+        if: ${{ matrix.template == 'mocha' || matrix.template == 'jest' }}
+        working-directory: /tmp/hello-anchor-${{ matrix.template }}
+        run: yarn link @anchor-lang/core
+
+      - name: Install generated JS project dependencies
+        if: ${{ matrix.template == 'mocha' || matrix.template == 'jest' }}
+        uses: nick-fields/retry@14672906e672a08bd6eeb15720e9ed3ce869cdd4 # v2
+        with:
+          retry_wait_seconds: 60
+          timeout_minutes: 5
+          max_attempts: 5
+          retry_on: error
+          shell: bash
+          # `anchor init` does not generate a yarn.lock, so --frozen-lockfile would fail here.
+          # locked-in: ignore[yarn-frozen-lockfile]
+          command: cd /tmp/hello-anchor-${{ matrix.template }} && yarn
+
       - name: Run generated JS project tests
         if: ${{ matrix.template == 'mocha' || matrix.template == 'jest' }}
         working-directory: /tmp/hello-anchor-${{ matrix.template }}
-        # `anchor init` does not generate a yarn.lock, so --frozen-lockfile would fail here.
-        # locked-in: ignore[yarn-frozen-lockfile]
-        run: yarn link @anchor-lang/core && yarn && anchor test && yarn lint:fix
+        run: anchor test && yarn lint:fix
 
       - name: Run generated Rust project tests
         if: ${{ matrix.template == 'rust' || matrix.template == 'mollusk' || matrix.template == 'litesvm' || matrix.template == 'litesvm-solana-v4' }}
