@@ -22,6 +22,18 @@ Solana version: 4.2.0
 
 ---
 
+## [1.2.1]
+
+Solana version: 3.1.10
+
+| Program | Binary Size | -   |
+| ------- | ----------- | --- |
+| bench   | 891,144     | -   |
+
+### Notable changes
+
+---
+
 ## [1.2.0]
 
 Solana version: 3.1.10
@@ -31,6 +43,8 @@ Solana version: 3.1.10
 | bench   | 891,144     | 🟢 **-40,904 (4.39%)** |
 
 ### Notable changes
+
+- Remeasured with platform-tools v1.57, SBPFv3, and Surfpool 1.5.0 to match 1.2.1. Comparisons with earlier releases include toolchain changes.
 
 ---
 
