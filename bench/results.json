@@ -3265,7 +3265,7 @@
     "result": {
       "binarySize": {
         "bench": 800480,
-        "escrow": 153616
+        "escrow": 144320
       },
       "computeUnits": {
         "accountInfo1": 588,
@@ -3356,7 +3356,7 @@
         "uncheckedAccount4": 1396,
         "uncheckedAccount8": 2523,
         "escrow/initialize": 7891,
-        "escrow/take": 6155
+        "escrow/take": 5542
       },
       "stackMemory": {
         "account_info1": 64,
@@ -3447,7 +3447,7 @@
         "unchecked_account4": 64,
         "unchecked_account8": 64,
         "escrow/initialize": 1088,
-        "escrow/take": 1536
+        "escrow/take": 1344
       }
     }
   }

@@ -16,7 +16,7 @@ The benchmark harness is located in [/bench](https://github.com/otter-sec/anchor
 
 Solana version: 4.2.0
 
-**Average:** 🟢 **-425.51 (7.90%)** [-14.93%, -3.57%]
+**Average:** 🟢 **-432.39 (8.03%)** [-15.27%, -3.57%]
 
 <details>
 <summary>Instruction results (89)</summary>
@@ -111,7 +111,7 @@ Solana version: 4.2.0
 | uncheckedAccount4           | 1,396         | 🟢 **-209 (13.02%)**  |
 | uncheckedAccount8           | 2,523         | 🟢 **-360 (12.49%)**  |
 | escrow/initialize           | 7,891         | 🟢 **-578 (6.82%)**   |
-| escrow/take                 | 6,155         | 🟢 **-386 (5.90%)**   |
+| escrow/take                 | 5,542         | 🟢 **-999 (15.27%)**  |
 
 </details>
 

@@ -18,7 +18,7 @@ The stack size of the `try_accounts` function is measured.
 
 Solana version: 4.2.0
 
-**Average:** 🔴 **+4.31 (1.52%)** [-19.05%, +25.00%]
+**Average:** 🔴 **+2.16 (0.76%)** [-19.23%, +25.00%]
 
 <details>
 <summary>Accounts struct results (89)</summary>
@@ -113,7 +113,7 @@ Solana version: 4.2.0
 | unchecked_account4             | 64           | -                    |
 | unchecked_account8             | 64           | -                    |
 | escrow/initialize              | 1,088        | 🟢 **-256 (19.05%)** |
-| escrow/take                    | 1,536        | 🟢 **-128 (7.69%)**  |
+| escrow/take                    | 1,344        | 🟢 **-320 (19.23%)** |
 
 </details>
 
