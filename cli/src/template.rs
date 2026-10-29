@@ -813,7 +813,10 @@ impl TestTemplate {
                 }
             }
             Self::Rust | Self::Litesvm => "cargo test".to_owned(),
-            Self::Mollusk => "cargo test-sbf".to_owned(),
+            Self::Mollusk => format!(
+                "cargo test-sbf --tools-version {}",
+                crate::DEFAULT_TOOLS_VERSION
+            ),
         }
     }
 
@@ -1165,5 +1168,13 @@ mod tests {
         }
         let script = TestTemplate::Mocha.get_test_script(false, Some(&PackageManager::NPM));
         assert!(script.contains("mocha --import=tsx"));
+        let script = TestTemplate::Mollusk.get_test_script(false, None);
+        assert_eq!(
+            script,
+            format!(
+                "cargo test-sbf --tools-version {}",
+                crate::DEFAULT_TOOLS_VERSION
+            )
+        );
     }
 }
