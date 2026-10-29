@@ -20,9 +20,9 @@ use {
 };
 
 // SBF programs use the compiler bundled with platform-tools.
-const ANCHOR_MSRV: &str = "1.89.0";
+const ANCHOR_MSRV: &str = "1.95.0";
 // Host-side tests depend on Agave and LiteSVM, which require newer Rust.
-const HOST_RUST_VERSION: &str = "1.97.1";
+const HOST_RUST_VERSION: &str = "1.98.0";
 
 /// Program initialization template
 #[derive(Clone, Debug, Default, Eq, PartialEq, Parser, ValueEnum, AbsolutePath)]
@@ -243,7 +243,7 @@ fn workspace_manifest() -> String {
 members = [
     "programs/*"
 ]
-resolver = "2"
+resolver = "3"
 
 [workspace.package]
 edition = "2021"

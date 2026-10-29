@@ -1,6 +1,7 @@
 [package]
 name = "anchor-lang"
 version.workspace = true
+rust-version = "1.95.0"
 edition = "2021"
 repository = "https://github.com/otter-sec/anchor"
 description = "Anchor v2: trait-based account system for Solana (no_std)"

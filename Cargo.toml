@@ -67,7 +67,7 @@ exclude = [
     "tests/swap/deps/openbook-dex",
     "tests-v2/programs/declare-program",
 ]
-resolver = "2"
+resolver = "3"
 
 [workspace.package]
 version = "2.0.0-rc.2"
