@@ -276,6 +276,8 @@ fn cargo_toml(name: &str, test_template: Option<&TestTemplate>) -> String {
             r#"
 [dev-dependencies]
 mollusk-svm = "0.16"
+# Agave 4.4 requires Rust 1.98.1; keep the runtime on the supported cohort.
+solana-program-runtime = "~4.3.0"
 solana-account = "4.5.0"
 solana-pubkey = "4.3.0"
 solana-sdk-ids = "3.1.0"
