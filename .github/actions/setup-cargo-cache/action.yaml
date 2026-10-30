@@ -1,5 +1,5 @@
 name: "Setup Cargo cache"
-description: "Restore shared Cargo downloads; master Core Tests populate them"
+description: "Restore shared Cargo downloads; a separate master build populates them"
 inputs:
   save:
     description: "Populate the cache from the root lockfile"

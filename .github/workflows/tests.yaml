@@ -30,7 +30,7 @@ permissions:
   contents: read
 
 env:
-  CACHE: "true"
+  CACHE: ${{ github.event_name == 'pull_request' }}
   SOLANA_VERSION: 4.1.2
   NODE_VERSION: 22.22.3
   CARGO_PROFILE: ${{ github.event_name == 'pull_request' && 'debug' || 'release' }}
@@ -38,6 +38,31 @@ env:
   SURFPOOL_CLI_VERSION: 1.5.0
 
 jobs:
+  # Verification stays cold; only this independent job populates PR caches.
+  populate-pr-caches:
+    name: Populate PR caches
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CACHE: "true"
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup/
+      - uses: ./.github/actions/setup-cargo-cache/
+        with:
+          save: true
+      - run: cargo build
+      - run: cargo test --workspace --exclude avm --features allow-missing-optionals,anchor-debug,derive,event-cpi,init-if-needed,lazy-account --no-run
+      - run: cargo test -p anchor-client --features async --no-run
+      - run: cargo test -p avm --no-run
+      - run: cargo test --workspace --exclude avm --no-default-features --features solana-v4,allow-missing-optionals,anchor-debug,derive,event-cpi,init-if-needed,lazy-account,associated_token,mint,token,token_2022,token_2022_extensions --no-run
+      - run: cargo test -p anchor-client --no-default-features --features solana-v4,async --no-run
+      - run: cargo install --path cli anchor-cli --locked --force --debug --features idl-localnet-testing
+      - run: cargo install --path avm --locked --force
+
   test-core:
     name: Core Tests
     runs-on: ubuntu-latest
@@ -51,8 +76,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
       - uses: ./.github/actions/setup-cargo-cache/
-        with:
-          save: ${{ github.event_name == 'push' }}
+        if: env.CACHE == 'true'
 
       - run: cargo build
       - run: rustup component add --toolchain nightly-x86_64-unknown-linux-gnu rustfmt && cargo +nightly fmt -- --check
@@ -109,6 +133,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup/
       - uses: ./.github/actions/setup-cargo-cache/
+        if: env.CACHE == 'true'
 
       # `--no-default-features` also drops anchor-spl's capability features, so
       # they have to be re-listed alongside the cohort.
@@ -144,10 +169,10 @@ jobs:
           shell: bash
           command: cargo build-sbf --install-only
       - uses: ./.github/actions/setup-cargo-cache/
+        if: env.CACHE == 'true'
 
-      # Pushes warm the debug CLI used by PRs before building the release CLI.
       - run: cargo install --path cli anchor-cli --locked --force --debug --features idl-localnet-testing
-        if: env.CARGO_PROFILE == 'debug' || github.event_name == 'push'
+        if: env.CARGO_PROFILE == 'debug'
       - run: cargo install --path cli anchor-cli --locked --force --features idl-localnet-testing
         if: env.CARGO_PROFILE != 'debug'
       - run: cargo install --path avm --locked --force
@@ -302,6 +327,7 @@ jobs:
           cache-save: false
 
       - uses: ./.github/actions/setup-cargo-cache/
+        if: env.CACHE == 'true'
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -406,6 +432,7 @@ jobs:
           cache-save: false
 
       - uses: ./.github/actions/setup-cargo-cache/
+        if: env.CACHE == 'true'
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -608,6 +635,7 @@ jobs:
           cache-save: false
 
       - uses: ./.github/actions/setup-cargo-cache/
+        if: env.CACHE == 'true'
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
