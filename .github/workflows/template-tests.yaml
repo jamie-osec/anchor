@@ -51,15 +51,7 @@ jobs:
         id: rustc
         run: echo "version=$(rustc --version | cut -d ' ' -f 2)" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        name: Cache Cargo home
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: cargo-home-${{ runner.os }}-template-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: cargo-home-${{ runner.os }}-template-
+      - uses: ./.github/actions/setup-cargo-cache/
 
       - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         name: Restore CLI target
@@ -103,6 +95,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup/
+      - uses: ./.github/actions/setup-cargo-cache/
       - uses: ./.github/actions/setup-solana/
       - uses: ./.github/actions/setup-surfpool/
 
@@ -188,6 +181,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup/
+      - uses: ./.github/actions/setup-cargo-cache/
       - uses: ./.github/actions/setup-solana/
       - uses: ./.github/actions/setup-surfpool/
 

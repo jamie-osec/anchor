@@ -12,12 +12,6 @@ env:
   SOLANA_VERSION: 4.1.0-rc.1
   CARGO_PROFILE: debug
   ANCHOR_BINARY_NAME: anchor-binary-network-deploy
-  CARGO_CACHE_PATH: |
-    ~/.cargo/bin/
-    ~/.cargo/registry/index/
-    ~/.cargo/registry/cache/
-    ~/.cargo/git/db/
-    ./target/
 
 jobs:
   setup-anchor-cli:
@@ -31,12 +25,7 @@ jobs:
 
       - uses: ./.github/actions/setup/
 
-      - uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3
-        name: Cache Cargo registry + index
-        id: cache-anchor
-        with:
-          path: ${{ env.CARGO_CACHE_PATH }}
-          key: cargo-${{ runner.os }}-${{ env.CARGO_PROFILE }}-anchor-${{ hashFiles('**/Cargo.lock') }}
+      - uses: ./.github/actions/setup-cargo-cache/
 
       - run: cargo install --path cli anchor-cli --locked --force --debug
 
@@ -78,15 +67,7 @@ jobs:
 
       - run: chmod +x ~/.cargo/bin/anchor
 
-      - uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3
-        name: Cache Cargo registry + index
-        id: cache-cargo-build
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: cargo-${{ runner.os }}-network-deploy-${{ env.SOLANA_VERSION }}-${{ hashFiles('**/Cargo.lock') }}
+      - uses: ./.github/actions/setup-cargo-cache/
 
       - name: Create minimal Anchor program
         env:
