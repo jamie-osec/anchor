@@ -127,6 +127,22 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup/
+      - uses: ./.github/actions/setup-solana/
+        if: github.event_name != 'pull_request'
+      - uses: ./.github/actions/setup-surfpool/
+        if: github.event_name != 'pull_request'
+      - uses: ./.github/actions/setup-ts/
+        if: github.event_name != 'pull_request'
+      - uses: nick-fields/retry@14672906e672a08bd6eeb15720e9ed3ce869cdd4 # v2
+        name: Warm SBF platform tools
+        if: github.event_name != 'pull_request'
+        with:
+          retry_wait_seconds: 60
+          timeout_minutes: 5
+          max_attempts: 5
+          retry_on: error
+          shell: bash
+          command: cargo build-sbf --install-only
       - uses: ./.github/actions/setup-cargo-cache/
 
       # Pushes warm the debug CLI used by PRs before building the release CLI.
@@ -163,8 +179,14 @@ jobs:
 
       - uses: ./.github/actions/setup/
       - uses: ./.github/actions/setup-solana/
+        with:
+          cache-save: false
       - uses: ./.github/actions/setup-ts/
+        with:
+          cache-save: false
       - uses: ./.github/actions/setup-surfpool/
+        with:
+          cache-save: false
 
       - run: cd examples/tutorial && yarn workspaces run test
       - uses: ./.github/actions/git-diff/
@@ -194,6 +216,8 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup/
       - uses: ./.github/actions/setup-solana/
+        with:
+          cache-save: false
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -219,6 +243,8 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup/
       - uses: ./.github/actions/setup-ts/
+        with:
+          cache-save: false
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -247,7 +273,11 @@ jobs:
           name: composite.so
           path: tests/composite/target/deploy/
       - uses: ./.github/actions/setup-solana/
+        with:
+          cache-save: false
       - uses: ./.github/actions/setup-surfpool/
+        with:
+          cache-save: false
       - run: cd client/example && ./run-test.sh
       - uses: ./.github/actions/git-diff/
 
@@ -262,8 +292,14 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup/
       - uses: ./.github/actions/setup-ts/
+        with:
+          cache-save: false
       - uses: ./.github/actions/setup-solana/
+        with:
+          cache-save: false
       - uses: ./.github/actions/setup-surfpool/
+        with:
+          cache-save: false
 
       - uses: ./.github/actions/setup-cargo-cache/
 
@@ -360,8 +396,14 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup/
       - uses: ./.github/actions/setup-ts/
+        with:
+          cache-save: false
       - uses: ./.github/actions/setup-solana/
+        with:
+          cache-save: false
       - uses: ./.github/actions/setup-surfpool/
+        with:
+          cache-save: false
 
       - uses: ./.github/actions/setup-cargo-cache/
 
@@ -556,8 +598,14 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup/
       - uses: ./.github/actions/setup-ts/
+        with:
+          cache-save: false
       - uses: ./.github/actions/setup-solana/
+        with:
+          cache-save: false
       - uses: ./.github/actions/setup-surfpool/
+        with:
+          cache-save: false
 
       - uses: ./.github/actions/setup-cargo-cache/
 
