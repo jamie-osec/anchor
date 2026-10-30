@@ -30,7 +30,7 @@ permissions:
   contents: read
 
 env:
-  CACHE: ${{ github.event_name == 'pull_request' }}
+  CACHE: "true"
   SOLANA_VERSION: 4.1.2
   NODE_VERSION: 22.22.3
   CARGO_PROFILE: ${{ github.event_name == 'pull_request' && 'debug' || 'release' }}
@@ -147,8 +147,9 @@ jobs:
           path: ${{ env.CARGO_CACHE_PATH }}
           key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
 
+      # Pushes warm the debug CLI used by PRs before building the release CLI.
       - run: cargo install --path cli anchor-cli --locked --force --debug --features idl-localnet-testing
-        if: env.CARGO_PROFILE == 'debug'
+        if: env.CARGO_PROFILE == 'debug' || github.event_name == 'push'
       - run: cargo install --path cli anchor-cli --locked --force --features idl-localnet-testing
         if: env.CARGO_PROFILE != 'debug'
       - run: cargo install --path avm --locked --force
